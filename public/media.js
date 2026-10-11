@@ -1,3 +1,4 @@
+import {measureCall} from './call-metrics.js';
 // Bitrates are codec payload caps. IP/UDP/SRTP/TURN overhead is additional.
 export const PROFILES = {
   wifi: { audio:48000, video:900000, width:960, height:540, fps:24, label:'Wi-Fi · clear voice' },
@@ -35,7 +36,7 @@ export class Phone {
     Object.assign(this,{signal,update,remote,local,ended,preference});
     this.pc=null; this.stream=null; this.candidates=[]; this.localCandidates=[]; this.videoWanted=false; this.muted=false;
     this.profile=networkMode(preference()); this.stable=0; this.last=null; this.restartAt=0; this.applying=false;
-    this.facingMode='user';this.cameraBusy=false;
+    this.facingMode='user';this.cameraBusy=false;this.trafficSamples=new Map();
   }
   async prepare(ice, video=false, caller=false) {
     this.caller=caller; this.videoWanted=video;
@@ -201,11 +202,10 @@ export class Phone {
   async sample(){
     if(!this.pc||this.sampling)return;this.sampling=true;
     try{
-      const report=await this.pc.getStats();let rtt=0,jitter=0,lost=0,received=0,bytes=0,bandwidth=Infinity,relay=false,outboundLoss=0;
+      const pc=this.pc,report=await pc.getStats();if(this.pc!==pc)return;let rtt=0,jitter=0,lost=0,received=0,bandwidth=Infinity,relay=false,outboundLoss=0;
       for(const s of report.values()){
         if(s.type==='inbound-rtp'&&s.kind==='audio'){lost=s.packetsLost||0;received=s.packetsReceived||0;jitter=s.jitter||0;}
         if(s.type==='remote-inbound-rtp'&&s.kind==='audio'){rtt=Math.max(rtt,s.roundTripTime||0);outboundLoss=Math.max(outboundLoss,s.fractionLost||0);jitter=Math.max(jitter,s.jitter||0);}
-        if(s.type==='outbound-rtp'||s.type==='inbound-rtp')bytes+=(s.bytesSent||s.bytesReceived||0);
         if(s.type==='candidate-pair'&&s.state==='succeeded'&&(s.nominated||s.selected)){
           rtt=Math.max(rtt,s.currentRoundTripTime||0);bandwidth=s.availableOutgoingBitrate??Infinity;
           relay=report.get(s.localCandidateId)?.candidateType==='relay'||report.get(s.remoteCandidateId)?.candidateType==='relay';
@@ -213,8 +213,9 @@ export class Phone {
       }
       const dl=Math.max(0,lost-(this.last?.lost||0)),dr=Math.max(0,received-(this.last?.received||0));
       const loss=Math.max(outboundLoss,dl+dr?dl/(dl+dr):0);
-      const stats={loss,rtt,jitter,bandwidth,relay,kbps:this.last?Math.max(0,(bytes-this.last.bytes)*8/(Date.now()-this.last.time)):0};
-      this.last={lost,received,bytes,time:Date.now()};
+      const {samples,...traffic}=measureCall(report,this.trafficSamples);this.trafficSamples=samples;
+      const stats={loss,rtt,jitter,bandwidth,relay,...traffic};
+      this.last={lost,received};
       if(loss<.03&&rtt<.5&&jitter<.04&&bandwidth>100000)this.stable++;else this.stable=0;
       const next=chooseProfile(networkMode(this.preference()),stats,this.profile,this.stable);
       if(next!==this.profile){this.profile=next;await this.applyProfile();}

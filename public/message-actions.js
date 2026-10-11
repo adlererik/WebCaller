@@ -37,7 +37,7 @@ export function messageActions({messages,self,contacts,peer,render,event,sendTex
   $('message-reply').onclick=()=>{if(!alive(chosen))return;replyTo=chosen.id;replyPeer=peer()?.id;close();replyBar();$('message-input').focus();};
   $('cancel-reply').onclick=()=>{replyTo=replyPeer=null;replyBar();};
   $('message-edit').onclick=()=>{if(!alive(chosen)||chosen.from!==self()||chosen.location)return;editing=chosen;$('message-dialog').close();$('edit-text').value=editing.text;$('edit-dialog').showModal();$('edit-text').focus();};
-  $('edit-form').onsubmit=async e=>{e.preventDefault();const m=editing,text=$('edit-text').value.trim();if(!alive(m))return close();if(!text&&!m.attachment)return;$('save-edit').disabled=true;try{await event(m,'edit',{text});close();}catch(e){toast(e.message);}finally{$('save-edit').disabled=false;}};
+  $('edit-form').onsubmit=async e=>{e.preventDefault();const m=editing,text=$('edit-text').value.trim();if(!alive(m)||m.from!==self()||m.location)return close();if(!text&&!m.attachment)return;$('save-edit').disabled=true;try{await event(m,'edit',{text});close();}catch(e){toast(e.message);}finally{$('save-edit').disabled=false;}};
   $('message-forward').onclick=()=>prepareForward([chosen]);
   $('message-copy').onclick=()=>{const m=chosen;close();void copy([m]);};
   $('message-select').onclick=()=>{const m=chosen;close();select(m);};

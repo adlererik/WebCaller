@@ -35,7 +35,7 @@ A signed encrypted message carries a random per-file AES-256-GCM key and nonce p
 
 ## Chat controls
 
-Rounded green/gray bubbles, media captions, searchable self-hosted Unicode emoji with skin tones, front/back photo capture, previewable voice recording, automatic media previews and a full-screen image/video/audio viewer are included. Voice notes use browser-negotiated MP4/AAC or WebM/Ogg Opus at a requested mono 32 kbps. Both participants can delete any message; encrypted attachment chunks are removed transactionally and expiring deletion markers prevent replay/offline resurrection. Signed encrypted typing updates are ephemeral and never include draft text.
+Rounded blue/gray bubbles, media captions, searchable self-hosted Unicode emoji with skin tones, front/back photo capture, previewable voice recording, automatic media previews and a full-screen image/video/audio viewer are included. Voice notes use browser-negotiated MP4/AAC or WebM/Ogg Opus at a requested mono 32 kbps. Both participants can delete any message; encrypted attachment chunks are removed transactionally and expiring deletion markers prevent replay/offline resurrection. Signed encrypted typing updates are ephemeral and never include draft text.
 
 ## Deliberately absent
 
@@ -65,3 +65,10 @@ Signed encrypted message-state envelopes carry edits, reactions, pins and delive
 A viewed mark requires the visible bubble in the active chat for at least 300 ms, while the app is visible and no app dialog/call screen covers the chat. It indicates app visibility, not proof a person read the text. Replies reference the parent ID instead of copying its text. Forwarding creates a new encrypted message/file for the chosen contact. Pins cannot extend message expiry. Latest-state version checks stop delayed older edits/reactions from replacing newer state. Plaintext actions/drafts are held in memory and cleared when the app backgrounds.
 
 System appearance uses prefers-color-scheme CSS and matching browser theme-color tags. Map links use the viewing device’s platform, while the encrypted raster thumbnail continues to use the configured tile provider (OpenStreetMap by default). This does not require paid Google/Apple map imagery keys.
+
+
+## Encrypted local media retention and live call metrics (v0.7.0)
+
+Sent and verified received media is retained as complete encrypted chunk sets in IndexedDB, scoped to the local identity and message/attachment ID and bound to the original size/expiry. No attachment keys, filenames, MIME types or plaintext are added to that cache. Reopening uses authenticated local decryption instead of another media transfer. Deletion transactions remove bytes and store an expiring ID-only tombstone so a late transfer cannot restore them. Corrupt cached chunks are discarded and fetched again once. Expiry is enforced on every read/write and purge runs on startup, return to foreground and every minute while the page executes; closed browsers cannot physically purge until they run again. Forget this device clears the cache. Storage failure leaves messaging/calling usable and reports that reopening may download again. Browser storage remains subject to quota/eviction.
+
+Measured media rate and negotiated audio/video codec pills share the compact call-quality style at the top of both call layouts. The rate samples cumulative bytes using statistics timestamps, counts bundled transports once, falls back to RTP counters, and skips invalid/reset baselines. Codec IDs are resolved from active stream reports; repair codecs are not presented as the picture codec. [WebRTC statistics specification](https://www.w3.org/TR/webrtc-stats/).

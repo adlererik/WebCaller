@@ -24,6 +24,8 @@ flowchart LR
 | public/attachments.js | Per-file keys, validated manifests, indexed chunk encryption/decryption and size limits |
 | server/attachments.mjs | Authenticated chunk upload/download, pending transfer cleanup and storage quotas |
 | public/onboarding.js | Parse invite/setup fragments, invitation precedence and removing secrets from the address |
+| public/media-cache.js | Identity-scoped encrypted IndexedDB media retention, expiry and transactional deletion tombstones |
+| public/call-metrics.js | Bundled transport/RTP byte deltas, measured rate formatting and active-stream codec labels |
 | public/media.js | Phone class, Opus SDP tuning, capture, sender adaptation, candidate queues, ICE restart and relay test |
 | public/sw.js | Call-state checks, generic notifications, foreground-ring coordination and notification taps; no fetch cache |
 | public/call-setup.js | Phone detection, Home Screen guidance, notification permission and heard-alert verification |

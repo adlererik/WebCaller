@@ -1,6 +1,6 @@
 {
   "name": "webcaller",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -19,5 +19,8 @@
     "ws": "8.21.0"
   },
   "description": "Web-only adaptive audio/video calls and encrypted disappearing messages",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "fake-indexeddb": "6.2.5"
+  }
 }

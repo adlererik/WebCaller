@@ -50,7 +50,7 @@ export function drawMessages({container,list,self,options,openMedia,load,save,se
           const expand=node('button','audio-expand','Open audio');expand.type='button';expand.onclick=()=>openMedia(m);bubble.append(expand);
         }else{
           bubble.append(node('strong','attachment-name',kind==='audio'?'Voice message':a.name));
-          const action=node('button','attachment-action',m.blobURL?'Save file':m.loading?'Loading…':`${m.loadError?'Retry':kind==='audio'?'Play voice message':'Download file'} · ${fileSize(a.size)}`);
+          const action=node('button','attachment-action',m.blobURL?'Save file':m.loading?'Loading…':`${m.loadError?'Retry':kind==='audio'?'Play voice message':'Open file'} · ${fileSize(a.size)}`);
           action.type='button';action.disabled=!!m.loading;action.onclick=()=>m.blobURL?save(m):load(m);bubble.append(action);
         }
       }
@@ -59,7 +59,7 @@ export function drawMessages({container,list,self,options,openMedia,load,save,se
       if(m.pinned)meta.append(node('span','pin-mark','Pinned'));
       if(m.editedAt)meta.append(node('span','message-edited','Edited'));
       const clock=node('time','message-time',new Date(time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));clock.dateTime=new Date(time).toISOString();clock.title=m.receipt?.deliveredAt?'Received '+new Date(time).toLocaleString():'Sent '+new Date(time).toLocaleString();meta.append(clock);
-      if(m.from===self)for(const [label,value]of [['Received',m.receipt?.deliveredAt],['Seen',m.receipt?.readAt]])if(value){const mark=node('span','receipt-check','✓');mark.title=label+' '+new Date(value).toLocaleString();mark.ariaLabel=mark.title;mark.dataset.receipt=label.toLowerCase();meta.append(mark);}
+      const receipts=node('span','receipt-group');if(m.from===self)for(const [label,value]of [['Received',m.receipt?.deliveredAt],['Seen',m.receipt?.readAt]])if(value){const mark=node('span','receipt-check','✓');mark.title=label+' '+new Date(value).toLocaleString();mark.ariaLabel=mark.title;mark.dataset.receipt=label.toLowerCase();receipts.append(mark);}if(receipts.childElementCount)meta.append(receipts);
       bubble.append(meta);
       if(m.reactions&&Object.keys(m.reactions).length){const chips=node('div','message-reactions'),counts=new Map();for(const emoji of Object.values(m.reactions))counts.set(emoji,(counts.get(emoji)||0)+1);for(const [value,count]of counts){const chip=node('button','reaction-chip',value);chip.type='button';chip.ariaLabel=`Reaction ${value}, ${count}`;chip.setAttribute('aria-pressed',String(m.reactions[self]===value));if(count>1)chip.append(node('span','reaction-count',count));chip.onclick=()=>options(m);chips.append(chip);}stack.append(chips);}
 

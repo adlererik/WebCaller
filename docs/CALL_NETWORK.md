@@ -52,3 +52,20 @@ Voice and Video pills show the actual negotiated codecs from active WebRTC strea
 3. Check the codec/rate display. Where network type is exposed, either cellular endpoint limits both video directions.
 4. Test a controlled weak/lossy connection. Picture and file transfers should reduce/pause before voice; improve the link and confirm recovery.
 5. Repeat Android/iPhone, headset/Bluetooth/speaker, front/back lens, direct and TURN-only paths. Actual hardware acceleration and power consumption require measurements on those physical devices.
+
+
+## New flagship phones: which codec actually works?
+
+A phone needs an encoder for outgoing camera video and a decoder for incoming video. Hardware playback support alone does not establish an efficient two-way WebRTC call. The browser, OS, exact profile and other phone also matter.
+
+| Codec | Practical expectation |
+|---|---|
+| H.264 | Broadly compatible fallback. Hardware implementations are common, but the browser chooses the actual implementation. |
+| H.265 / HEVC | An efficient option when both browsers advertise compatible WebRTC capabilities and efficient encoding/decoding. Safari supports HEVC RTP; Chrome added WebRTC HEVC in version 136, with device-dependent capability reporting. |
+| AV1 | Can offer strong compression, but efficient hardware encoding must be confirmed separately from decoding. Do not force it solely because a phone is a flagship. |
+| VP9 | Another optional candidate when both phones expose it and report efficient two-way support. |
+| VP8 | Widely compatible fallback when more efficient shared variants are unavailable. |
+
+As examples, Apple lists HEVC/H.264 among the iPhone 17 Pro’s camera recording formats and AV1 among playback formats. Qualcomm explicitly lists an accelerated H.265/VP9/AV1 **decoder** in the Snapdragon 8 Elite Gen 5 brief. These specifications are not a promise of AV1 hardware encoding in a browser. WebCaller queries both sides and shows the actual negotiated codec at the top of the call. H.265 is a plausible efficient shared option on modern devices; H.264 remains a practical fallback. Exact hardware acceleration still needs tests on those phones.
+
+Primary references: [WebRTC’s required H.264/VP8 codecs](https://www.rfc-editor.org/rfc/rfc7742.html), [Safari HEVC RTP support](https://webkit.org/blog/15865/webkit-features-in-safari-18-0/), [Chrome 136 WebRTC HEVC](https://developer.chrome.com/blog/chrome-136-beta), [iPhone 17 Pro specifications](https://support.apple.com/en-us/125090), [Snapdragon 8 Elite Gen 5 brief](https://www.qualcomm.com/content/dam/qcomm-martech/dm-assets/documents/Snapdragon-8-Elite-Gen-5-product-brief.pdf), and [Media Capabilities](https://www.w3.org/TR/media-capabilities/). Reviewed October 2026; runtime detection takes precedence over this overview.

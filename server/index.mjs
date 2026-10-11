@@ -157,6 +157,28 @@ export function createApp(options = {}) {
         if(await handleAttachment(req,res,route,u,json))return;
         if(await handleMessageEvents(req,res,route,u,json))return;
         if (route === '/me' && req.method === 'GET') return json(200, { user: userView(u), contacts: contacts(u.id) });
+        const removeContact=route.match(/^\/contacts\/([a-f0-9-]{36})$/);
+        if(removeContact&&req.method==='DELETE'){
+          const peer=removeContact[1];if(peer===u.id)fail(400,'Choose a contact');store.purge();
+          // Deleted IDs remain until their original expiry, preventing late upload
+          // commits/replays from restoring history, even after a fresh invitation.
+          const deleted=store.transaction(()=>{
+            const pair=[u.id,peer,peer,u.id];
+            const rows=store.all('SELECT id,sender,recipient,expires FROM messages WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?) UNION SELECT message_id AS id,sender,recipient,expires FROM attachments WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?)',...pair,...pair);
+            for(const m of rows)store.run('INSERT OR IGNORE INTO message_deletions VALUES(?,?,?,?)',m.id,m.sender,m.recipient,m.expires);
+            store.run('DELETE FROM attachments WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?)',...pair);
+            store.run('DELETE FROM messages WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?)',...pair);
+            store.run('DELETE FROM contacts WHERE (a=? AND b=?) OR (a=? AND b=?)',...pair);
+            return store.all('SELECT id,expires FROM message_deletions WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?)',...pair);
+          });
+          for(const [id,c]of calls)if([c.from,c.to].includes(u.id)&&[c.from,c.to].includes(peer)){
+            alerts.stop(id);calls.delete(id);const event={type:'call-ended',callId:id,reason:'Contact removed.'};emit(c.from,event);emit(c.to,event);
+          }
+          // Send revocation first so visible clients stop transfers immediately;
+          // their ordinary resync also learns all deletion IDs when reconnecting.
+          emit(u.id,{type:'contacts'});emit(peer,{type:'contacts'});
+          return json(200,{ok:true,contacts:contacts(u.id),deleted});
+        }
         if (route === '/invite' && req.method === 'POST') {
           rate(`invite:${u.id}`, 10);
           const b=await body(req);if(b.name!==undefined&&b.name!==''&&!validName(b.name))fail(400,'Use a name of up to 48 characters');

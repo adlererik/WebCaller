@@ -31,7 +31,7 @@ Signed encrypted envelopes have expiry, sender/recipient, IDs and ciphertext. Th
 
 ## Encrypted attachments
 
-A signed encrypted message carries a random per-file AES-256-GCM key and nonce prefix. Each 64 KB plaintext chunk is encrypted with a distinct indexed nonce; authenticated data binds the file ID, chunk order, size and expiry. Contents are uploaded sequentially to an authenticated contact-only mailbox and cannot be announced until all expected chunks exist. Filename/type/key stay inside the message envelope. Quotas limit pending and completed uploads. Chat sync fetches metadata; visible open conversations then automatically decrypt photos/video/audio sequentially. General files require a user action. Transfers pause for calls, preserving voice priority. Files expire alongside their messages and are removed with device deletion. Downloads and screenshots cannot be erased outside the app.
+A signed encrypted message carries a random per-file AES-256-GCM key and nonce prefix. Each 64 KB plaintext chunk is encrypted with a distinct indexed nonce; authenticated data binds the file ID, chunk order, size and expiry. Contents are uploaded sequentially to an authenticated contact-only mailbox and cannot be announced until all expected chunks exist. Filename/type/key stay inside the message envelope. Quotas limit pending and completed uploads. Chat sync fetches metadata; visible open conversations then automatically decrypt photos/video/audio sequentially. General files require a user action. Transfers during calls use paced encrypted parts that wait on weak connections, preserving voice priority. Files expire alongside their messages and are removed with device deletion. Downloads and screenshots cannot be erased outside the app.
 
 ## Chat controls
 
@@ -80,3 +80,10 @@ See [Call networking](CALL_NETWORK.md) for the full policy, budgets, browser lim
 Both phones exchange signed encrypted codec efficiency summaries and network modes. Only variants reported smooth and efficient for both encoding and decoding on both phones receive the strongest preference: AV1, H.265, VP9, H.264, VP8. Unsupported/unknown efficiency leaves conservative compatible fallbacks; all repair codec capabilities remain available. Power-efficient does not prove hardware acceleration. Video adapts bitrate, frame rate and resolution without changing codecs on every speed fluctuation; a proven efficient alternative can be negotiated after sustained CPU limits.
 
 The header shows separate Voice/Video codec and combined send-plus-receive payload rates. Per-media rates use primary RTP counters, including retransmitted primary payload where reported, avoiding separate RTX double counting; bundled transport totals remain available in diagnostics. They exclude network headers, TURN overhead and chat/file traffic. A rate starts only after two valid statistics samples.
+
+
+## Contact removal (v0.9.0)
+
+Press and hold a contact, right-click, or use Shift+F10 / Context Menu to open a confirmation dialog. Movement, scrolling, cancellation and removed rows cancel a pending hold. Confirmation removes the mutual connection and this pair’s entire shared mailbox, including unfinished uploads and all message updates. Other contacts, histories and identities are preserved. Ringing or answered calls between this pair end, and outstanding reminders stop. Closed browsers learn the change on resync. Deletion markers protect against late commits and replay until original expiry, even after a new invitation.
+
+The browser clears this contact’s drafts, open media, decrypted messages, cached ciphertext, trust pin, unread/typing state and conversation timer. Browser tests also caught and corrected whole-chunk downloads arriving in the wrong buffer form for ciphertext caching; both whole chunks and paced parts now retain downloaded media until deletion or expiry, subject to browser storage limits.

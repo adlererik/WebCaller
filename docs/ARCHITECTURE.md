@@ -52,6 +52,7 @@ flowchart LR
 | POST /register | First browser, using private owner code and browser public keys |
 | POST /join | Redeem single-use invitation; create/reuse device and connect contacts |
 | GET /me | Authenticated self/contact metadata |
+| DELETE /contacts/:id | Idempotently remove the mutual contact relationship and shared history/media; end this pair’s call; return contact list and deleted IDs |
 | POST /invite | Create one-person invitation, with optional recipient name |
 | POST /invite-info | Verify invitation/fingerprint and preview names without redemption (unauthenticated) |
 | GET /ice | Authenticated STUN/TURN config with temporary credentials |

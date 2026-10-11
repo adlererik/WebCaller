@@ -33,6 +33,75 @@ async function fixture(push=false,extra={},options={}){
   }
   return {app,request,alice,pair,socket,url,origin};
 }
+test('contact removal clears both histories, events and complete/partial media, with durable replay protection',async t=>{
+  const f=await fixture();t.after(()=>f.app.close());const {bob}=await f.pair(),{bob:other}=await f.pair();
+  const peer={id:bob.user.id,keys:bob.identity.keys};
+  const text=await seal(f.alice.identity,f.alice.user.id,peer,{kind:'text',text:'Only this conversation'},3600);
+  await f.request('/messages',{method:'POST',token:f.alice.token,body:text});
+  const reply=await seal(bob.identity,bob.user.id,{id:f.alice.user.id,keys:f.alice.identity.keys},{kind:'text',text:'Reply'},3600);
+  await f.request('/messages',{method:'POST',token:bob.token,body:reply});
+  f.app.store.run('INSERT INTO message_events VALUES(?,?,?,?,?,?,?)',text.id,f.alice.user.id,'reaction',text.createdAt,text.expiresAt,randomUUID(),JSON.stringify(text));
+  const preserved=await seal(f.alice.identity,f.alice.user.id,{id:other.user.id,keys:other.identity.keys},{kind:'text',text:'Keep this other conversation'},3600);
+  await f.request('/messages',{method:'POST',token:f.alice.token,body:preserved});
+  const attachments=[];
+  for(const complete of [true,false]){
+    const file=new File([new Uint8Array(complete?5:10000)],'synthetic.bin',{type:'application/octet-stream'}),a=newAttachment(file);
+    const envelope=await seal(f.alice.identity,f.alice.user.id,peer,{kind:'attachment',attachment:a},3600),key=await attachmentKey(a);
+    assert.equal((await f.request('/attachments',{method:'POST',token:f.alice.token,body:{id:a.id,size:a.size,envelope}})).status,201);
+    const cipher=await encryptChunk(key,a,0,envelope.expiresAt,await file.arrayBuffer());
+    const uploaded=await fetch(f.url+'/calls/api/attachments/'+a.id+'/chunks/0'+(complete?'':'/parts/0'),{method:'PUT',headers:{Origin:f.origin,Authorization:'Bearer '+f.alice.token},body:complete?cipher:cipher.slice(0,4096)});
+    assert.equal(uploaded.status,201);if(complete)assert.equal((await f.request('/messages',{method:'POST',token:f.alice.token,body:envelope})).status,201);
+    attachments.push({a,envelope});
+  }
+  assert.equal((await f.request('/contacts/'+bob.user.id,{method:'DELETE'})).status,401);
+  assert.equal((await f.request('/contacts/'+bob.user.id,{method:'DELETE',token:f.alice.token,requestOrigin:'https://evil.test'})).status,403);
+  const foreign=await f.request('/contacts/'+bob.user.id,{method:'DELETE',token:other.token});assert.deepEqual(foreign.body.deleted,[]);
+  assert.equal(f.app.store.get('SELECT COUNT(*) n FROM messages').n,4);
+  const removed=await f.request('/contacts/'+bob.user.id,{method:'DELETE',token:f.alice.token});assert.equal(removed.status,200);
+  const ids=[text.id,reply.id,...attachments.map(v=>v.envelope.id)].sort();assert.deepEqual(removed.body.deleted.map(d=>d.id).sort(),ids);
+  assert.deepEqual(removed.body.contacts.map(c=>c.id),[other.user.id]);
+  assert.deepEqual((await f.request('/me',{token:bob.token})).body.contacts,[]);
+  assert.deepEqual((await f.request('/messages',{token:bob.token})).body,[]);
+  assert.deepEqual((await f.request('/messages',{token:f.alice.token})).body.map(e=>e.id),[preserved.id]);
+  for(const table of ['message_events','attachments','attachment_chunks','attachment_parts'])assert.equal(f.app.store.get('SELECT COUNT(*) n FROM '+table).n,0);
+  // A closed recipient learns every deleted ID on reconnect, including unfinished files.
+  assert.deepEqual((await f.request('/message-deletions',{token:bob.token})).body.map(d=>d.id).sort(),ids);
+  assert.deepEqual((await f.request('/message-deletions',{token:other.token})).body,[]);
+  assert.equal((await f.request('/contacts/'+bob.user.id,{method:'DELETE',token:f.alice.token})).status,200);
+  assert.equal((await f.request('/messages',{method:'POST',token:f.alice.token,body:text})).status,410);
+  const late=await seal(f.alice.identity,f.alice.user.id,peer,{kind:'text',text:'Cannot send without an invitation'},60);
+  assert.equal((await f.request('/messages',{method:'POST',token:f.alice.token,body:late})).status,403);
+  const invitation=(await f.request('/invite',{method:'POST',token:f.alice.token,body:{}})).body,[invite,fp]=new URL(invitation.url).hash.slice(8).split('.');
+  assert.equal((await f.request('/join',{method:'POST',token:bob.token,body:{name:'Bob',keys:bob.identity.keys,invite,fingerprint:fp}})).status,201);
+  for(const {a,envelope}of attachments){
+    assert.equal((await f.request('/attachments/'+a.id+'/chunks/0',{token:bob.token})).status,404);
+    assert.equal((await f.request('/attachments',{method:'POST',token:f.alice.token,body:{id:a.id,size:a.size,envelope}})).status,410);
+    assert.equal((await f.request('/messages',{method:'POST',token:f.alice.token,body:envelope})).status,410);
+  }
+  assert.equal((await f.request('/messages',{method:'POST',token:f.alice.token,body:await seal(f.alice.identity,f.alice.user.id,peer,{kind:'text',text:'New conversation'},60)})).status,201);
+});
+for(const answered of [false,true])test(`contact removal ends ${answered?'answered':'ringing'} calls and frees both participants`,{timeout:10000},async t=>{
+  const f=await fixture();t.after(()=>f.app.close());const {bob}=await f.pair(),{bob:other}=await f.pair();
+  const a=await f.socket(f.alice),b=await f.socket(bob),callId=randomUUID(),peer={id:bob.user.id,keys:bob.identity.keys};
+  const offer=await seal(f.alice.identity,f.alice.user.id,peer,{kind:'offer',callId},90),arrived=once(b,'message');
+  a.send(JSON.stringify({type:'signal',kind:'offer',callId,envelope:offer}));assert.equal(JSON.parse((await arrived)[0]).kind,'offer');
+  if(answered){const delivered=once(a,'message');b.send(JSON.stringify({type:'signal',kind:'answer',callId,envelope:await seal(bob.identity,bob.user.id,{id:f.alice.user.id,keys:f.alice.identity.keys},{kind:'answer',callId},90)}));assert.equal(JSON.parse((await delivered)[0]).kind,'answer');}
+  // Removing an unrelated contact cannot end this call.
+  const events=[];a.on('message',raw=>events.push(JSON.parse(raw)));
+  await f.request('/contacts/'+other.user.id,{method:'DELETE',token:f.alice.token});assert.ok(!events.some(e=>e.type==='call-ended'));
+  const endA=once(a,'message'),endB=once(b,'message');await f.request('/contacts/'+bob.user.id,{method:'DELETE',token:f.alice.token});
+  for(const promise of [endA,endB]){const event=JSON.parse((await promise)[0]);assert.equal(event.type,'call-ended');assert.equal(event.callId,callId);}
+  const newCall=randomUUID(),rejection=new Promise(resolve=>b.on('message',raw=>{const e=JSON.parse(raw);if(e.type==='error')resolve(e);}));
+  b.send(JSON.stringify({type:'signal',kind:'offer',callId:newCall,envelope:await seal(bob.identity,bob.user.id,{id:f.alice.user.id,keys:f.alice.identity.keys},{kind:'offer',callId:newCall},90)}));
+  // The deleted connection cannot ring either phone.
+  assert.equal((await rejection).error,'Unknown contact');
+  const invitation=(await f.request('/invite',{method:'POST',token:f.alice.token,body:{}})).body,[invite,fp]=new URL(invitation.url).hash.slice(8).split('.');
+  assert.equal((await f.request('/join',{method:'POST',token:bob.token,body:{name:'Bob',keys:bob.identity.keys,invite,fingerprint:fp}})).status,201);
+  // After an explicit new invitation, both can call again rather than remaining busy.
+  const nextId=randomUUID(),incoming=new Promise(resolve=>a.on('message',raw=>{const e=JSON.parse(raw);if(e.type==='signal')resolve(e);}));
+  b.send(JSON.stringify({type:'signal',kind:'offer',callId:nextId,envelope:await seal(bob.identity,bob.user.id,{id:f.alice.user.id,keys:f.alice.identity.keys},{kind:'offer',callId:nextId},90)}));
+  assert.equal((await incoming).callId,nextId);a.close();b.close();
+});
 test('enrollment, fragment identity verification, single-use invites and authorization',async t=>{
   const f=await fixture();t.after(()=>f.app.close());const {bob,invite,fp}=await f.pair();
   assert.equal((await f.request('/join',{method:'POST',body:{name:'Other',keys:bob.identity.keys,invite,fingerprint:fp}})).status,410);

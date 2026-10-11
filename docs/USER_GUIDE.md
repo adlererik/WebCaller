@@ -10,6 +10,10 @@ The first browser uses the owner's private setup QR/link. Other people accept an
 
 The left conversation list shows your contacts and unread indicators. **Search people** filters it locally. Tap a person to open their conversation. On narrow screens the back arrow returns to the list. Only established contacts can route messages or calls to one another.
 
+Press and hold a person in the conversation list for about a second, then choose **Delete contact and history**. On a computer you can right-click; keyboard users can use Shift+F10 or the Context Menu key. The dialog explains the effect before you confirm. Cancel keeps everything.
+
+Removal disconnects the two contacts and deletes their shared messages, media, edits, receipts, reactions and pins from this server. Open phones clear that conversation and cached media; a closed phone learns the removal when it reconnects. A call with that person ends. Other conversations and your browser identity stay intact. To talk again, send a new invitation. Saved, forwarded or captured copies elsewhere cannot be recalled.
+
 ## Voice and video
 
 The phone icon starts an audio-only call; the camera icon starts video. Allow the microphone when requested. An incoming call presents answer and decline buttons. Microphone/camera permissions are requested when making or answering, not when accepting an invitation.

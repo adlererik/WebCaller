@@ -1,4 +1,5 @@
 import {TRANSFER_PART_SIZE,transferPacer} from './transfer-policy.js';
+import {contactPress} from './contact-press.js';
 import { newIdentity, fingerprint, safetyNumber, seal, open, vault } from './crypto.js';
 import { Phone, testRelay } from './media.js';
 import {formatRate} from './call-metrics.js';
@@ -46,7 +47,7 @@ const ownerName=entry.name;entry.setupCode=null;
 clearEntryFragment(location,history,!!invitation&&phonePlatform().needsHomeScreen);
 let device,config,selected,ws,wsReady=false,connecting=false,reconnectTimer,reconnectAttempt=0,heartbeat,phone,call,callTicker,wakeLock,soundContext,ringTimer,toastTimer;let ringNodes=new Set();
 let deletedMessages=new Map(),typingPeers=new Map(),typingSeen=new Map(),typingTimer,typingSent=0,typingPeerId,typingChain=Promise.resolve(),viewerMessage,draft;
-let messages=new Map(),unread=new Map(),seenSignals=new Set(),pendingCandidates=new Map(),settings={timers:{}},transfer;
+let messages=new Map(),unread=new Map(),seenSignals=new Set(),pendingCandidates=new Map(),settings={timers:{}},transfer,contactToRemove,contactPressCleanup=[];
 try{settings={...settings,...JSON.parse(localStorage.getItem('webcaller-settings')||'{}')};}catch{}
 delete settings.mode; // Retire saved manual modes; connection management is always Automatic.
 const preference=()=> 'auto';
@@ -64,6 +65,8 @@ async function api(path,method='GET',data,signal){
 const alerts=callSetup({api,config:()=>config,device:()=>device,save:()=>vault('put',device),toast});
 function connected(ready){wsReady=ready;$('connection').textContent=ready?'Ready for conversations':'Reconnecting…';$('connection').classList.toggle('online',ready);}
 async function pinContacts(contacts){
+  const removed=(device.contacts||[]).filter(c=>!contacts.some(next=>next.id===c.id));
+  for(const c of removed)clearContactHistory(c.id);
   device.pins ||= {};const safe=[];
   for(const contact of contacts){
     const next=await fingerprint(contact.keys),prior=device.pins[contact.id];
@@ -74,6 +77,7 @@ async function pinContacts(contacts){
   if(selected){selected=safe.find(c=>c.id===selected.id);if(!selected){$('conversation').classList.add('hidden');$('empty').classList.remove('hidden');document.querySelector('.app').classList.remove('chat-open');}}
 }
 function renderContacts(){
+  contactPressCleanup.splice(0).forEach(dispose=>dispose());
   const el=$('contacts');el.replaceChildren();$('contact-count').textContent=device?.contacts?.length||0;
   const contacts=(device?.contacts||[]).filter(c=>c.name.toLowerCase().includes($('search').value.toLowerCase()));
   for(const c of contacts){
@@ -82,9 +86,27 @@ function renderContacts(){
     const text=document.createElement('div');text.className='contact-text';const name=document.createElement('strong');name.textContent=c.name;
     const preview=document.createElement('span');preview.textContent='Private conversation';text.append(name,preview);button.append(avatar,text);
     if(unread.get(c.id)){const badge=document.createElement('span');badge.className='unread';badge.textContent=unread.get(c.id);button.append(badge);}
-    button.onclick=()=>selectContact(c);el.append(button);
+    button.setAttribute('aria-haspopup','dialog');button.title='Press and hold, or right-click, for contact options';
+    contactPressCleanup.push(contactPress(button,{activate:()=>selectContact(c),open:()=>showContactOptions(c)}));el.append(button);
   }
   if(!contacts.length){const p=document.createElement('p');p.className='no-contacts';p.textContent=$('search').value?'No people found.':'Your people will appear here.\nStart with an invitation.';el.append(p);}
+}
+function showContactOptions(c){
+  if(!device.contacts.some(peer=>peer.id===c.id))return;
+  contactToRemove=c;$('remove-contact-title').textContent=`Remove ${c.name}?`;$('remove-contact-error').textContent='';
+  $('confirm-remove-contact').disabled=false;if(!$('remove-contact-dialog').open)$('remove-contact-dialog').showModal();
+}
+function clearContactHistory(id){
+  if(transfer?.peerId===id)transfer.controller.abort();
+  if(selected?.id===id){
+    actions.reset();stopTyping();locationShare.close();$('attachment-dialog').close();closeViewer();captures.close();clearDraft();$('draft-dialog').close();$('emoji-dialog').close();
+    $('message-input').value='';updateComposer();$('messages').replaceChildren();$('pinned-message').textContent='';$('pinned-message').onclick=null;$('pinned-message').classList.add('hidden');
+    selected=null;$('conversation').classList.add('hidden');$('empty').classList.remove('hidden');document.querySelector('.app').classList.remove('chat-open');
+  }
+  if(call?.peer.id===id)finishCall('Contact removed.');
+  for(const m of [...messages.values()])if([m.from,m.to].includes(id))rememberDeletion(m.id,m.expiresAt);
+  unread.delete(id);typingPeers.delete(id);delete settings.timers[id];delete device.pins?.[id];saveSettings();
+  if(contactToRemove?.id===id){contactToRemove=null;$('remove-contact-dialog').close();}
 }
 function selectContact(c){
   actions.reset();stopTyping();locationShare.close();$('attachment-dialog').close();closeViewer();captures.close();$('draft-dialog').close();$('message-input').value='';updateComposer();selected=c;unread.delete(c.id);renderContacts();$('empty').classList.add('hidden');$('conversation').classList.remove('hidden');document.querySelector('.app').classList.add('chat-open');
@@ -158,7 +180,7 @@ async function acceptMessage(envelope,hydrating=false){
   if(payload.kind==='attachment'&&(!validAttachment(payload.attachment)||(payload.text!==undefined&&(typeof payload.text!=='string'||payload.text.length>4000))))return;
   if(!['text','attachment'].includes(payload.kind))return;
   if(payload.location!==undefined&&(payload.kind!=='attachment'||mediaKind(payload.attachment.type)!=='image'||!validLocation(payload.location)))return;
-  if(document.visibilityState!=='visible'||deletedMessages.has(envelope.id)||messages.has(envelope.id)||envelope.expiresAt<=Date.now())return;
+  if(document.visibilityState!=='visible'||!device.contacts.some(c=>c.id===peerId)||deletedMessages.has(envelope.id)||messages.has(envelope.id)||envelope.expiresAt<=Date.now())return;
   if(payload.replyTo!==undefined&&!validMessageId(payload.replyTo))return;
   messages.set(envelope.id,{id:envelope.id,from:envelope.from,to:envelope.to,createdAt:envelope.createdAt,expiresAt:envelope.expiresAt,text:payload.text||'',attachment:payload.attachment,location:payload.location,replyTo:payload.replyTo,forwarded:payload.forwarded===true,receivedLocally:envelope.from!==device.user.id?Math.max(envelope.createdAt,Date.now()):undefined});
   for(const update of pendingMessageEvents.get(envelope.id)||[])await acceptMessageEvent(update);pendingMessageEvents.delete(envelope.id);
@@ -199,7 +221,7 @@ async function chunkRequest(path,method,state,data){
 }
 async function transferChunk(a,index,state,cipher){
   const path=`/attachments/${a.id}/chunks/${index}`,method=cipher?'PUT':'GET';
-  if(!call)return chunkRequest(path,method,state,cipher);
+  if(!call){const result=await chunkRequest(path,method,state,cipher);return cipher?result:result.buffer;}
   const length=Math.min(CHUNK_SIZE,a.size-index*CHUNK_SIZE)+16,result=cipher?null:new Uint8Array(length),bytes=cipher?new Uint8Array(cipher):null;
   for(let offset=0;offset<length;offset+=TRANSFER_PART_SIZE){
     const part=Math.floor(offset/TRANSFER_PART_SIZE),data=bytes?.subarray(offset,offset+TRANSFER_PART_SIZE);
@@ -212,7 +234,7 @@ async function sendFile(file,text='',sharedLocation,recipient=selected){
   if(sharedLocation&&!validLocation(sharedLocation))return toast('Invalid location.');
   if(!file||!recipient)return false;const peer=recipient;
   let a;try{a=newAttachment(file);}catch(e){return toast(e.message);}
-  const state=beginTransfer(`Sending ${a.name} to ${peer.name}`);if(!state)return;
+  const state=beginTransfer(`Sending ${a.name} to ${peer.name}`);if(!state)return;state.peerId=peer.id;
   let committed=false;const chunks=[],owner=device.user.id;
   try{
     const envelope=await seal(device.identity,device.user.id,peer,{kind:'attachment',attachment:a,text,...(sharedLocation?{location:sharedLocation}:{})},timerFor(peer.id)),key=await attachmentKey(a);state.messageId=envelope.id;transferExpiry(state,envelope.expiresAt);
@@ -239,7 +261,7 @@ async function loadAttachment(m,automatic=false){
   if(!m.attachment||m.expiresAt<=Date.now()||messages.get(m.id)!==m)return;
   if(m.blobURL)return automatic?undefined:mediaKind(m.attachment.type)==='file'?saveAttachment(m):openViewer(m);
   const a=m.attachment,state=beginTransfer(`Loading ${a.name}`,automatic);if(!state)return;
-  state.messageId=m.id;transferExpiry(state,m.expiresAt);m.loading=true;m.loadError=null;renderMessages();const pieces=[];
+  state.peerId=m.from===device.user.id?m.to:m.from;state.messageId=m.id;transferExpiry(state,m.expiresAt);m.loading=true;m.loadError=null;renderMessages();const pieces=[];
   try{
     const key=await attachmentKey(a),owner=device.user.id;
     let chunks=await cachedMedia.get(owner,m,a),local=!!chunks;
@@ -456,7 +478,7 @@ async function receiveSignal(b){
   let peer=device.contacts.find(c=>c.id===b.envelope.from);
   if(!peer){await pinContacts((await api('/me')).contacts);peer=device.contacts.find(c=>c.id===b.envelope.from);}if(!peer)return;
   const payload=await open(device.identity,device.user.id,peer,b.envelope);
-  if(payload.kind!==b.kind||payload.callId!==b.callId)return;
+  if(!device.contacts.some(c=>c.id===peer.id)||payload.kind!==b.kind||payload.callId!==b.callId)return;
   seenSignals.add(b.envelope.id);if(seenSignals.size>2000)seenSignals.delete(seenSignals.values().next().value);
   if(b.kind==='offer'){
     if(call?.id===b.callId)return;if(call)return;
@@ -625,6 +647,15 @@ $('diagnostics').onclick=async()=>{
   try{const ice=await api('/ice');const result=await testRelay(ice);$('diagnostic-result').textContent=result.text;}catch(e){$('diagnostic-result').textContent=e.message;}finally{$('diagnostics').disabled=false;}
 };
 $('forget-device').onclick=()=>{$('settings-dialog').close();$('forget-dialog').showModal();};
+$('remove-contact-dialog').addEventListener('close',()=>{contactToRemove=null;});
+$('confirm-remove-contact').onclick=async()=>{
+  const c=contactToRemove;if(!c)return;$('confirm-remove-contact').disabled=true;
+  try{
+    const result=await api(`/contacts/${c.id}`,'DELETE');
+    for(const m of result.deleted)rememberDeletion(m.id,m.expires);
+    clearContactHistory(c.id);await pinContacts(result.contacts);$('remove-contact-dialog').close();toast('Contact and shared history deleted.');
+  }catch(e){if(contactToRemove?.id===c.id){$('remove-contact-error').textContent=e.message;$('confirm-remove-contact').disabled=false;}else toast(e.message);}
+};
 $('confirm-forget').onclick=async()=>{
   try{await api('/device','DELETE');if(ws){ws.onclose=null;ws.close();}clearTimeout(reconnectTimer);clearInterval(heartbeat);finishCall('');transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();await cachedMedia.clear();await vault('delete');localStorage.removeItem('webcaller-settings');device=null;location.reload();}catch(e){toast(e.message);}
 };

@@ -1,4 +1,5 @@
 :root{color-scheme:light dark;--surface:#fafbfe;--panel:#edf0f6;--ink:#20262e;--soft-ink:#69727e;--bubble:#e7ebf3;--sent:#3a76f0;--receipt:#13772f;--receipt-bg:#dcf7e3;--accent-panel:#dfe7fa}
+.contact{-webkit-touch-callout:none;user-select:none;touch-action:pan-y}.contact-hint{font-size:11px;color:var(--soft-ink);margin:8px 10px 16px}#remove-contact-dialog .dialog-mark{color:#d44959}#remove-contact-error:empty{display:none}
 /* Keep keyboard focus visible on buttons, without a box around the composer. */
 .compose-pill textarea:focus,.compose-pill textarea:focus-visible{outline:none;box-shadow:none}
 .message-stack{min-width:0;max-width:100%;display:flex;flex-direction:column;align-items:flex-start;position:relative}

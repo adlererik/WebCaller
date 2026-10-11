@@ -1,9 +1,12 @@
 import { newIdentity, fingerprint, safetyNumber, seal, open, vault, unb64 } from './crypto.js';
 import { Phone, testRelay } from './media.js';
 import { readEntryFragment, clearEntryFragment } from './onboarding.js';
-import {newAttachment,validAttachment,attachmentKey,encryptChunk,decryptChunk,CHUNK_SIZE,imageTypes,fileSize} from './attachments.js';
+import {newAttachment,validAttachment,attachmentKey,encryptChunk,decryptChunk,CHUNK_SIZE,mediaKind,fileSize} from './attachments.js';
+import {drawMessages,emojiPicker} from './chat-ui.js';
+import {chatCapture} from './chat-capture.js';
 const $=id=>document.getElementById(id);
 const icons={
+  smile:'<circle cx="12" cy="12" r="9"/><path d="M8 14a4 4 0 0 0 8 0M8 9h.01M16 9h.01"/>',camera:'<path d="m8 5 2-3h4l2 3h4v16H4V5Z"/><circle cx="12" cy="13" r="4"/>',download:'<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',
   chat:'<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H7l-5 3 1.5-5.5A8.5 8.5 0 1 1 21 11.5Z"/><path d="M7 11h.01M12 11h.01M17 11h.01"/>',
   phone:'<path d="m7 3 3 5-3 2c1.7 3.5 3.5 5.3 7 7l2-3 5 3v3c0 1-1 2-2 2C9 22 2 15 2 5c0-1 1-2 2-2Z"/>',
   hangup:'<path d="M3 15v-4c5-5 13-5 18 0v4h-5v-4a14 14 0 0 0-8 0v4Z"/>',
@@ -24,6 +27,7 @@ let ownerSetup=entry.setupCode;
 const ownerName=entry.name;entry.setupCode=null;
 clearEntryFragment(location,history); // Never send invitation/setup secrets in HTTP URLs or referrers.
 let device,config,selected,ws,wsReady=false,reconnectTimer,reconnectAttempt=0,heartbeat,phone,call,callTicker,wakeLock,soundContext,ringTimer,toastTimer;
+let deletedMessages=new Map(),typingPeers=new Map(),typingSeen=new Map(),typingTimer,typingSent=0,typingPeerId,typingChain=Promise.resolve(),chosenMessage,viewerMessage,draft;
 let messages=new Map(),unread=new Map(),seenSignals=new Set(),pendingCandidates=new Map(),settings={timers:{}},transfer;
 try{settings={...settings,...JSON.parse(localStorage.getItem('webcaller-settings')||'{}')};}catch{}
 delete settings.mode; // Retire saved manual modes; connection management is always Automatic.
@@ -64,60 +68,97 @@ function renderContacts(){
   if(!contacts.length){const p=document.createElement('p');p.className='no-contacts';p.textContent=$('search').value?'No people found.':'Your people will appear here.\nStart with an invitation.';el.append(p);}
 }
 function selectContact(c){
-  selected=c;unread.delete(c.id);renderContacts();$('empty').classList.add('hidden');$('conversation').classList.remove('hidden');document.querySelector('.app').classList.add('chat-open');
+  stopTyping();closeViewer();captures.close();$('draft-dialog').close();$('message-input').value='';updateComposer();selected=c;unread.delete(c.id);renderContacts();$('empty').classList.add('hidden');$('conversation').classList.remove('hidden');document.querySelector('.app').classList.add('chat-open');
   $('peer-name').textContent=c.name;$('peer-avatar').textContent=initials(c.name);$('expiry-label').textContent=`Your messages disappear after ${duration(timerFor(c.id))}`;renderMessages();
 }
 function renderMessages(){
-  const el=$('messages');const nearBottom=el.scrollHeight-el.scrollTop-el.clientHeight<100;el.replaceChildren();
-  const list=[...messages.values()].filter(m=>m.expiresAt>Date.now()&&[m.from,m.to].includes(selected?.id)).sort((a,b)=>a.createdAt-b.createdAt);
-  for(const m of list){
-    const bubble=document.createElement('div');bubble.className='message'+(m.from===device.user.id?' outgoing':'');
-    const text=document.createElement('span');text.textContent=m.text||'';const meta=document.createElement('span');meta.className='message-meta';
-    const time=new Date(m.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});meta.textContent=time+' · '+duration(Math.max(1,Math.ceil((m.expiresAt-Date.now())/1000))).replace(/\d+ seconds/,'expires soon');
-    if(m.attachment){
-      bubble.classList.add('attachment-message');
-      const a=m.attachment,name=document.createElement('strong');name.className='attachment-name';name.textContent=a.name;bubble.append(name);
-      if(m.blobURL&&imageTypes.has(a.type)){const image=document.createElement('img');image.src=m.blobURL;image.alt=a.name;image.className='chat-image';image.onload=()=>{if(nearBottom)el.scrollTop=el.scrollHeight;};bubble.append(image);}
-      const action=document.createElement('button');action.type='button';action.className='attachment-action';action.textContent=m.blobURL?'Save file':`${imageTypes.has(a.type)?'View photo':'Download file'} · ${fileSize(a.size)}`;
-      action.onclick=()=>m.blobURL?saveAttachment(m):void loadAttachment(m);bubble.append(action);
-    }else bubble.append(text);
-    bubble.append(meta);el.append(bubble);
-  }
-  if(!list.length){const p=document.createElement('p');p.className='chat-empty';p.textContent='A conversation just for you two.\nSay hello, or give them a call.';el.append(p);}
-  if(nearBottom||list.length<4)el.scrollTop=el.scrollHeight;
+  if(!selected)return;
+  const list=[...messages.values()].filter(m=>m.expiresAt>Date.now()&&[m.from,m.to].includes(selected.id)).sort((a,b)=>a.createdAt-b.createdAt);
+  drawMessages({container:$('messages'),list,self:device.user.id,options:messageOptions,openMedia:openViewer,load:loadAttachment,save:saveAttachment});
+  renderTyping();queueMicrotask(pumpMedia);
+}
+function messageOptions(m){if(m.expiresAt<=Date.now())return;chosenMessage=m;$('message-dialog').showModal();}
+function rememberDeletion(id,expires){
+  if(typeof id!=='string'||!Number.isSafeInteger(expires))return;
+  deletedMessages.set(id,expires);const m=messages.get(id);
+  if(transfer?.messageId===id)transfer.controller.abort();if(viewerMessage?.id===id)closeViewer();
+  if(m){clearMessage(m);messages.delete(id);if(selected)renderMessages();}
+}
+function renderTyping(){
+  const active=selected&&document.visibilityState==='visible'&&typingPeers.get(selected.id)>Date.now();
+  $('typing-status').classList.toggle('hidden',!active);$('typing-label').textContent=active?`${selected.name} is typing`:'';
+}
+async function sendTyping(peer,active){
+  typingChain=typingChain.then(async()=>{
+    if(!peer||!device||!wsReady||ws?.readyState!==1)return;
+    const envelope=await seal(device.identity,device.user.id,peer,{kind:'typing',active},8);if(wsReady&&ws?.readyState===1)ws.send(JSON.stringify({type:'typing',envelope}));
+  }).catch(()=>{});return typingChain;
+}
+function stopTyping(){
+  clearTimeout(typingTimer);if(typingPeerId){const peer=device?.contacts?.find(c=>c.id===typingPeerId);void sendTyping(peer,false);}typingPeerId=null;typingSent=0;
+}
+function inputTyping(){
+  updateComposer();if(!selected||!$('message-input').value.trim())return stopTyping();
+  const now=Date.now();if(typingPeerId!==selected.id||now-typingSent>=3000){typingPeerId=selected.id;typingSent=now;void sendTyping(selected,true);}
+  clearTimeout(typingTimer);typingTimer=setTimeout(stopTyping,4500);
+}
+async function receiveTyping(envelope){
+  if(envelope.expiresAt<=Date.now()||typingSeen.has(envelope.id))return;
+  const peer=device.contacts.find(c=>c.id===envelope.from);if(!peer)return;
+  const payload=await open(device.identity,device.user.id,peer,envelope);
+  if(payload.kind!=='typing'||typeof payload.active!=='boolean')return;
+  typingSeen.set(envelope.id,envelope.expiresAt);
+  if(payload.active)typingPeers.set(peer.id,Math.min(envelope.expiresAt,Date.now()+8000));else typingPeers.delete(peer.id);renderTyping();
+}
+function updateComposer(){
+  const hasText=!!$('message-input').value.trim();$('send').classList.toggle('hidden',!hasText);$('attach').classList.toggle('hidden',hasText);
+  const input=$('message-input');input.style.height='auto';input.style.height=Math.max(42,Math.min(132,input.scrollHeight))+'px';input.style.overflowY=input.scrollHeight>132?'auto':'hidden';
+}
+function pumpMedia(){
+  if(!device||!selected||call||transfer||document.visibilityState!=='visible')return;
+  const bounds=$('messages').getBoundingClientRect();
+  if(bounds.height<=0)return;
+  const m=[...messages.values()].find(m=>{
+    if(!m.attachment||mediaKind(m.attachment.type)==='file'||![m.from,m.to].includes(selected.id)||m.expiresAt<=Date.now()||m.blobURL||m.loading||m.loadError)return false;
+    const row=[...$('messages').children].find(e=>e.dataset.key===m.id),rect=row?.getBoundingClientRect();
+    return rect&&rect.bottom>=bounds.top-150&&rect.top<=bounds.bottom+150;
+  });
+  if(m)void loadAttachment(m,true);
 }
 async function acceptMessage(envelope,hydrating=false){
-  if(messages.has(envelope.id)||envelope.expiresAt<=Date.now())return;
+  if(document.visibilityState==='hidden')return; // Resync ciphertext when visible; do not rebuild hidden plaintext.
+  if(messages.has(envelope.id)||deletedMessages.has(envelope.id)||envelope.expiresAt<=Date.now())return;
   const peerId=envelope.from===device.user.id?envelope.to:envelope.from;
   let peer=device.contacts.find(c=>c.id===peerId);
   if(!peer&&!hydrating){await pinContacts((await api('/me')).contacts);peer=device.contacts.find(c=>c.id===peerId);}if(!peer)return;
   const payload=await open(device.identity,device.user.id,peer,envelope);
   if(payload.kind==='text'&&(typeof payload.text!=='string'||payload.text.length>4000))return;
-  if(payload.kind==='attachment'&&!validAttachment(payload.attachment))return;
+  if(payload.kind==='attachment'&&(!validAttachment(payload.attachment)||(payload.text!==undefined&&(typeof payload.text!=='string'||payload.text.length>4000))))return;
   if(!['text','attachment'].includes(payload.kind))return;
+  if(deletedMessages.has(envelope.id)||messages.has(envelope.id)||envelope.expiresAt<=Date.now())return;
   messages.set(envelope.id,{id:envelope.id,from:envelope.from,to:envelope.to,createdAt:envelope.createdAt,expiresAt:envelope.expiresAt,text:payload.text||'',attachment:payload.attachment});
   if(!hydrating&&envelope.from!==device.user.id&&selected?.id!==peer.id)unread.set(peer.id,(unread.get(peer.id)||0)+1);
   if(selected?.id===peer.id)renderMessages();renderContacts();
 }
-function beginTransfer(label){
-  if(call){toast('Send or open files after the call to keep your audio clear.');return null;}
-  if(transfer){toast('Wait for the current file transfer to finish.');return null;}
+function beginTransfer(label,automatic=false){
+  if(call){if(!automatic)toast('Send or open files after the call to keep your audio clear.');return null;}
+  if(transfer){if(!automatic)toast('Wait for the current file transfer to finish.');return null;}
   const state={controller:new AbortController(),label};transfer=state;$('attach').disabled=true;$('attachment-progress').classList.remove('hidden');$('attachment-progress').textContent=label;return state;
 }
 function transferProgress(state,index,total){if(transfer===state)$('attachment-progress').textContent=`${state.label} · ${Math.round(index/total*100)}%`;}
-function endTransfer(state){if(transfer===state){transfer=null;$('attach').disabled=false;$('attachment-progress').classList.add('hidden');}}
+function endTransfer(state){if(transfer===state){transfer=null;$('attach').disabled=false;$('attachment-progress').classList.add('hidden');queueMicrotask(pumpMedia);}}
 function stopTransferForCall(){if(transfer){transfer.controller.abort();toast('File transfer stopped to keep your call clear. Try again after the call.');}}
 async function chunkRequest(path,method,state,data){
   const res=await fetch(`${base}/api${path}`,{method,headers:{Authorization:`Bearer ${device.token}`,...(data?{'Content-Type':'application/octet-stream'}:{})},body:data,cache:'no-store',signal:AbortSignal.any([state.controller.signal,AbortSignal.timeout(120000)])});
   if(!res.ok){const error=await res.json();throw new Error(error.error||'File transfer failed');}return res;
 }
-async function sendFile(file){
+async function sendFile(file,text=''){
   if(!file||!selected)return;const peer=selected;
   let a;try{a=newAttachment(file);}catch(e){return toast(e.message);}
   const state=beginTransfer(`Sending ${a.name} to ${peer.name}`);if(!state)return;
   let committed=false;
   try{
-    const envelope=await seal(device.identity,device.user.id,peer,{kind:'attachment',attachment:a},timerFor(peer.id)),key=await attachmentKey(a);
+    const envelope=await seal(device.identity,device.user.id,peer,{kind:'attachment',attachment:a,text},timerFor(peer.id)),key=await attachmentKey(a);state.messageId=envelope.id;
     await api('/attachments','POST',{id:a.id,size:a.size,envelope},state.controller.signal);
     for(let index=0;index<a.chunks;index++){
       state.controller.signal.throwIfAborted();
@@ -136,10 +177,11 @@ function saveAttachment(m){
   if(!m.attachment||m.expiresAt<=Date.now()||!m.blobURL)return toast('This file has expired.');
   const link=document.createElement('a');link.href=m.blobURL;link.download=m.attachment.name.replace(/[\/\\\x00-\x1f]/g,'_');link.click();
 }
-async function loadAttachment(m){
-  if(!m.attachment||m.expiresAt<=Date.now())return toast('This file has expired.');
-  const a=m.attachment,state=beginTransfer(`Opening ${a.name}`);if(!state)return;
-  const pieces=[];
+async function loadAttachment(m,automatic=false){
+  if(!m.attachment||m.expiresAt<=Date.now()||messages.get(m.id)!==m)return;
+  if(m.blobURL)return mediaKind(m.attachment.type)==='file'?saveAttachment(m):openViewer(m);
+  const a=m.attachment,state=beginTransfer(`Loading ${a.name}`,automatic);if(!state)return;
+  state.messageId=m.id;m.loading=true;m.loadError=null;renderMessages();const pieces=[];
   try{
     const key=await attachmentKey(a);
     for(let index=0;index<a.chunks;index++){
@@ -147,15 +189,48 @@ async function loadAttachment(m){
       pieces.push(new Uint8Array(await decryptChunk(key,a,index,m.expiresAt,await response.arrayBuffer())));transferProgress(state,index+1,a.chunks);
     }
     state.controller.signal.throwIfAborted();
-    if(m.expiresAt<=Date.now()||messages.get(m.id)!==m)throw new Error('This file has expired or the chat was closed.');
-    const blob=new Blob(pieces,{type:imageTypes.has(a.type)?a.type:'application/octet-stream'});m.blobURL=URL.createObjectURL(blob);
-    if(selected&&[m.from,m.to].includes(selected.id))renderMessages();
-    if(!imageTypes.has(a.type))saveAttachment(m);
-  }catch(e){if(e.name!=='AbortError')toast(e.message);}
-  finally{for(const piece of pieces)piece.fill(0);endTransfer(state);}
+    if(m.expiresAt<=Date.now()||messages.get(m.id)!==m)throw new Error('This file has expired or was deleted.');
+    const blob=new Blob(pieces,{type:mediaKind(a.type)==='file'?'application/octet-stream':a.type});m.blobURL=URL.createObjectURL(blob);
+    if(!automatic){if(mediaKind(a.type)==='file')saveAttachment(m);else openViewer(m);}
+  }catch(e){if(e.name!=='AbortError'){m.loadError=e.message;if(!automatic)toast(e.message);}}
+  finally{for(const piece of pieces)piece.fill(0);m.loading=false;endTransfer(state);if(selected&&[m.from,m.to].includes(selected.id))renderMessages();}
 }
+function closeViewer(){
+  for(const media of $('media-content').querySelectorAll('audio,video')){media.pause();media.removeAttribute('src');media.load();}
+  $('media-content').replaceChildren();viewerMessage=null;if($('media-viewer').open)$('media-viewer').close();
+}
+function openViewer(m){
+  if(!m.blobURL||!m.attachment||m.expiresAt<=Date.now()||messages.get(m.id)!==m)return;
+  closeViewer();viewerMessage=m;const kind=mediaKind(m.attachment.type),media=document.createElement(kind==='image'?'img':kind==='video'?'video':'audio');
+  media.src=m.blobURL;if(kind==='image')media.alt=m.attachment.name;else{media.controls=true;media.playsInline=true;}
+  media.onerror=()=>{$('media-error').textContent='This browser cannot play this format. Use Save media to open a copy.';};
+  $('media-title').textContent=m.attachment.name;$('media-error').textContent='';$('media-content').append(media);$('media-viewer').showModal();
+  if(kind!=='image')void media.play().catch(()=>{});
+}
+function clearDraft(){
+  if(draft?.url)URL.revokeObjectURL(draft.url);draft=null;
+  for(const media of $('draft-preview').querySelectorAll('audio,video')){media.pause();media.removeAttribute('src');media.load();}
+  $('draft-preview').replaceChildren();$('draft-caption').value='';
+}
+function previewFile(file){
+  if(!file||!selected)return;
+  if(call||transfer)return toast('Finish the call or file transfer first.');
+  try{newAttachment(file);}catch(e){return toast(e.message);}
+  clearDraft();draft={file,peer:selected.id,url:URL.createObjectURL(file)};const kind=mediaKind(file.type);
+  if(kind!=='file'){const media=document.createElement(kind==='image'?'img':kind==='video'?'video':'audio');media.src=draft.url;if(kind==='image')media.alt=file.name;else{media.controls=true;media.playsInline=true;}$('draft-preview').append(media);}
+  $('draft-name').textContent=`${file.name} · ${fileSize(file.size)}`;$('draft-dialog').showModal();
+}
+const captures=chatCapture({busy:()=>!!(call||transfer),onFile:previewFile,toast});
+$('close-media').onclick=closeViewer;$('media-viewer').addEventListener('close',closeViewer);$('save-media').onclick=()=>viewerMessage&&saveAttachment(viewerMessage);
+$('draft-dialog').addEventListener('close',clearDraft);
+$('draft-form').onsubmit=e=>{e.preventDefault();if(!draft||draft.peer!==selected?.id)return;const file=draft.file,text=$('draft-caption').value.trim();clearDraft();$('draft-dialog').close();void sendFile(file,text);};
+$('delete-message').onclick=async()=>{
+  const m=chosenMessage;if(!m)return;$('delete-message').disabled=true;
+  try{await api(`/messages/${m.id}`,'DELETE');rememberDeletion(m.id,m.expiresAt);$('message-dialog').close();}catch(e){toast(e.message);}finally{$('delete-message').disabled=false;chosenMessage=null;}
+};
 async function sync(){
   const me=await api('/me');await pinContacts(me.contacts);
+  for(const d of await api('/message-deletions'))rememberDeletion(d.id,d.expires);
   const saved=await api('/messages');
   for(const e of saved)try{await acceptMessage(e,true);}catch{toast('An encrypted message could not be verified.');}
   if(selected)renderMessages();
@@ -170,6 +245,8 @@ async function connect(){
       const b=JSON.parse(event.data);
       if(b.type==='ready'){connected(true);reconnectAttempt=0;await sync();if(phone)await phone.restart();clearInterval(heartbeat);heartbeat=setInterval(()=>{if(wsReady&&ws.readyState===1)ws.send(JSON.stringify({type:'ping'}));},25000);}
       else if(b.type==='message')await acceptMessage(b.envelope);
+      else if(b.type==='message-deleted')rememberDeletion(b.id,b.expires);
+      else if(b.type==='typing')await receiveTyping(b.envelope);
       else if(b.type==='contacts')await sync();
       else if(b.type==='signal')await receiveSignal(b);
       else if(b.type==='busy'&&b.callId===call?.id)finishCall('They’re on another call. Try again later.');
@@ -208,7 +285,7 @@ function ring(){
 }
 function stopRing(){clearInterval(ringTimer);}
 function showCall(incoming=false){
-  stopTransferForCall();
+  stopTransferForCall();stopTyping();captures.close();closeViewer();$('draft-dialog').close();$('emoji-dialog').close();
   $('call-screen').classList.remove('hidden');$('call-screen').classList.remove('has-video');$('call-name').textContent=call.peer.name;$('call-avatar').textContent=initials(call.peer.name);
   $('call-screen').classList.remove('call-connected','has-remote-video');$('call-peer-top').textContent=call.peer.name;$('switch-camera').classList.add('hidden');
   $('call-status').textContent=incoming?(call.video?'Incoming video call':'Incoming voice call'):'Calling…';$('call-duration').textContent='';$('call-quality').textContent='Voice first';$('call-warning').textContent='';
@@ -280,7 +357,7 @@ async function answerCall(){
 }
 function finishCall(reason='Call ended'){
   if(call)clearTimeout(call.timeout);stopRing();clearInterval(callTicker);phone?.close();phone=null;call=null;pendingCandidates.clear();wakeLock?.release().catch(()=>{});wakeLock=null;
-  $('call-screen').classList.add('hidden');if(reason)toast(reason);
+  $('call-screen').classList.add('hidden');queueMicrotask(pumpMedia);if(reason)toast(reason);
 }
 async function endCall(reason='Call ended'){try{await signal('hangup',{reason});}catch{}finishCall(reason);}
 async function invite(){
@@ -327,19 +404,24 @@ $('welcome-dialog').addEventListener('cancel',e=>e.preventDefault());
 $('invite').onclick=invite;$('empty-invite').onclick=invite;$('settings').onclick=settingsDialog;$('chat-settings').onclick=settingsDialog;
 $('call-settings').onclick=settingsDialog;
 $('search').oninput=renderContacts;
-$('back').onclick=()=>document.querySelector('.app').classList.remove('chat-open');
+$('back').onclick=()=>{stopTyping();closeViewer();captures.close();document.querySelector('.app').classList.remove('chat-open');};
 document.querySelectorAll('[data-close]').forEach(e=>e.onclick=()=>e.closest('dialog').close());
 $('copy-invite').onclick=async()=>{try{await navigator.clipboard.writeText($('invite-link').value);toast('Invitation copied.');}catch{$('invite-link').select();toast('Select and copy the invitation link.');}};
 $('share-invite').onclick=async()=>{try{if(navigator.share)await navigator.share({title:'Talk with me on WebCaller',url:$('invite-link').value});else $('copy-invite').click();}catch(e){if(e.name!=='AbortError')toast(e.message);}};
 $('composer').onsubmit=async event=>{
-  event.preventDefault();unlockSound();const input=$('message-input'),text=input.value.trim();if(!text||!selected)return;const peer=selected;$('send').disabled=true;
-  try{const envelope=await seal(device.identity,device.user.id,peer,{kind:'text',text},timerFor(peer.id));await api('/messages','POST',envelope);await acceptMessage(envelope);input.value='';$('messages').scrollTop=$('messages').scrollHeight;}catch(e){toast(e.message);}finally{$('send').disabled=false;}
+  event.preventDefault();unlockSound();const input=$('message-input'),text=input.value.trim();if(!text||!selected)return;const peer=selected,original=input.value;stopTyping();$('send').disabled=true;
+  try{const envelope=await seal(device.identity,device.user.id,peer,{kind:'text',text},timerFor(peer.id));await api('/messages','POST',envelope);await acceptMessage(envelope);if(input.value===original)input.value='';updateComposer();$('messages').scrollTop=$('messages').scrollHeight;}catch(e){toast(e.message);}finally{$('send').disabled=false;}
 };
 $('attach').onclick=()=>{if(selected&&!call)$('attachment-dialog').showModal();else if(call)toast('Send files after the call to keep your audio clear.');};
 for(const [button,input]of [['choose-photo','photo-input'],['choose-file','file-input']]){
   $(button).onclick=()=>{$('attachment-dialog').close();$(input).click();};
-  $(input).onchange=()=>{const file=$(input).files[0];$(input).value='';void sendFile(file);};
+  $(input).onchange=()=>{const file=$(input).files[0];$(input).value='';previewFile(file);};
 }
+$('camera-input').onchange=()=>{const file=$('camera-input').files[0];$('camera-input').value='';previewFile(file);};
+$('chat-camera').onclick=captures.camera;$('record-voice').onclick=captures.voice;
+$('emoji').onclick=emojiPicker({input:$('message-input'),changed:inputTyping,toast});
+$('message-input').oninput=inputTyping;$('message-input').onblur=stopTyping;
+$('messages').addEventListener('scroll',()=>queueMicrotask(pumpMedia),{passive:true});
 $('message-input').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();$('composer').requestSubmit();}};
 $('message-timer').onchange=()=>{if(selected){settings.timers[selected.id]=Number($('message-timer').value);saveSettings();}};
 $('peer-details').onclick=async()=>{if(!selected)return;$('safety-number').textContent=await safetyNumber(device.identity.keys,selected.keys);$('safety-dialog').showModal();};
@@ -373,11 +455,11 @@ $('forget-device').onclick=()=>{$('settings-dialog').close();$('forget-dialog').
 $('confirm-forget').onclick=async()=>{
   try{await api('/device','DELETE');if(ws){ws.onclose=null;ws.close();}clearTimeout(reconnectTimer);clearInterval(heartbeat);finishCall('');await vault('delete');transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();localStorage.removeItem('webcaller-settings');device=null;location.reload();}catch(e){toast(e.message);}
 };
-function clearMessage(m){if(m.blobURL)URL.revokeObjectURL(m.blobURL);m.blobURL=null;m.text='';m.attachment=null;}
-setInterval(()=>{let changed=false;for(const [id,m]of messages)if(m.expiresAt<=Date.now()){clearMessage(m);messages.delete(id);changed=true;}if(changed&&selected)renderMessages();},1000);
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&device){unlockSound();if(!wsReady)connect();else sync().catch(()=>{});if(call?.started)navigator.wakeLock?.request('screen').then(lock=>wakeLock=lock).catch(()=>{});}if(document.visibilityState==='hidden'){transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();$('messages').replaceChildren();}});
+function clearMessage(m){if(viewerMessage?.id===m.id)closeViewer();if(m.blobURL)URL.revokeObjectURL(m.blobURL);m.blobURL=null;m.text='';m.attachment=null;}
+setInterval(()=>{for(const [id,expiry]of deletedMessages)if(expiry<=Date.now())deletedMessages.delete(id);for(const [id,expiry]of typingSeen)if(expiry<=Date.now())typingSeen.delete(id);renderTyping();let changed=false;for(const [id,m]of messages)if(m.expiresAt<=Date.now()){clearMessage(m);messages.delete(id);changed=true;}if(changed&&selected)renderMessages();},1000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&device){unlockSound();if(!wsReady)connect();else sync().catch(()=>{});if(call?.started)navigator.wakeLock?.request('screen').then(lock=>wakeLock=lock).catch(()=>{});}if(document.visibilityState==='hidden'){stopTyping();typingPeers.clear();renderTyping();captures.close();closeViewer();clearDraft();$('draft-dialog').close();$('emoji-dialog').close();transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();$('messages').replaceChildren();}});
 window.addEventListener('online',()=>{if(device&&!wsReady)connect();});
 navigator.connection?.addEventListener('change',()=>{if(phone)void phone.sample();});
-window.addEventListener('pagehide',()=>{phone?.close();transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();});
+window.addEventListener('pagehide',()=>{stopTyping();captures.close();closeViewer();clearDraft();phone?.close();transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();});
 unlockSound();
 void boot();

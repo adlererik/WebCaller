@@ -15,6 +15,8 @@ flowchart LR
 | File/directory | Responsibility |
 |---|---|
 | public/index.html, style.css, icon.svg | Responsive conversation UI, dialogs, call controls and local SVG assets |
+| public/chat-ui.js | Keyed message rendering, media bubbles and searchable Unicode emoji picker |
+| public/chat-capture.js | Separate camera/voice capture, cleanup and voice-note codec selection |
 | public/app.js | Enrollment, contact pins, encrypted chat/signaling, call state, ringing, notifications, timers and reconnect |
 | public/crypto.js | Key generation, non-exportable vault, fingerprint/safety number, signed encryption and verification |
 | public/attachments.js | Per-file keys, validated manifests, indexed chunk encryption/decryption and size limits |
@@ -46,6 +48,8 @@ flowchart LR
 | POST /ticket | Short-lived single-use WebSocket authentication ticket |
 | GET /messages | Authorized unexpired ciphertext mailbox |
 | POST /messages | Validate/store idempotent signed ciphertext and notify recipient |
+| GET /message-deletions | Participant-scoped deletion markers until original message expiry |
+| DELETE /messages/:id | Either participant removes a message and its attachment; emits deletion to both |
 | POST /attachments | Reserve an expiring encrypted transfer with its exact message envelope |
 | PUT /attachments/:id/chunks/:part | Sender-only upload of a bounded encrypted chunk |
 | GET /attachments/:id/chunks/:part | Sender/recipient download after all chunks are committed |
@@ -56,3 +60,5 @@ flowchart LR
 `/calls/health` is a simple health endpoint. `/calls/ws` upgrades with an allowed Origin; its first frame consumes the ticket. Encrypted call frames carry call IDs/kinds and sealed offers/answers/ICE. Offers to an offline recipient are held in RAM for 90 seconds; server restarts discard them. SQLite attachment tables are created additively on startup. Chunk blobs reference their manifest with cascading deletion. The original message tables are retained. Message envelope fields include version, IDs, sender/recipient, creation/expiry, ephemeral public key, nonce, ciphertext copies and signature. Browser tokens/keys are never embedded in server logs by the app.
 
 The optional `archive-proxy.mjs` bypasses an existing Node site's visitor handler for only /calls and upgrades, strips its cookies and forwards to loopback. `link-archive.mjs` recognizes a specific http.createServer wrapper and backs it up before adding hooks; it is not a universal website installer. Use a normal reverse proxy for unrelated frameworks.
+
+Typing uses authenticated WebSocket `{type:"typing", envelope}` events with signed encrypted payloads `{kind:"typing",active:boolean}` and an eight-second client TTL. It does not enter the call map/mailbox or offline replay. Deletion uses authenticated HTTP and metadata notifications; clients reject delayed envelopes for known deleted IDs.

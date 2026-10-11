@@ -3,6 +3,9 @@ export const MAX_FILE_SIZE=10*1024*1024, CHUNK_SIZE=64*1024;
 const enc=new TextEncoder();
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 export const imageTypes=new Set(['image/jpeg','image/png','image/webp','image/gif','image/avif']);
+export const videoTypes=new Set(['video/mp4','video/webm','video/ogg','video/quicktime']);
+export const audioTypes=new Set(['audio/mp4','audio/webm','audio/ogg','audio/mpeg','audio/wav','audio/x-wav','audio/aac','audio/flac']);
+export function mediaKind(type){const base=(type||'').split(';')[0].trim().toLowerCase();return imageTypes.has(base)?'image':videoTypes.has(base)?'video':audioTypes.has(base)?'audio':'file';}
 export function fileSize(size){return size<1024?`${size} B`:size<1024*1024?`${Math.ceil(size/1024)} KB`:`${(size/1024/1024).toFixed(1)} MB`;}
 export function validAttachment(a){
   return !!a&&uuid.test(a.id)&&typeof a.name==='string'&&a.name.length>0&&a.name.length<=255&&typeof a.type==='string'&&a.type.length<=100&&Number.isSafeInteger(a.size)&&a.size>0&&a.size<=MAX_FILE_SIZE&&a.chunks===Math.ceil(a.size/CHUNK_SIZE)&&typeof a.key==='string'&&/^[A-Za-z0-9_-]{43}$/.test(a.key)&&typeof a.nonce==='string'&&/^[A-Za-z0-9_-]{11}$/.test(a.nonce);

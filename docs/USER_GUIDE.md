@@ -24,15 +24,27 @@ Type a message and use the send button. Text is encrypted for sender and recipie
 
 Settings → **Disappearing messages** chooses 30 seconds, 5 minutes, 1 hour, 24 hours (default), or 7 days for new messages you send in that conversation. The sender's signed timer starts at send time, including unread/offline messages. Changing the setting does not extend existing messages or override the other sender's timer. Copying/screenshotting content can preserve it outside WebCaller.
 
-## Images and files
+## Photos, video, files and voice messages
 
-Tap the little **+** next to the message box, then **Photo** or **File**. Choose one item up to 10 MB. File contents, filename, type and file key are encrypted; the server sees transfer size and routing/expiry metadata. A progress line shows the transfer. Files use this chat’s disappearing timer starting when encryption begins; choose a longer timer for a large file on a slow link.
+The composer follows a rounded Signal-style layout: **Emoji**, message field, **Camera** and **Microphone** in the pill, with a round **+** outside it. When text is entered, the + becomes the send button. The smiley opens a searchable Unicode emoji picker with categories and skin tones. Emoji artwork uses your device’s font, rather than Signal’s bundled artwork; newer emoji need an OS font that supports them.
 
-Received photos show **View photo**; other files show **Download file**. Contents load only when tapped, saving data and avoiding repeated downloads during chat sync. Common raster photos display inline. Other types, including SVG/HTML and unsupported photo formats, download rather than execute in chat. Once loaded, **Save file** downloads a copy. Saved copies remain outside WebCaller and are not erased by the disappearing timer.
+Tap **Camera** for a live preview. Use the camera-switch button for a selfie or the main camera, then **Take photo**. **Phone camera** provides the browser’s native capture/picker fallback. Allow camera access when prompted. Tap **Microphone** to record a voice message; **Stop and preview** lets you listen before sending. Closing the recording discards it. Recording stops at five minutes. Voice notes request mono audio at 32 kbps, preferring AAC/MP4 when the browser can record it, then Opus/WebM or Ogg. Actual codec/rate depends on the browser.
 
-Transfers are unavailable during calls and stop if a call starts or the page is hidden. Retry after the call or on returning to the page. This protects call audio and avoids leaving decrypted files in a background chat. Blob previews are revoked on expiry/backgrounding. Files awaiting completion and completed files share the server’s expiring storage quota; a full quota means wait for older items to expire.
+Tap **+** → **Photos and videos** or **File**, then choose one item up to 10 MB. Preview it, add an optional caption and press **Send**. Contents, filename, media type, caption and file key are encrypted. The server sees transfer size, routing and expiry metadata. Files use this chat’s disappearing timer starting when sending begins; choose a longer timer for a large file on a slow connection.
 
-A website cannot reliably prevent operating-system screenshots or another camera photographing the screen. This app clears background chat previews and hides chat in print layouts; those controls do not block screenshots.
+**Photos, video and audio load automatically on both sides when their bubbles are visible in the open chat.** Older off-screen media waits until you scroll to it. This uses data for visible media in that conversation, including again after returning from a hidden page because plaintext previews are cleared. There is no automatic audio/video playback. Tap a photo or video to open the full-screen viewer; video has playback controls. Voice messages have an inline audio player and **Open audio** for the viewer. **Close media** or Escape returns to chat. Common raster images and MP4/WebM/Ogg media render through the browser’s own decoders. An unsupported codec can be saved instead. HTML/SVG and other files download as files and never execute inline. Files load only when requested.
+
+**Save media/Save file** downloads an external copy. Copies remain outside WebCaller and are not erased by timers or remote deletion. There is no persistent decrypted media cache. Transfers are unavailable during calls and stop when a call starts or the page is hidden; automatic media loading resumes after the call/when visible. Retry an interrupted upload. Captures and unsent media drafts are discarded on backgrounding or starting a call. Pending and completed uploads share expiring storage quotas.
+
+## Delete for both
+
+Long-press a bubble, right-click it on a computer, or tap its little **…** button. Choose **Delete for both**. Either participant can remove a sent or received text/media message. The server removes the message and encrypted media chunks; connected phones remove the bubble and close its viewer. An offline phone learns the deletion on reconnect. A minimal deletion marker (message ID, participant IDs and original expiry) remains until the original timer expires, preventing an old envelope from being uploaded again. It contains no message text, filename or media key.
+
+A website cannot reliably prevent operating-system screenshots or another camera photographing the screen. Background previews are cleared and chat is hidden when printing. External copies cannot be recalled.
+
+## Typing indicators
+
+Three animated dots show when the other person types. Only a signed encrypted typing/not-typing status is sent; the draft itself is never sent. Updates are throttled, expire within eight seconds and are never stored or replayed by the server. Dots clear after sending, leaving the field, switching conversations, hiding the page or inactivity. Delivery needs both pages connected.
 
 ## Settings
 

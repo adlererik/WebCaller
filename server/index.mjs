@@ -145,12 +145,29 @@ export function createApp(options = {}) {
           store.purge();
           return json(200, store.all('SELECT envelope FROM messages WHERE (recipient=? OR sender=?) AND expires>? ORDER BY created DESC LIMIT 500', u.id, u.id, Date.now()).reverse().map(r => JSON.parse(r.envelope)));
         }
+        if(route==='/message-deletions'&&req.method==='GET'){
+          store.purge();return json(200,store.all('SELECT id,expires FROM message_deletions WHERE sender=? OR recipient=?',u.id,u.id));
+        }
+        const deletion=route.match(/^\/messages\/([a-f0-9-]{36})$/);
+        if(deletion&&req.method==='DELETE'){
+          store.purge();const m=store.get('SELECT * FROM messages WHERE id=?',deletion[1])||store.get('SELECT * FROM message_deletions WHERE id=?',deletion[1]);
+          if(!m||![m.sender,m.recipient].includes(u.id))fail(404,'Message unavailable');
+          store.transaction(()=>{
+            store.run('INSERT OR IGNORE INTO message_deletions VALUES(?,?,?,?)',m.id,m.sender,m.recipient,m.expires);
+            store.run('DELETE FROM attachments WHERE message_id=?',m.id);
+            store.run('DELETE FROM messages WHERE id=?',m.id);
+          });
+          const event={type:'message-deleted',id:m.id,expires:m.expires};emit(m.sender,event);emit(m.recipient,event);
+          return json(200,{ok:true});
+        }
         if (route === '/messages' && req.method === 'POST') {
-          const b = await body(req); validateEnvelope(b, u.id);
+          const b = await body(req),attachment=store.get('SELECT * FROM attachments WHERE message_id=?',b.id);
+          // Reserved uploads were validated at creation; a slow upload can exceed five minutes.
+          validateEnvelope(b,u.id,false,attachment?.sender===u.id);
+          if(store.get('SELECT id FROM message_deletions WHERE id=?',b.id))fail(410,'Message was deleted');
           if (!related(u.id, b.to)) fail(403, 'Invite this person first');
           const prior = store.get('SELECT sender,envelope FROM messages WHERE id=?', b.id);
           if (prior) { if (prior.sender !== u.id || prior.envelope !== JSON.stringify(b)) fail(409, 'Message identifier conflict'); return json(200, { id: b.id }); }
-          const attachment=store.get('SELECT * FROM attachments WHERE message_id=?',b.id);
           if(attachment){
             if(attachment.sender!==u.id||attachment.envelope!==JSON.stringify(b))fail(409,'Attachment message does not match');
             if(store.get('SELECT COUNT(*) AS n FROM attachment_chunks WHERE attachment=?',attachment.id).n!==Math.ceil(attachment.size/CHUNK_SIZE))fail(409,'Finish uploading the file first');
@@ -180,6 +197,7 @@ export function createApp(options = {}) {
           store.transaction(() => {
             store.run('DELETE FROM attachments WHERE sender=? OR recipient=?',u.id,u.id);
             store.run('DELETE FROM messages WHERE sender=? OR recipient=?', u.id, u.id);
+            store.run('DELETE FROM message_deletions WHERE sender=? OR recipient=?',u.id,u.id);
             store.run('DELETE FROM invites WHERE owner=?', u.id);
             store.run('DELETE FROM push WHERE owner=?', u.id);
             store.run('DELETE FROM contacts WHERE a=? OR b=?', u.id, u.id);
@@ -202,9 +220,9 @@ export function createApp(options = {}) {
       res.end(req.method === 'HEAD' ? undefined : data);
     } catch (e) { json(e.status || (e.code === 'ENOENT' ? 404 : 500), { error: e.status ? e.message : e.code === 'ENOENT' ? 'Not found' : 'Something went wrong. Try again.' }); }
   });
-  function validateEnvelope(b, sender, signaling = false) {
+  function validateEnvelope(b, sender, signaling = false, reservedUpload = false) {
     const now = Date.now();
-    if (b?.v !== 1 || b.from !== sender || typeof b.to !== 'string' || typeof b.id !== 'string' || !/^[a-f0-9-]{36}$/.test(b.id) || !Number.isSafeInteger(b.createdAt) || !Number.isSafeInteger(b.expiresAt) || b.createdAt > now + 30000 || b.createdAt < now - 300000 || b.expiresAt <= now || b.expiresAt - b.createdAt > (signaling ? 120000 : 604800000) || b.expiresAt <= b.createdAt || typeof b.ciphertext !== 'string' || b.ciphertext.length > 24000 || typeof b.selfCiphertext !== 'string' || b.selfCiphertext.length > 24000 || typeof b.signature !== 'string' || b.signature.length > 128 || typeof b.iv !== 'string' || b.iv.length !== 16 || !b.ephemeral?.x || !b.ephemeral?.y || b.ephemeral.d) fail(400, 'Invalid encrypted message');
+    if (b?.v !== 1 || b.from !== sender || typeof b.to !== 'string' || typeof b.id !== 'string' || !/^[a-f0-9-]{36}$/.test(b.id) || !Number.isSafeInteger(b.createdAt) || !Number.isSafeInteger(b.expiresAt) || b.createdAt > now + 30000 || (!reservedUpload && b.createdAt < now - 300000) || b.expiresAt <= now || b.expiresAt - b.createdAt > (signaling ? 120000 : 604800000) || b.expiresAt <= b.createdAt || typeof b.ciphertext !== 'string' || b.ciphertext.length > 24000 || typeof b.selfCiphertext !== 'string' || b.selfCiphertext.length > 24000 || typeof b.signature !== 'string' || b.signature.length > 128 || typeof b.iv !== 'string' || b.iv.length !== 16 || !b.ephemeral?.x || !b.ephemeral?.y || b.ephemeral.d) fail(400, 'Invalid encrypted message');
   }
   const wss = new WebSocketServer({ noServer: true, maxPayload: 65536, perMessageDeflate: false });
   server.on('upgrade', (req, socket, head) => {
@@ -232,6 +250,12 @@ export function createApp(options = {}) {
         }
         rate(`ws:${ws.user}`, 240);
         if (b.type === 'ping') return ws.send(JSON.stringify({ type: 'pong' }));
+        if(b.type==='typing'){
+          validateEnvelope(b.envelope,ws.user,true);
+          if(b.envelope.expiresAt-b.envelope.createdAt>10000)fail(400,'Typing update expires too late');
+          if(!related(ws.user,b.envelope.to))fail(403,'Unknown contact');
+          rate(`typing:${ws.user}`,40);emit(b.envelope.to,{type:'typing',envelope:b.envelope});return;
+        }
         if (b.type !== 'signal' || !['offer','answer','ice','hangup','restart','video','receipt'].includes(b.kind)) fail(400, 'Invalid signal');
         validateEnvelope(b.envelope, ws.user, true);
         if (!related(ws.user, b.envelope.to)) fail(403, 'Unknown contact');

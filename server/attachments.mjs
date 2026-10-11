@@ -9,6 +9,7 @@ export function attachmentRoutes({store,related,validateEnvelope,fail,body,env})
       if(!uuid.test(b.id)||!Number.isSafeInteger(b.size)||b.size<=0||b.size>MAX_FILE_SIZE)fail(400,'Files must be between 1 byte and 10 MB');
       if(!related(u.id,b.envelope.to))fail(403,'Invite this person first');
       store.purge();const serialized=JSON.stringify(b.envelope),old=store.get('SELECT * FROM attachments WHERE id=? OR message_id=?',b.id,b.envelope.id);
+      if(store.get('SELECT id FROM message_deletions WHERE id=?',b.envelope.id))fail(410,'Message was deleted');
       if(old){if(old.id!==b.id||old.sender!==u.id||old.size!==b.size||old.envelope!==serialized)fail(409,'Attachment identifier conflict');json(200,{id:b.id});return true;}
       if(store.get('SELECT id FROM messages WHERE id=?',b.envelope.id))fail(409,'Message already exists');
       const used=store.get('SELECT COALESCE(SUM(size),0) AS n FROM attachments WHERE sender=?',u.id).n;

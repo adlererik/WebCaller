@@ -31,7 +31,11 @@ Signed encrypted envelopes have expiry, sender/recipient, IDs and ciphertext. Th
 
 ## Encrypted attachments
 
-A signed encrypted message carries a random per-file AES-256-GCM key and nonce prefix. Each 64 KB plaintext chunk is encrypted with a distinct indexed nonce; authenticated data binds the file ID, chunk order, size and expiry. Contents are uploaded sequentially to an authenticated contact-only mailbox and cannot be announced until all expected chunks exist. Filename/type/key stay inside the message envelope. Quotas limit pending and completed uploads. Chat sync fetches metadata only; loading content is a user action. Files expire alongside their messages and are removed with device deletion. Downloads and screenshots cannot be erased outside the app.
+A signed encrypted message carries a random per-file AES-256-GCM key and nonce prefix. Each 64 KB plaintext chunk is encrypted with a distinct indexed nonce; authenticated data binds the file ID, chunk order, size and expiry. Contents are uploaded sequentially to an authenticated contact-only mailbox and cannot be announced until all expected chunks exist. Filename/type/key stay inside the message envelope. Quotas limit pending and completed uploads. Chat sync fetches metadata; visible open conversations then automatically decrypt photos/video/audio sequentially. General files require a user action. Transfers pause for calls, preserving voice priority. Files expire alongside their messages and are removed with device deletion. Downloads and screenshots cannot be erased outside the app.
+
+## Chat controls
+
+Rounded green/gray bubbles, media captions, searchable self-hosted Unicode emoji with skin tones, front/back photo capture, previewable voice recording, automatic media previews and a full-screen image/video/audio viewer are included. Voice notes use browser-negotiated MP4/AAC or WebM/Ogg Opus at a requested mono 32 kbps. Both participants can delete any message; encrypted attachment chunks are removed transactionally and expiring deletion markers prevent replay/offline resurrection. Signed encrypted typing updates are ephemeral and never include draft text.
 
 ## Deliberately absent
 

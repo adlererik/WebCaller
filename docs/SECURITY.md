@@ -2,7 +2,7 @@
 
 ## Scope
 
-This is an unaudited initial preview. Do not substitute it for independently audited software where compromise, surveillance or forensic recovery could cause serious harm. It is one-to-one software, not Signal Protocol or Double Ratchet.
+This is an unaudited preview. Do not substitute it for independently audited software where compromise, surveillance or forensic recovery could cause serious harm. It is one-to-one software, not Signal Protocol or Double Ratchet.
 
 ## Encryption
 
@@ -14,7 +14,7 @@ There is **no forward secrecy against compromise of the recipient's long-term pr
 
 File keys and names are wrapped inside signed encrypted message envelopes; 64 KB file chunks use AES-GCM with indexed nonces and authenticated file identity/order/size/expiry. The same unaudited protocol and long-term key limitations apply to attachments. The server can see sizes and timing. Completed attachments are immutable and contact-only; pending uploads share bounded quotas.
 
-Messages expire from send time, including unread/offline messages. Server purge runs every second and on startup/read; client purge removes plaintext references/DOM. Backgrounding clears displayed plaintext and revokes decrypted image/file blob URLs. Expiry/device deletion cascades to encrypted chunks. Chat is hidden from print layouts. These actions cannot prevent OS screenshots, screen recording or photographing a display. No persistent plaintext outbox/cache is created. SQLite uses `secure_delete=ON` and DELETE journaling for operational deletion, not guaranteed forensic erasure on SSDs/snapshots/backups.
+Messages expire from send time, including unread/offline messages. Server purge runs every second and on startup/read; client purge removes plaintext references/DOM. Backgrounding clears displayed plaintext and revokes decrypted image/file blob URLs. Expiry, participant deletion and device deletion cascade to encrypted chunks. Explicit deletion retains only message ID, participant IDs and original expiry until that expiry to stop replay and inform reconnecting devices. It does not retain the envelope/key/name/content. Automatic previews download encrypted media in the open visible chat and retain decrypted blobs only in memory. Camera and voice drafts are discarded on backgrounding; native camera/download copies remain under OS control. Typing statuses are signed/encrypted, short-lived and never stored; no draft text is transmitted. Chat is hidden from print layouts. These actions cannot prevent OS screenshots, screen recording or photographing a display. No persistent plaintext outbox/cache is created. SQLite uses `secure_delete=ON` and DELETE journaling for operational deletion, not guaranteed forensic erasure on SSDs/snapshots/backups.
 
 Device keys/tokens, names, contacts and settings persist. Screenshots, browser history, camera/share history, OS notification history, DNS records, push/provider metadata, swap, recipients' external copies and backups may remain. HTTPS/Tunnel/proxy/operator logs can reveal metadata. A website cannot guarantee zero traces.
 

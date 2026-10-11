@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0 — 2026-10-11
+
+- Match the supplied Signal-style chat reference with rounded green/gray bubbles, integrated composer controls, edge-to-edge media and captions.
+- Automatically display photos/video/audio in the open visible chat on both phones; add full-screen media viewing with a close button and inline voice playback.
+- Add camera capture/front-back switching, previewable mono voice recording, a self-hosted searchable Unicode emoji catalog with skin tones, and file/media drafts.
+- Add encrypted ephemeral typing animations and deletion by either participant, with offline deletion sync, replay prevention and encrypted chunk removal.
+- Keep call audio ahead of attachment transfers and clear media/capture drafts on backgrounding. Add deletion tables without changing identities or the encryption format. Refresh both phones after updating.
+- 23 automated tests pass, including participant deletion/replay and ephemeral typing tests; two-browser synthetic media checks pass.
+
 ## 0.2.0 — 2026-10-11
 
 - Add a chat + menu for encrypted images/files up to 10 MB, chunked transfer, contact authorization, storage quotas and disappearance cleanup.

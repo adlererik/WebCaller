@@ -123,3 +123,58 @@ test('attachment size and storage quotas prevent unbounded uploads',async t=>{
  assert.equal((await f.request('/attachments/'+first.id,{method:'DELETE',token:f.alice.token})).status,200);
  assert.equal(f.app.store.get('SELECT COUNT(*) AS n FROM attachments').n,0);
 });
+test('either participant deletes messages for both, reconnect learns deletions and replays stay deleted', {timeout:10000},async t=>{
+  const f=await fixture();t.after(()=>f.app.close());const {bob}=await f.pair(),{bob:other}=await f.pair();
+  const peer={id:bob.user.id,keys:bob.identity.keys},a=await f.socket(f.alice),b=await f.socket(bob);
+  const envelope=await seal(f.alice.identity,f.alice.user.id,peer,{kind:'text',text:'remove from both'},60);
+  await f.request('/messages',{method:'POST',token:f.alice.token,body:envelope});
+  assert.equal((await f.request('/messages/'+envelope.id,{method:'DELETE',token:other.token})).status,404);
+  const received=new Promise(resolve=>a.on('message',raw=>{const event=JSON.parse(raw);if(event.type==='message-deleted')resolve(event);}));
+  assert.equal((await f.request('/messages/'+envelope.id,{method:'DELETE',token:bob.token})).status,200);
+  assert.equal((await received).id,envelope.id);
+  for(const user of [f.alice,bob]){
+    assert.deepEqual((await f.request('/messages',{token:user.token})).body,[]);
+    assert.equal((await f.request('/message-deletions',{token:user.token})).body[0].id,envelope.id);
+  }
+  assert.deepEqual((await f.request('/message-deletions',{token:other.token})).body,[]);
+  assert.equal((await f.request('/messages',{method:'POST',token:f.alice.token,body:envelope})).status,410);
+  assert.equal((await f.request('/messages/'+envelope.id,{method:'DELETE',token:f.alice.token})).status,200);
+  const second=await seal(f.alice.identity,f.alice.user.id,peer,{kind:'text',text:'sender removes this'},60);
+  await f.request('/messages',{method:'POST',token:f.alice.token,body:second});
+  assert.equal((await f.request('/messages/'+second.id,{method:'DELETE',token:f.alice.token})).status,200);
+  f.app.store.purge(Math.max(second.expiresAt,envelope.expiresAt)+1);assert.equal(f.app.store.get('SELECT COUNT(*) AS n FROM message_deletions').n,0);
+  a.close();b.close();
+});
+test('deleting media removes encrypted chunks and prevents attachment resurrection',async t=>{
+  const f=await fixture();t.after(()=>f.app.close());const {bob}=await f.pair();
+  const file=new File(['synthetic media bytes'],'clip.webm',{type:'video/webm'}),attachment=newAttachment(file),key=await attachmentKey(attachment);
+  const envelope=await seal(f.alice.identity,f.alice.user.id,{id:bob.user.id,keys:bob.identity.keys},{kind:'attachment',attachment,text:'caption'},3600);
+  await f.request('/attachments',{method:'POST',token:f.alice.token,body:{id:attachment.id,size:attachment.size,envelope}});
+  const cipher=await encryptChunk(key,attachment,0,envelope.expiresAt,await file.arrayBuffer());
+  const upload=await fetch(f.url+'/calls/api/attachments/'+attachment.id+'/chunks/0',{method:'PUT',headers:{Origin:f.origin,Authorization:'Bearer '+f.alice.token},body:cipher});assert.equal(upload.status,201);
+  const realNow=Date.now();t.mock.method(Date,'now',()=>realNow+360000); // Slow reserved upload, over five minutes.
+  assert.equal((await f.request('/messages',{method:'POST',token:f.alice.token,body:envelope})).status,201);
+  t.mock.restoreAll();
+  assert.equal((await f.request('/messages/'+envelope.id,{method:'DELETE',token:bob.token})).status,200);
+  assert.equal(f.app.store.get('SELECT COUNT(*) AS n FROM attachment_chunks').n,0);
+  assert.equal(f.app.store.get('SELECT COUNT(*) AS n FROM attachments').n,0);
+  assert.equal((await f.request('/attachments/'+attachment.id+'/chunks/0',{token:f.alice.token})).status,404);
+  assert.equal((await f.request('/attachments',{method:'POST',token:f.alice.token,body:{id:attachment.id,size:attachment.size,envelope}})).status,410);
+  assert.equal((await f.request('/device',{method:'DELETE',token:bob.token})).status,200);
+  assert.equal(f.app.store.get('SELECT COUNT(*) AS n FROM message_deletions').n,0);
+});
+test('typing updates are encrypted, short-lived, contact-only and never stored or replayed', {timeout:10000},async t=>{
+  const f=await fixture();t.after(()=>f.app.close());const {bob}=await f.pair(),{bob:other}=await f.pair();
+  const a=await f.socket(f.alice),b=await f.socket(bob);
+  const peer={id:bob.user.id,keys:bob.identity.keys};
+  const envelope=await seal(f.alice.identity,f.alice.user.id,peer,{kind:'typing',active:true},8);
+  const delivered=once(b,'message');a.send(JSON.stringify({type:'typing',envelope}));
+  const event=JSON.parse((await delivered)[0]);assert.equal(event.type,'typing');assert.ok(!JSON.stringify(event).includes('active'));
+  assert.deepEqual(await open(bob.identity,bob.user.id,{id:f.alice.user.id,keys:f.alice.identity.keys},event.envelope),{kind:'typing',active:true});
+  assert.equal(f.app.store.get('SELECT COUNT(*) AS n FROM messages').n,0);
+  const error=once(b,'message');b.send(JSON.stringify({type:'typing',envelope:await seal(bob.identity,bob.user.id,{id:other.user.id,keys:other.identity.keys},{kind:'typing',active:true},8)}));
+  assert.equal(JSON.parse((await error)[0]).type,'error');
+  const late=once(a,'message');a.send(JSON.stringify({type:'typing',envelope:await seal(f.alice.identity,f.alice.user.id,peer,{kind:'typing',active:true},30)}));
+  assert.equal(JSON.parse((await late)[0]).type,'error');
+  b.close();const reconnected=await f.socket(bob);assert.equal(f.app.store.get('SELECT COUNT(*) AS n FROM messages').n,0);reconnected.close();a.close();
+});

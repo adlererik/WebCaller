@@ -1,0 +1,25 @@
+[Unit]
+Description=WebCaller encrypted WebRTC calling and messaging
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=webcaller
+WorkingDirectory=/opt/webcaller
+EnvironmentFile=/opt/webcaller/.env
+Environment=NODE_ENV=production
+ExecStart=/opt/webcaller/.runtime/node/bin/node server/index.mjs
+Restart=always
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/opt/webcaller/data
+StandardOutput=null
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

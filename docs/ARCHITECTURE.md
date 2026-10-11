@@ -1,0 +1,52 @@
+# Architecture and source map
+
+```mermaid
+flowchart LR
+  A[Phone browser] <-->|HTTPS and encrypted WebSocket signaling| H[HTTPS proxy or Cloudflare Tunnel]
+  H <--> S[Node server]
+  S <--> DB[SQLite ciphertext and contact metadata]
+  A <-->|DTLS-SRTP direct or relayed| B[Other phone browser]
+  A <--> T[Authenticated coturn or managed TURN]
+  T <--> B
+```
+
+## Source files
+
+| File/directory | Responsibility |
+|---|---|
+| public/index.html, style.css, icon.svg | Responsive conversation UI, dialogs, call controls and local SVG assets |
+| public/app.js | Enrollment, contact pins, encrypted chat/signaling, call state, ringing, notifications, timers and reconnect |
+| public/crypto.js | Key generation, non-exportable vault, fingerprint/safety number, signed encryption and verification |
+| public/onboarding.js | Parse invite/setup fragments, invitation precedence and removing secrets from the address |
+| public/media.js | Phone class, Opus SDP tuning, capture, sender adaptation, candidate queues, ICE restart and relay test |
+| public/sw.js | Optional generic push notification handling; no page/message fetch cache |
+| server/index.mjs | HTTP/API/auth, ciphertext mailbox, contact-authorized WebSocket routing, push and TURN credentials |
+| server/store.mjs | SQLite schema, transactions, secure deletion, expiry and storage helpers |
+| scripts/setup.mjs | Generate missing private secrets while preserving existing values |
+| scripts/phone-setup-qr.py | Private loopback or explicit terminal QR; reads a local .env or remote SSH configuration |
+| scripts/network-check.py, relay-probe.mjs, verify-public.mjs | Network evidence, authenticated UDP relay allocation, HTTPS/header/WebSocket verification |
+| scripts/browser-qa.mjs, invite-qa.mjs, ui-peer.mjs | Local-only disposable synthetic media/enrollment/messaging harnesses |
+| scripts/router-turn.py | Optional explicit UPnP mapping status/apply/removal with collision checks |
+| scripts/configure-local-turn.mjs, turn-maintenance.mjs | Advanced native config, public-IP/mapping/certificate maintenance |
+| deploy/ | Guided Debian/Compose deployment, Caddy, coturn, native examples and optional existing-origin proxy |
+| tests/ | Encryption, backend authorization/expiry, media policy/restart and fragment security regression tests |
+
+## API routes below /calls/api
+
+| Method / route | Function |
+|---|---|
+| GET /config | Public base URL, first-registration availability, public push key and relay availability |
+| POST /register | First browser, using private owner code and browser public keys |
+| POST /join | Redeem single-use invitation; create/reuse device and connect contacts |
+| GET /me | Authenticated self/contact metadata |
+| POST /invite | Create one-person invitation |
+| GET /ice | Authenticated STUN/TURN config with temporary credentials |
+| POST /ticket | Short-lived single-use WebSocket authentication ticket |
+| GET /messages | Authorized unexpired ciphertext mailbox |
+| POST /messages | Validate/store idempotent signed ciphertext and notify recipient |
+| POST/DELETE /push | Register/remove provider-restricted push subscription |
+| DELETE /device | Delete device-related records, close sockets and notify contacts |
+
+`/calls/health` is a simple health endpoint. `/calls/ws` upgrades with an allowed Origin; its first frame consumes the ticket. Encrypted call frames carry call IDs/kinds and sealed offers/answers/ICE. Offers to an offline recipient are held in RAM for 90 seconds; server restarts discard them. Message envelope fields include version, IDs, sender/recipient, creation/expiry, ephemeral public key, nonce, ciphertext copies and signature. Browser tokens/keys are never embedded in server logs by the app.
+
+The optional `archive-proxy.mjs` bypasses an existing Node site's visitor handler for only /calls and upgrades, strips its cookies and forwards to loopback. `link-archive.mjs` recognizes a specific http.createServer wrapper and backs it up before adding hooks; it is not a universal website installer. Use a normal reverse proxy for unrelated frameworks.

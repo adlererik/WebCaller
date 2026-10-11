@@ -1,0 +1,15 @@
+*
+!package.json
+!package-lock.json
+!.env.example
+!public/
+!public/**
+!server/
+!server/**
+!scripts/
+!scripts/**
+!deploy/
+!deploy/turnserver.conf.example
+!deploy/turn-container.py
+!deploy/Dockerfile.turn
+**/__pycache__/

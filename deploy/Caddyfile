@@ -1,0 +1,5 @@
+{$WEB_HOST} {
+	@phone path /calls /calls/*
+	reverse_proxy @phone webcaller:8080
+	respond "Not found" 404
+}

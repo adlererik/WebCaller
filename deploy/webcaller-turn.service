@@ -1,0 +1,21 @@
+[Unit]
+Description=WebCaller authenticated TURN relay
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=webcaller
+WorkingDirectory=/opt/webcaller
+Environment=LD_LIBRARY_PATH=/opt/webcaller/.runtime/turn/usr/lib/x86_64-linux-gnu
+ExecStart=/opt/webcaller/.runtime/turn/usr/bin/turnserver -c /opt/webcaller/.runtime/turnserver.conf
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+UMask=0077
+StandardOutput=null
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

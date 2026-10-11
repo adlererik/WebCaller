@@ -1,0 +1,14 @@
+[Unit]
+Description=Maintain WebCaller TURN router mappings and public IP
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=webcaller
+WorkingDirectory=/opt/webcaller
+ExecStart=/opt/webcaller/.runtime/node/bin/node scripts/turn-maintenance.mjs
+ExecStartPost=+/bin/sh -c 'if test -f /opt/webcaller/.runtime/turn-needs-restart; then /bin/systemctl try-restart webcaller-turn.service webcaller.service && /bin/rm /opt/webcaller/.runtime/turn-needs-restart; fi'
+TimeoutStartSec=300
+UMask=0077
+PrivateTmp=true

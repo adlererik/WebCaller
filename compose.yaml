@@ -1,0 +1,53 @@
+name: webcaller
+services:
+  webcaller:
+    build: .
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8080
+      DATA_DIR: /app/data
+      NODE_ENV: production
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    volumes:
+      - webcaller_data:/app/data
+    security_opt:
+      - no-new-privileges:true
+  https:
+    image: caddy:2-alpine
+    profiles: [https]
+    restart: unless-stopped
+    environment:
+      WEB_HOST: ${WEB_HOST:?Set WEB_HOST in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      webcaller:
+        condition: service_healthy
+  turn:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.turn
+    profiles: [turn]
+    restart: unless-stopped
+    network_mode: host
+    env_file: .env
+    volumes:
+      - ./certs:/certs:ro
+    read_only: true
+    tmpfs:
+      - /tmp:mode=0700
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  webcaller_data:
+  caddy_data:
+  caddy_config:

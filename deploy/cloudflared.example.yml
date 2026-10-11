@@ -1,0 +1,11 @@
+# For locally managed tunnels only. Existing remotely managed tunnels should
+# keep their current origin and use the supplied HTTP/WebSocket proxy instead.
+tunnel: YOUR_TUNNEL_ID
+credentials-file: /etc/cloudflared/YOUR_TUNNEL_ID.json
+ingress:
+  - hostname: example.com
+    path: ^/calls(?:/.*)?$
+    service: http://127.0.0.1:8080
+  - hostname: example.com
+    service: http://127.0.0.1:3000
+  - service: http_status:404

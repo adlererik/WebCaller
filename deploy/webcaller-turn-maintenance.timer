@@ -1,0 +1,10 @@
+[Unit]
+Description=Check WebCaller TURN forwarding and certificates
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=5min
+RandomizedDelaySec=15s
+
+[Install]
+WantedBy=timers.target

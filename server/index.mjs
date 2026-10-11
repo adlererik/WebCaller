@@ -6,6 +6,7 @@ import { randomBytes, randomUUID, createHash, createHmac, timingSafeEqual, creat
 import { WebSocketServer, WebSocket } from 'ws';
 import webpush from 'web-push';
 import { createStore } from './store.mjs';
+import {messageEventRoutes} from './message-events.mjs';
 import {attachmentRoutes} from './attachments.mjs';
 import {CHUNK_SIZE} from '../public/attachments.js';
 import {validAttribution,defaultAttribution} from '../public/location.js';
@@ -54,6 +55,7 @@ export function createApp(options = {}) {
   const related = (a, b) => !!store.get('SELECT 1 FROM contacts WHERE a=? AND b=?', a, b);
   const handleAttachment=attachmentRoutes({store,related,validateEnvelope,fail,body,env});
   const emit = (id, event) => { for (const ws of sockets.get(id) || []) if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(event)); };
+  const handleMessageEvents=messageEventRoutes({store,body,fail,validateEnvelope,emit});
   const auth = (req) => {
     const token = req.headers.authorization?.match(/^Bearer ([\w-]{43})$/)?.[1];
     const u = token && store.get('SELECT * FROM users WHERE token_hash=?', hash(token));
@@ -153,6 +155,7 @@ export function createApp(options = {}) {
         }
         const u = auth(req); rate(route.startsWith('/attachments')?'attachment:'+u.id:u.id,route.startsWith('/attachments')?600:120);
         if(await handleAttachment(req,res,route,u,json))return;
+        if(await handleMessageEvents(req,res,route,u,json))return;
         if (route === '/me' && req.method === 'GET') return json(200, { user: userView(u), contacts: contacts(u.id) });
         if (route === '/invite' && req.method === 'POST') {
           rate(`invite:${u.id}`, 10);

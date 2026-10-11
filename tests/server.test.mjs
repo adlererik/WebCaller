@@ -251,3 +251,38 @@ test('location permission and tile CSP allow only the configured map origin',asy
  assert.equal((await f.request('/config')).body.mapTileURL,'https://tile.openstreetmap.org/{z}/{x}/{y}.png');
  assert.throws(()=>createApp({dataDir:':memory:',env:{PUBLIC_URL:'https://example.com/calls',MAP_TILE_URL:'http://evil.test/{z}/{x}/{y}.png'}}),/MAP_TILE_URL/);
 });
+
+test('encrypted message updates enforce roles, stay isolated, replace old state and cascade on removal',async t=>{
+ const f=await fixture();t.after(()=>f.app.close());const {bob}=await f.pair(),{bob:other}=await f.pair();
+ const a=f.alice,peer={id:bob.user.id,keys:bob.identity.keys};
+ const m=await seal(a.identity,a.user.id,peer,{kind:'text',text:'Original private text'},60);
+ await f.request('/messages',{method:'POST',token:a.token,body:m});
+ const update=async(user,kind,data={},target=m.id)=>({target,kind,envelope:await seal(user.identity,user.user.id,user===a?peer:{id:a.user.id,keys:a.identity.keys},{kind:'message-'+kind,target,...data},30)});
+ const post=(user,events)=>f.request('/message-events',{method:'POST',token:user.token,body:{events}});
+ assert.equal((await post(bob,[await update(bob,'edit',{text:'forged edit'})])).status,403);
+ assert.equal((await post(a,[await update(a,'receipt',{deliveredAt:Date.now()})])).status,403);
+ assert.equal((await post(other,[await update(other,'reaction',{emoji:'👍'})])).status,404);
+ const edit=await update(a,'edit',{text:'New private text'});assert.equal((await post(a,[edit])).status,200);
+ assert.equal((await post(a,[edit])).status,200);
+ assert.equal((await post(a,[{...edit,envelope:{...edit.envelope,ciphertext:'different'}}])).status,409);
+ const later=await update(a,'edit',{text:'Final private text'});assert.equal((await post(a,[later])).status,200);assert.equal((await post(a,[edit])).status,200);
+ const read=await update(bob,'read',{deliveredAt:Date.now(),readAt:Date.now()});assert.equal((await post(bob,[read])).status,200);
+ const receipt=await update(bob,'receipt',{deliveredAt:Date.now()});assert.equal((await post(bob,[receipt])).status,200);
+ const reaction=await update(bob,'reaction',{emoji:'👍'});assert.equal((await post(bob,[reaction])).status,200);
+ const seen=(await f.request('/message-events',{token:bob.token})).body;
+ assert.equal(seen.length,4);assert.equal((await open(bob.identity,bob.user.id,{id:a.user.id,keys:a.identity.keys},seen.find(e=>e.kind==='edit').envelope)).text,'Final private text');
+ assert.deepEqual((await f.request('/message-events',{token:other.token})).body,[]);
+ assert.ok(!JSON.stringify(f.app.store.all('SELECT * FROM message_events')).includes('private text'));
+ const wrongPeer={...reaction,envelope:{...reaction.envelope,to:other.user.id}};assert.equal((await post(bob,[wrongPeer])).status,400);
+ const tooLong={...reaction,envelope:{...reaction.envelope,expiresAt:m.expiresAt+1}};assert.equal((await post(bob,[tooLong])).status,400);
+ assert.equal((await post(bob,[await update(bob,'pin',{pinned:true}),await update(bob,'edit',{text:'denied'})])).status,403);
+ assert.equal(f.app.store.get("SELECT COUNT(*) AS n FROM message_events WHERE kind='pin'").n,0,'batch is atomic');
+ const socket=await f.socket(a),notification=new Promise(resolve=>socket.on('message',raw=>{const e=JSON.parse(raw);if(e.type==='message-event')resolve(e);}));
+ await post(bob,[await update(bob,'reaction',{emoji:'❤️'})]);assert.equal((await notification).target,m.id);socket.close();
+ assert.equal((await f.request('/messages/'+m.id,{method:'DELETE',token:bob.token})).status,200);assert.equal(f.app.store.get('SELECT COUNT(*) AS n FROM message_events').n,0);
+ assert.equal((await post(a,[later])).status,404);
+ const next=await seal(a.identity,a.user.id,peer,{kind:'text',text:'Expires'},60);await f.request('/messages',{method:'POST',token:a.token,body:next});
+ await post(a,[await update(a,'pin',{pinned:true},next.id)]);f.app.store.purge(next.expiresAt+1);assert.equal(f.app.store.get('SELECT COUNT(*) AS n FROM message_events').n,0);
+ const last=await seal(a.identity,a.user.id,peer,{kind:'text',text:'Device removal'},60);await f.request('/messages',{method:'POST',token:a.token,body:last});await post(a,[await update(a,'pin',{pinned:true},last.id)]);
+ assert.equal((await f.request('/device',{method:'DELETE',token:bob.token})).status,200);assert.equal(f.app.store.get('SELECT COUNT(*) AS n FROM message_events').n,0);
+});

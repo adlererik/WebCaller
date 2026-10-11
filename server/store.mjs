@@ -10,6 +10,8 @@ export function createStore(dir) {
     CREATE TABLE IF NOT EXISTS contacts (a TEXT NOT NULL REFERENCES users(id), b TEXT NOT NULL REFERENCES users(id), PRIMARY KEY(a,b));
     CREATE TABLE IF NOT EXISTS invites (hash TEXT PRIMARY KEY, owner TEXT NOT NULL REFERENCES users(id), expires INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, sender TEXT NOT NULL REFERENCES users(id), recipient TEXT NOT NULL REFERENCES users(id), expires INTEGER NOT NULL, created INTEGER NOT NULL, envelope TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS message_events (message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE, actor TEXT NOT NULL REFERENCES users(id), kind TEXT NOT NULL CHECK(kind IN ('receipt','read','edit','reaction','pin')), created INTEGER NOT NULL, expires INTEGER NOT NULL, event_id TEXT NOT NULL, envelope TEXT NOT NULL, PRIMARY KEY(message_id,actor,kind));
+    CREATE INDEX IF NOT EXISTS message_events_expiry ON message_events(expires);
     CREATE INDEX IF NOT EXISTS messages_expiry ON messages(expires);
     CREATE INDEX IF NOT EXISTS messages_recipient ON messages(recipient,created);
     CREATE TABLE IF NOT EXISTS push (owner TEXT NOT NULL REFERENCES users(id), endpoint TEXT PRIMARY KEY, subscription TEXT NOT NULL);
@@ -31,6 +33,7 @@ export function createStore(dir) {
     catch (e) { db.exec('ROLLBACK'); throw e; }
   };
   const purge = (now = Date.now()) => {
+    run('DELETE FROM message_events WHERE expires<=?', now);
     run('DELETE FROM message_deletions WHERE expires<=?', now);
     run('DELETE FROM attachments WHERE expires<=?', now);
     run('DELETE FROM messages WHERE expires<=?', now);

@@ -7,7 +7,7 @@ export const defaultAttribution={text:'© OpenStreetMap contributors',url:'https
 export function validLocation(p){
   return !!p&&Number.isFinite(p.lat)&&Math.abs(p.lat)<=90&&Number.isFinite(p.lon)&&Math.abs(p.lon)<=180&&Number.isFinite(p.accuracy)&&p.accuracy>=0&&p.accuracy<=20000000&&Number.isSafeInteger(p.capturedAt)&&p.capturedAt>0&&typeof p.label==='string'&&p.label.length<=160&&['map','pin'].includes(p.preview)&&(p.attribution===undefined||validAttribution(p.attribution));
 }
-export function mapsURL(p){if(!validLocation(p))throw new Error('Invalid location');return `https://maps.google.com/maps?q=${p.lat.toFixed(6)},${p.lon.toFixed(6)}`;}
+export function mapsURL(p,platform=globalThis.navigator){if(!validLocation(p))throw new Error('Invalid location');const apple=/iPhone|iPad|iPod|Mac/i.test(`${platform?.userAgent||''} ${platform?.platform||''}`),coordinates=`${p.lat.toFixed(6)},${p.lon.toFixed(6)}`;return apple?`https://maps.apple.com/?ll=${coordinates}&q=${encodeURIComponent(p.label||'Current location')}`:`https://maps.google.com/maps?q=${coordinates}`;}
 export function locationText(p){return `${p.label||'Current location'}\n${mapsURL(p)}`;}
 export function mapPoint(lat,lon,zoom=15){
   const n=2**zoom,s=Math.sin(Math.max(-85.05112878,Math.min(85.05112878,lat))*Math.PI/180);
@@ -51,9 +51,9 @@ export function locationSharing({peer,busy,config,onSend}){
   const $=id=>document.getElementById(id);let draft,controller,recipient,url;
   function clear(){controller?.abort();controller=null;draft=null;recipient=null;if(url)URL.revokeObjectURL(url);url=null;$('location-preview').replaceChildren();$('location-label').value='';$('send-location').disabled=true;}
   function close(){clear();if($('location-dialog').open)$('location-dialog').close();}
-  function show(){if(!peer()||busy())return;clear();recipient=peer().id;const provider=new URL(config().mapTileURL,window.location.origin).hostname;$('location-provider').textContent=provider==='tile.openstreetmap.org'?'OpenStreetMap':provider;$('location-recipient').textContent=`Send your current location to ${peer().name}. Preview it first, then press Send.`;$('location-status').textContent='';$('locate').disabled=false;$('location-dialog').showModal();}
+  function show(){if(!peer()||busy())return;clear();recipient=peer().id;const provider=new URL(config().mapTileURL,window.location.origin).hostname;$('location-provider').textContent=provider==='tile.openstreetmap.org'?'OpenStreetMap':provider;$('location-recipient').textContent=`Send your current location to ${peer().name}. Preview it first, then press Send.`;$('location-status').textContent='';$('locate').disabled=false;$('location-dialog').showModal();void find();}
   $('location-dialog').addEventListener('close',clear);
-  $('locate').onclick=async()=>{
+  async function find(){
     if(!navigator.geolocation){$('location-status').textContent='Location is unavailable. Open this website in your phone’s browser.';return;}
     controller?.abort();controller=new AbortController();const active=controller,signal=active.signal;draft=null;$('send-location').disabled=true;$('locate').disabled=true;$('location-status').textContent='Finding your location…';
     try{
@@ -67,6 +67,7 @@ export function locationSharing({peer,busy,config,onSend}){
     }catch(e){if(!signal.aborted)$('location-status').textContent=e.code===1?'Allow location access in your browser, then try again.':e.code===3?'Finding your location took too long. Try again outside or near a window.':e.message||'Could not find your location. Try again.';}
     finally{if(controller===active)$('locate').disabled=false;}
   };
+  $('locate').onclick=find;
   $('send-location').onclick=()=>{if(!draft||busy()||peer()?.id!==recipient)return;const next=draft;next.location.label=$('location-label').value.trim().slice(0,160);close();onSend(next.file,next.location);};
   return {show,close};
 }

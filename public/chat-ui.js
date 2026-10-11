@@ -10,16 +10,24 @@ function messageText(text){
   }
   span.append(document.createTextNode(text.slice(offset)));return span;
 }
-export function drawMessages({container,list,self,options,openMedia,load,save}){
+export function drawMessages({container,list,self,options,openMedia,load,save,selection=new Set(),select=()=>{},jump=()=>{}}){
   const nearBottom=container.scrollHeight-container.scrollTop-container.clientHeight<100;
   const prior=new Map([...container.children].map(e=>[e.dataset.key,e])),desired=[];let previousDay;
   for(const m of list){
     const date=new Date(m.createdAt),day=date.toLocaleDateString();
     if(day!==previousDay){const key='day-'+day;let d=prior.get(key);if(!d){d=node('div','date-divider',date.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}));d.dataset.key=key;}desired.push(d);previousDay=day;}
-    const uiKey=JSON.stringify([m.blobURL||'',m.text,m.loading,m.loadError,m.attachment?.type,m.location]);let row=prior.get(m.id);
+    const original=list.find(p=>p.id===m.replyTo),quote=original?(original.location?'Current location':original.text||original.attachment?.name||'Message'):'Original message unavailable';
+    const uiKey=JSON.stringify([quote,m.editedAt,m.receipt,m.reactions,m.pinned,m.forwarded,selection.size>0,selection.has(m.id),m.blobURL||'',m.text,m.loading,m.loadError,m.attachment?.type,m.location]);let row=prior.get(m.id);
     if(!row||row.dataset.ui!==uiKey){
       row=node('div','message-row'+(m.from===self?' outgoing':''));row.dataset.key=m.id;row.dataset.ui=uiKey;
-      const bubble=node('div','message'+(m.from===self?' outgoing':''));row.append(bubble);
+      const stack=node('div','message-stack'),bubble=node('div','message'+(m.from===self?' outgoing':''));stack.append(bubble);row.append(stack);bubble.tabIndex=0;
+      row.classList.toggle('selected-message',selection.has(m.id));
+      if(selection.size){const check=node('input','message-select-box');check.type='checkbox';check.checked=selection.has(m.id);check.ariaLabel='Select message';check.onchange=()=>select(m);row.append(check);}
+      if(m.forwarded)bubble.append(node('span','message-edited','Forwarded'));
+      if(m.replyTo){const q=node('button','message-quote');q.type='button';q.ariaLabel='Go to replied message';q.append(node('strong','',original?(original.from===self?'You':'Reply'):'Reply'),node('span','',quote));q.onclick=()=>jump(m.replyTo);bubble.append(q);}
+      bubble.addEventListener('click',e=>{if(!e.target.closest('a,button,input,audio,video')&&!window.getSelection()?.toString())options(m);});
+      bubble.onkeydown=e=>{if(e.target===bubble&&(e.key==='Enter'||e.key===' ')){e.preventDefault();options(m);}};
+
       let held=false,holdTimer,origin;
       row.oncontextmenu=e=>{e.preventDefault();options(m);};
       bubble.onpointerdown=e=>{if(e.pointerType==='touch'){held=false;origin=[e.clientX,e.clientY];holdTimer=setTimeout(()=>{held=true;options(m);},550);}};
@@ -47,7 +55,14 @@ export function drawMessages({container,list,self,options,openMedia,load,save}){
         }
       }
       if(m.location){bubble.append(messageText(locationText(m.location)));if(m.location.preview==='map'){const source=m.location.attribution||defaultAttribution,credit=node('a','map-credit',source.text);credit.href=source.url;credit.target='_blank';credit.rel='noopener noreferrer';bubble.append(credit);}}else if(m.text)bubble.append(messageText(m.text));
-      const meta=node('span','message-meta',date.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));bubble.append(meta);
+      const time=m.receipt?.deliveredAt||m.createdAt,meta=node('span','message-meta');
+      if(m.pinned)meta.append(node('span','pin-mark','Pinned'));
+      if(m.editedAt)meta.append(node('span','message-edited','Edited'));
+      const clock=node('time','message-time',new Date(time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));clock.dateTime=new Date(time).toISOString();clock.title=m.receipt?.deliveredAt?'Received '+new Date(time).toLocaleString():'Sent '+new Date(time).toLocaleString();meta.append(clock);
+      if(m.from===self)for(const [label,value]of [['Received',m.receipt?.deliveredAt],['Seen',m.receipt?.readAt]])if(value){const mark=node('span','receipt-check','✓');mark.title=label+' '+new Date(value).toLocaleString();mark.ariaLabel=mark.title;mark.dataset.receipt=label.toLowerCase();meta.append(mark);}
+      bubble.append(meta);
+      if(m.reactions&&Object.keys(m.reactions).length){const chips=node('div','message-reactions'),counts=new Map();for(const emoji of Object.values(m.reactions))counts.set(emoji,(counts.get(emoji)||0)+1);for(const [value,count]of counts){const chip=node('button','reaction-chip',value);chip.type='button';chip.ariaLabel=`Reaction ${value}, ${count}`;chip.setAttribute('aria-pressed',String(m.reactions[self]===value));if(count>1)chip.append(node('span','reaction-count',count));chip.onclick=()=>options(m);chips.append(chip);}stack.append(chips);}
+
       const menu=node('button','message-options');menu.type='button';menu.ariaLabel='Message options';menu.append(glyph('more'));menu.onclick=()=>options(m);row.append(menu);
     }
     desired.push(row);
@@ -60,7 +75,7 @@ export function drawMessages({container,list,self,options,openMedia,load,save}){
   if(nearBottom||list.length<4)container.scrollTop=container.scrollHeight;
 }
 export function emojiPicker({input,changed,toast}){
-  const $=id=>document.getElementById(id);let data,selection;
+  const $=id=>document.getElementById(id);let data,selection,pick;
   function render(){
     const search=$('emoji-search').value.toLowerCase().trim(),category=$('emoji-category').value,tone=$('emoji-tone').value;
     const filtered=data.filter(([emoji,name,group])=>{
@@ -70,10 +85,11 @@ export function emojiPicker({input,changed,toast}){
       return tone?tones.length>0&&tones.every(t=>t===tone):!tones.length;
     });
     const grid=$('emoji-grid');grid.replaceChildren();
-    for(const [emoji,name]of filtered){const b=node('button','emoji-choice',emoji);b.type='button';b.title=name;b.ariaLabel=name;b.onclick=()=>{if(input.value.length-(selection[1]-selection[0])+emoji.length>input.maxLength)return toast('This message is full. Send it before adding more emoji.');input.setRangeText(emoji,selection[0],selection[1],'end');$('emoji-dialog').close();input.focus();changed();};grid.append(b);}
+    for(const [emoji,name]of filtered){const b=node('button','emoji-choice',emoji);b.type='button';b.title=name;b.ariaLabel=name;b.onclick=()=>{if(pick){const callback=pick;pick=null;$('emoji-dialog').close();void callback(emoji);return;}if(input.value.length-(selection[1]-selection[0])+emoji.length>input.maxLength)return toast('This message is full. Send it before adding more emoji.');input.setRangeText(emoji,selection[0],selection[1],'end');$('emoji-dialog').close();input.focus();changed();};grid.append(b);}
     $('emoji-status').textContent=filtered.length?'':'No matching emoji';
   }
-  async function show(){
+  async function show(onPick){
+    pick=typeof onPick==='function'?onPick:null;
     selection=[input.selectionStart,input.selectionEnd];
     try{
       if(!data){const r=await fetch('./emojis.json',{cache:'no-store',signal:AbortSignal.timeout(15000)});if(!r.ok)throw new Error('Emoji could not be loaded');data=await r.json();

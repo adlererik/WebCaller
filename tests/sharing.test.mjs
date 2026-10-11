@@ -43,3 +43,21 @@ test('late output enumeration from an ended call cannot change the next call’s
  const old=output.start(true);output.stop();await output.start(false);resolveOld([{kind:'audiooutput',deviceId:'speaker',label:'Speaker'}]);await old;
  assert.equal(output.video,false);assert.equal(output.isSpeaker,false);assert.ok(!routes.includes('speaker'));output.stop();
 });
+
+test('Apple devices open Apple Maps, Android devices open Google Maps and links encode labels',()=>{
+ assert.equal(mapsURL(place,{userAgent:'iPhone',platform:'iPhone'}),'https://maps.apple.com/?ll=0.000000,0.000000&q=Main%20entrance');
+ assert.equal(mapsURL(place,{userAgent:'Android',platform:'Linux'}),'https://maps.google.com/maps?q=0.000000,0.000000');
+ assert.ok(mapsURL({...place,label:'A & B'},{userAgent:'Macintosh',platform:'MacIntel'}).endsWith('q=A%20%26%20B'));
+});
+test('a new voice call resets a prior speaker choice to a real earpiece; video restores chosen voice output',async()=>{
+ const f=audioFixture();f.items([{kind:'audiooutput',deviceId:'default',label:'Default'},{kind:'audiooutput',deviceId:'speaker',label:'Built-in speaker'},{kind:'audiooutput',deviceId:'receiver',label:'Earpiece'}]);
+ await f.output.start(false);assert.equal(f.output.sink,'receiver');await f.output.toggle();assert.equal(f.output.isSpeaker,true);await f.output.toggle();assert.equal(f.output.sink,'receiver');
+ await f.output.setVideo(true);assert.equal(f.output.sink,'speaker');await f.output.setVideo(false);assert.equal(f.output.sink,'receiver');await f.output.toggle();f.output.stop();await f.output.start();assert.equal(f.output.sink,'receiver');f.output.stop();
+});
+
+test('video requested during output discovery still switches to speaker after discovery finishes',async()=>{
+ let discover;const routes=[],devices={enumerateDevices:()=>new Promise(r=>discover=r)};
+ const output=new AudioOutput({setSinkId:async id=>routes.push(id)},devices),starting=output.start(false);
+ await output.setVideo(true);discover([{kind:'audiooutput',deviceId:'receiver',label:'Earpiece'},{kind:'audiooutput',deviceId:'speaker',label:'Built-in speaker'}]);await starting;
+ assert.equal(output.video,true);assert.equal(output.sink,'speaker');await output.setVideo(false);assert.equal(output.sink,'receiver');output.stop();
+});

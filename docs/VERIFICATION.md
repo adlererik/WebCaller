@@ -1,4 +1,4 @@
-# Verification of v0.5.1
+# Verification of v0.6.0
 
 ## Scope
 
@@ -41,3 +41,10 @@ No container, TURN, codec or deployment dependencies changed. Existing deploymen
 ## v0.5.1 routing cancellation
 
 41 Node tests pass. The additional regression ends a video call while output enumeration is pending, starts a voice call, resolves the old result, and verifies the new call keeps its voice route. Pending output-picker results are also checked against the original call generation before routing. This is a source-level concurrency fix; the previously documented UI and media checks remain applicable.
+
+
+## v0.6.0 message controls and defaults
+
+Automated checks cover encrypted event authorization, isolation, idempotency, replacement of older state, batch atomicity, WebSocket propagation, original-expiry enforcement and deletion/device cascades. Client state tests cover target binding, sender-only editing, separate delivery/read updates, cross-participant pin ordering and Unicode reaction validation. Output tests cover an earpiece default, explicit speaker toggling, video restoration, stale call cancellation and video requested while output enumeration is pending. Map-link checks cover Apple/Android selection and URL encoding.
+
+Disposable two-browser checks with synthetic media/location/clipboard verified delivery without a seen mark before opening the chat, a second mark after visibility, edits on both sides and after reload, reactions and full emoji picker, replies, copy, forwarding, selection, info timestamps, pins and deletion cleanup including unavailable quotes. Synthetic calls verified initial receiver routing, explicit speaker toggling, video speaker routing, restoration after camera-off and fading video overlays. Location requests started automatically after Location and encrypted map cards arrived on both sides. Phone-width light/dark branches were checked separately; neither proves physical OS routing or GPS accuracy.

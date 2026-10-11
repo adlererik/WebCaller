@@ -4,11 +4,14 @@ import {validLocation,mapsURL,locationText,locationSharing} from './location.js'
 import {AudioOutput} from './audio-output.js';
 import { readEntryFragment, clearEntryFragment } from './onboarding.js';
 import {newAttachment,validAttachment,attachmentKey,encryptChunk,decryptChunk,CHUNK_SIZE,mediaKind,fileSize} from './attachments.js';
+import {messageActions} from './message-actions.js';
+import {applyMessageEvent,validMessageId} from './message-state.js';
 import {drawMessages,emojiPicker} from './chat-ui.js';
 import {chatCapture} from './chat-capture.js';
 import {callSetup,phonePlatform,registerAlerts} from './call-setup.js';
 const $=id=>document.getElementById(id);
 const icons={
+  reply:'<path d="m9 4-7 7 7 7v-5c6 0 10 2 13 7v-4C22 8 17 7 9 7Z"/>',edit:'<path d="m3 17 14-14 4 4-14 14-5 1ZM14 6l4 4"/>',forward:'<path d="m15 4 7 7-7 7v-5C9 13 5 15 2 20v-4c0-8 5-9 13-9Z"/>',check:'<circle cx="12" cy="12" r="9"/><path d="m7 12 3 3 7-7"/>',pin:'<path d="m15 3 6 6-4 1-3 5 1 3-3-1-4-4-1-3 3 1 5-3ZM10 14l-7 7"/>',trash:'<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>',
   gallery:'<rect x="3" y="6" width="17" height="15" rx="3"/><path d="m6 6-1-3 15-1 2 15-2 1M3 17l5-5 4 4 3-3 5 5"/><circle cx="8" cy="10" r="1"/>',location:'<circle cx="12" cy="12" r="9"/><path d="m7 11 11-5-5 11-2-4Z"/>',speaker:'<path d="M3 9h4l5-5v16l-5-5H3ZM16 8a6 6 0 0 1 0 8M19 5a10 10 0 0 1 0 14"/>',info:'<circle cx="12" cy="12" r="9"/><path d="M12 10v7M12 7h.01"/>',videoOff:'<path d="M3 3l18 18M3 7v12h12v-4M9 5h6v4l6-3v12l-3-1"/>',
 
   smile:'<circle cx="12" cy="12" r="9"/><path d="M8 14a4 4 0 0 0 8 0M8 9h.01M16 9h.01"/>',camera:'<path d="m8 5 2-3h4l2 3h4v16H4V5Z"/><circle cx="12" cy="13" r="4"/>',download:'<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',
@@ -34,7 +37,7 @@ const ownerName=entry.name;entry.setupCode=null;
 // Retain only an iPhone invitation fragment for its Home Screen handoff; never an owner code.
 clearEntryFragment(location,history,!!invitation&&phonePlatform().needsHomeScreen);
 let device,config,selected,ws,wsReady=false,connecting=false,reconnectTimer,reconnectAttempt=0,heartbeat,phone,call,callTicker,wakeLock,soundContext,ringTimer,toastTimer;let ringNodes=new Set();
-let deletedMessages=new Map(),typingPeers=new Map(),typingSeen=new Map(),typingTimer,typingSent=0,typingPeerId,typingChain=Promise.resolve(),chosenMessage,viewerMessage,draft;
+let deletedMessages=new Map(),typingPeers=new Map(),typingSeen=new Map(),typingTimer,typingSent=0,typingPeerId,typingChain=Promise.resolve(),viewerMessage,draft;
 let messages=new Map(),unread=new Map(),seenSignals=new Set(),pendingCandidates=new Map(),settings={timers:{}},transfer;
 try{settings={...settings,...JSON.parse(localStorage.getItem('webcaller-settings')||'{}')};}catch{}
 delete settings.mode; // Retire saved manual modes; connection management is always Automatic.
@@ -76,19 +79,22 @@ function renderContacts(){
   if(!contacts.length){const p=document.createElement('p');p.className='no-contacts';p.textContent=$('search').value?'No people found.':'Your people will appear here.\nStart with an invitation.';el.append(p);}
 }
 function selectContact(c){
-  stopTyping();locationShare.close();$('attachment-dialog').close();closeViewer();captures.close();$('draft-dialog').close();$('message-input').value='';updateComposer();selected=c;unread.delete(c.id);renderContacts();$('empty').classList.add('hidden');$('conversation').classList.remove('hidden');document.querySelector('.app').classList.add('chat-open');
+  actions.reset();stopTyping();locationShare.close();$('attachment-dialog').close();closeViewer();captures.close();$('draft-dialog').close();$('message-input').value='';updateComposer();selected=c;unread.delete(c.id);renderContacts();$('empty').classList.add('hidden');$('conversation').classList.remove('hidden');document.querySelector('.app').classList.add('chat-open');
   $('peer-name').textContent=c.name;$('peer-avatar').textContent=initials(c.name);$('expiry-label').textContent=`Your messages disappear after ${duration(timerFor(c.id))}`;renderMessages();
 }
 function renderMessages(){
   if(!selected)return;
   const list=[...messages.values()].filter(m=>m.expiresAt>Date.now()&&[m.from,m.to].includes(selected.id)).sort((a,b)=>a.createdAt-b.createdAt);
-  drawMessages({container:$('messages'),list,self:device.user.id,options:messageOptions,openMedia:openViewer,load:loadAttachment,save:saveAttachment});
-  renderTyping();if($('attachment-dialog').open)renderRecent();queueMicrotask(pumpMedia);
+  actions.changed();
+  drawMessages({container:$('messages'),list,self:device.user.id,options:messageOptions,openMedia:openViewer,load:loadAttachment,save:saveAttachment,selection:actions.selection,select:actions.select,jump:jumpMessage});
+  const pinned=list.filter(m=>m.pinned).sort((a,b)=>(b.pinVersion?.createdAt||0)-(a.pinVersion?.createdAt||0))[0];$('pinned-message').classList.toggle('hidden',!pinned);$('pinned-message').textContent=pinned?'📌 '+(pinned.text||pinned.attachment?.name||'Message'): "";$('pinned-message').onclick=()=>pinned&&jumpMessage(pinned.id);
+  renderTyping();if($('attachment-dialog').open)renderRecent();queueMicrotask(pumpMedia);queueReceipts();
 }
-function messageOptions(m){if(m.expiresAt<=Date.now())return;chosenMessage=m;$('message-dialog').showModal();}
+function messageOptions(m){actions.show(m);}
+function jumpMessage(id){const row=[...$('messages').children].find(e=>e.dataset.key===id);if(row){row.scrollIntoView({block:'center',behavior:'smooth'});row.querySelector('.message')?.focus({preventScroll:true});}else toast('The original message has expired or was deleted.');}
 function rememberDeletion(id,expires){
   if(typeof id!=='string'||!Number.isSafeInteger(expires))return;
-  deletedMessages.set(id,expires);const m=messages.get(id);
+  deletedMessages.set(id,expires);receiptWanted.delete(id);visibleSince.delete(id);pendingMessageEvents.delete(id);const m=messages.get(id);
   if(transfer?.messageId===id)transfer.controller.abort();if(viewerMessage?.id===id)closeViewer();
   if(m){clearMessage(m);messages.delete(id);if(selected)renderMessages();}
 }
@@ -144,8 +150,10 @@ async function acceptMessage(envelope,hydrating=false){
   if(payload.kind==='attachment'&&(!validAttachment(payload.attachment)||(payload.text!==undefined&&(typeof payload.text!=='string'||payload.text.length>4000))))return;
   if(!['text','attachment'].includes(payload.kind))return;
   if(payload.location!==undefined&&(payload.kind!=='attachment'||mediaKind(payload.attachment.type)!=='image'||!validLocation(payload.location)))return;
-  if(deletedMessages.has(envelope.id)||messages.has(envelope.id)||envelope.expiresAt<=Date.now())return;
-  messages.set(envelope.id,{id:envelope.id,from:envelope.from,to:envelope.to,createdAt:envelope.createdAt,expiresAt:envelope.expiresAt,text:payload.text||'',attachment:payload.attachment,location:payload.location});
+  if(document.visibilityState!=='visible'||deletedMessages.has(envelope.id)||messages.has(envelope.id)||envelope.expiresAt<=Date.now())return;
+  if(payload.replyTo!==undefined&&!validMessageId(payload.replyTo))return;
+  messages.set(envelope.id,{id:envelope.id,from:envelope.from,to:envelope.to,createdAt:envelope.createdAt,expiresAt:envelope.expiresAt,text:payload.text||'',attachment:payload.attachment,location:payload.location,replyTo:payload.replyTo,forwarded:payload.forwarded===true,receivedLocally:envelope.from!==device.user.id?Math.max(envelope.createdAt,Date.now()):undefined});
+  for(const update of pendingMessageEvents.get(envelope.id)||[])await acceptMessageEvent(update);pendingMessageEvents.delete(envelope.id);
   if(!hydrating&&envelope.from!==device.user.id&&selected?.id!==peer.id)unread.set(peer.id,(unread.get(peer.id)||0)+1);
   if(selected?.id===peer.id)renderMessages();renderContacts();
 }
@@ -161,9 +169,9 @@ async function chunkRequest(path,method,state,data){
   const res=await fetch(`${base}/api${path}`,{method,headers:{Authorization:`Bearer ${device.token}`,...(data?{'Content-Type':'application/octet-stream'}:{})},body:data,cache:'no-store',signal:AbortSignal.any([state.controller.signal,AbortSignal.timeout(120000)])});
   if(!res.ok){const error=await res.json();throw new Error(error.error||'File transfer failed');}return res;
 }
-async function sendFile(file,text='',sharedLocation){
+async function sendFile(file,text='',sharedLocation,recipient=selected){
   if(sharedLocation&&!validLocation(sharedLocation))return toast('Invalid location.');
-  if(!file||!selected)return;const peer=selected;
+  if(!file||!recipient)return false;const peer=recipient;
   let a;try{a=newAttachment(file);}catch(e){return toast(e.message);}
   const state=beginTransfer(`Sending ${a.name} to ${peer.name}`);if(!state)return;
   let committed=false;
@@ -179,7 +187,7 @@ async function sendFile(file,text='',sharedLocation){
     await api('/messages','POST',envelope,state.controller.signal);committed=true;
     await acceptMessage(envelope);const m=messages.get(envelope.id);
     if(m&&document.visibilityState==='visible'&&!state.controller.signal.aborted){m.blob=file;m.blobURL=URL.createObjectURL(file);if(selected?.id===peer.id)renderMessages();}
-    toast('File sent. It uses this chat’s disappearing timer.');
+    toast('File sent. It uses this chat’s disappearing timer.');return true;
   }catch(e){if(e.name!=='AbortError')toast(e.message);}
   finally{if(!committed)void api(`/attachments/${a.id}`,'DELETE').catch(()=>{});endTransfer(state);}
 }
@@ -189,7 +197,7 @@ function saveAttachment(m){
 }
 async function loadAttachment(m,automatic=false){
   if(!m.attachment||m.expiresAt<=Date.now()||messages.get(m.id)!==m)return;
-  if(m.blobURL)return mediaKind(m.attachment.type)==='file'?saveAttachment(m):openViewer(m);
+  if(m.blobURL)return automatic?undefined:mediaKind(m.attachment.type)==='file'?saveAttachment(m):openViewer(m);
   const a=m.attachment,state=beginTransfer(`Loading ${a.name}`,automatic);if(!state)return;
   state.messageId=m.id;m.loading=true;m.loadError=null;renderMessages();const pieces=[];
   try{
@@ -235,16 +243,55 @@ const captures=chatCapture({busy:()=>!!(call||transfer),onFile:previewFile,toast
 $('close-media').onclick=closeViewer;$('media-viewer').addEventListener('close',closeViewer);$('save-media').onclick=()=>viewerMessage&&saveAttachment(viewerMessage);
 $('draft-dialog').addEventListener('close',clearDraft);
 $('draft-form').onsubmit=e=>{e.preventDefault();if(!draft||draft.peer!==selected?.id)return;const file=draft.file,text=$('draft-caption').value.trim();clearDraft();$('draft-dialog').close();void sendFile(file,text);};
-$('delete-message').onclick=async()=>{
-  const m=chosenMessage;if(!m)return;$('delete-message').disabled=true;
-  try{await api(`/messages/${m.id}`,'DELETE');rememberDeletion(m.id,m.expiresAt);$('message-dialog').close();}catch(e){toast(e.message);}finally{$('delete-message').disabled=false;chosenMessage=null;}
-};
+const chooseEmoji=emojiPicker({input:$('message-input'),changed:inputTyping,toast});
+const actions=messageActions({messages:()=>messages,self:()=>device?.user.id,contacts:()=>device?.contacts||[],peer:()=>selected,render:renderMessages,event:sendMessageEvent,sendText:sendTextTo,sendFile,load:loadAttachment,remove:async m=>{await api(`/messages/${m.id}`,'DELETE');rememberDeletion(m.id,m.expiresAt);},toast,emoji:chooseEmoji});
+let eventChain=Promise.resolve(),receiptWanted=new Map(),visibleSince=new Map(),pendingMessageEvents=new Map(),receiptTimer,receiptsBusy=false,hydratingMessages=false;
+async function acceptMessageEvent(update){
+  if(document.visibilityState!=='visible'||!update?.envelope||!validMessageId(update.target))return;
+  const m=messages.get(update.target);if(!m){if(!deletedMessages.has(update.target)&&update.envelope.expiresAt>Date.now()&&pendingMessageEvents.size<500){const pending=pendingMessageEvents.get(update.target)||[];if(pending.length<8)pending.push(update);pendingMessageEvents.set(update.target,pending);}return;}
+  const e=update.envelope,peerId=e.from===device.user.id?e.to:e.from,peer=device.contacts.find(c=>c.id===peerId);if(!peer)return;
+  const payload=await open(device.identity,device.user.id,peer,e);
+  if(document.visibilityState!=='visible'||messages.get(m.id)!==m)return;
+  if(applyMessageEvent(m,update,payload)){if(selected&&[m.from,m.to].includes(selected.id))renderMessages();}
+}
+async function eventEnvelope(m,kind,data){
+  if(messages.get(m.id)!==m||m.expiresAt-Date.now()<300)throw new Error('Message expired or was deleted');
+  const peer=device.contacts.find(c=>c.id===(m.from===device.user.id?m.to:m.from));if(!peer)throw new Error('Contact unavailable');
+  const ttl=Math.floor((m.expiresAt-Date.now()-100)/1000*1000)/1000;
+  const envelope=await seal(device.identity,device.user.id,peer,{kind:`message-${kind}`,target:m.id,...data},ttl);
+  if(envelope.expiresAt>m.expiresAt)throw new Error('Try the update again');return {target:m.id,kind,envelope};
+}
+function sendMessageEvent(m,kind,data){
+  const task=eventChain.catch(()=>{}).then(async()=>{const update=await eventEnvelope(m,kind,data);await api('/message-events','POST',{events:[update]});await acceptMessageEvent(update);});eventChain=task;return task;
+}
+function queueReceipts(){if(!hydratingMessages&&!receiptTimer&&document.visibilityState==='visible')receiptTimer=setTimeout(()=>{receiptTimer=null;void pumpReceipts();},350);}
+async function pumpReceipts(){
+  if(receiptsBusy||hydratingMessages||!device||document.visibilityState!=='visible')return;
+  const now=Date.now(),bounds=$('messages').getBoundingClientRect(),openChat=selected&&!$('conversation').classList.contains('hidden')&&bounds.height>0&&$('call-screen').classList.contains('hidden')&&!document.querySelector('dialog[open]');
+  const rows=new Map([...$('messages').children].map(e=>[e.dataset.key,e]));
+  for(const m of messages.values()){
+    if(m.from===device.user.id||m.expiresAt-now<300)continue;
+    const wanted=receiptWanted.get(m.id)||{deliveredAt:m.receipt?.deliveredAt||m.receivedLocally||Math.max(m.createdAt,now)};
+    const rect=rows.get(m.id)?.querySelector('.message')?.getBoundingClientRect(),visible=openChat&&m.from===selected.id&&rect&&Math.min(rect.bottom,bounds.bottom)>Math.max(rect.top,bounds.top)&&rect.right>bounds.left&&rect.left<bounds.right;
+    if(visible){if(!visibleSince.has(m.id))visibleSince.set(m.id,now);if(now-visibleSince.get(m.id)>=300&&!m.receipt?.readAt)wanted.readAt ||=Math.max(wanted.deliveredAt,now);}else visibleSince.delete(m.id);
+    if(!m.receipt?.deliveredAt||wanted.readAt&&!m.receipt.readAt)receiptWanted.set(m.id,wanted);else receiptWanted.delete(m.id);
+  }
+  receiptsBusy=true;const updates=[];for(const [id,wanted]of receiptWanted){const m=messages.get(id);if(!m||m.expiresAt-now<300){receiptWanted.delete(id);continue;}if(updates.length===20)break;try{updates.push(await eventEnvelope(m,wanted.readAt?'read':'receipt',wanted));}catch{receiptWanted.delete(id);}}
+  if(!updates.length){receiptsBusy=false;return;}
+  let failed=false;
+  try{await api('/message-events','POST',{events:updates});for(const update of updates)await acceptMessageEvent(update);}catch{failed=true;}finally{receiptsBusy=false;}
+  if(failed&&!receiptTimer&&document.visibilityState==='visible')receiptTimer=setTimeout(()=>{receiptTimer=null;void pumpReceipts();},3000);else queueReceipts();
+}
+async function sendTextTo(peer,text,extra={}){const envelope=await seal(device.identity,device.user.id,peer,{kind:'text',text,...extra},timerFor(peer.id));await api('/messages','POST',envelope);await acceptMessage(envelope);}
 async function sync(){
   const me=await api('/me');await pinContacts(me.contacts);
   for(const d of await api('/message-deletions'))rememberDeletion(d.id,d.expires);
-  const saved=await api('/messages');
+  hydratingMessages=true;
+  try{const saved=await api('/messages');
   for(const e of saved)try{await acceptMessage(e,true);}catch{toast('An encrypted message could not be verified.');}
-  if(selected)renderMessages();
+  for(const update of await api('/message-events'))try{await acceptMessageEvent(update);}catch{toast('A message update could not be verified.');}
+  }finally{hydratingMessages=false;}
+  if(selected)renderMessages();queueReceipts();
 }
 async function connect(){
   clearTimeout(reconnectTimer);if(!device?.token||connecting||ws?.readyState===0||ws?.readyState===1)return;connecting=true;
@@ -256,6 +303,7 @@ async function connect(){
       const b=JSON.parse(event.data);
       if(b.type==='ready'){connected(true);reconnectAttempt=0;await sync();if(phone)await phone.restart();clearInterval(heartbeat);heartbeat=setInterval(()=>{if(wsReady&&ws.readyState===1)ws.send(JSON.stringify({type:'ping'}));},25000);}
       else if(b.type==='message')await acceptMessage(b.envelope);
+      else if(b.type==='message-event')await acceptMessageEvent(b);
       else if(b.type==='message-deleted')rememberDeletion(b.id,b.expires);
       else if(b.type==='typing')await receiveTyping(b.envelope);
       else if(b.type==='contacts')await sync();
@@ -300,7 +348,7 @@ function ring(){
 }
 function stopRing(){for(const oscillator of ringNodes){try{oscillator.stop();}catch{}}ringNodes.clear();clearInterval(ringTimer);ringTimer=null;$('hear-ringing').classList.add('hidden');navigator.vibrate?.(0);}
 function showCall(incoming=false){
-  alerts.close();locationShare.close();$('attachment-dialog').close();$('audio-output-dialog').close();$('return-call').classList.add('hidden');$('settings-dialog').close();stopTransferForCall();stopTyping();captures.close();closeViewer();$('draft-dialog').close();$('emoji-dialog').close();
+  actions.reset();alerts.close();locationShare.close();$('attachment-dialog').close();$('audio-output-dialog').close();$('return-call').classList.add('hidden');$('settings-dialog').close();stopTransferForCall();stopTyping();captures.close();closeViewer();$('draft-dialog').close();$('emoji-dialog').close();
   $('call-screen').classList.remove('hidden');$('call-screen').classList.remove('has-video');$('call-name').textContent=call.peer.name;$('call-avatar').textContent=initials(call.peer.name);
   $('call-screen').classList.remove('call-connected','has-remote-video');$('call-peer-top').textContent=call.peer.name;$('switch-camera').classList.add('hidden');
   $('call-status').textContent=incoming?(call.video?'Incoming video call':'Incoming voice call'):'Calling…';$('call-duration').textContent='';$('call-quality').textContent='Voice first';$('call-warning').textContent='';
@@ -436,13 +484,13 @@ $('call-settings').onclick=settingsDialog;$('call-more').onclick=settingsDialog;
 $('call-back').onclick=()=>{$('call-screen').classList.add('hidden');$('return-call').classList.remove('hidden');selectContact(call.peer);};
 $('return-call').onclick=()=>{if(call){$('call-screen').classList.remove('hidden');$('return-call').classList.add('hidden');}};
 $('search').oninput=renderContacts;
-$('back').onclick=()=>{stopTyping();closeViewer();captures.close();document.querySelector('.app').classList.remove('chat-open');};
+$('back').onclick=()=>{actions.reset();stopTyping();closeViewer();captures.close();document.querySelector('.app').classList.remove('chat-open');};
 document.querySelectorAll('[data-close]').forEach(e=>e.onclick=()=>e.closest('dialog').close());
 $('copy-invite').onclick=async()=>{try{await navigator.clipboard.writeText($('invite-link').value);toast('Invitation copied.');}catch{$('invite-link').select();toast('Select and copy the invitation link.');}};
 $('share-invite').onclick=async()=>{try{if(navigator.share)await navigator.share({title:'Talk with me on WebCaller',url:$('invite-link').value});else $('copy-invite').click();}catch(e){if(e.name!=='AbortError')toast(e.message);}};
 $('composer').onsubmit=async event=>{
   event.preventDefault();unlockSound();const input=$('message-input'),text=input.value.trim();if(!text||!selected)return;const peer=selected,original=input.value;stopTyping();$('send').disabled=true;
-  try{const envelope=await seal(device.identity,device.user.id,peer,{kind:'text',text},timerFor(peer.id));await api('/messages','POST',envelope);await acceptMessage(envelope);if(input.value===original)input.value='';updateComposer();$('messages').scrollTop=$('messages').scrollHeight;}catch(e){toast(e.message);}finally{$('send').disabled=false;}
+  try{await sendTextTo(peer,text,actions.reply()?{replyTo:actions.reply()}:{});if(input.value===original&&selected?.id===peer.id){input.value='';actions.clearReply();}updateComposer();$('messages').scrollTop=$('messages').scrollHeight;}catch(e){toast(e.message);}finally{$('send').disabled=false;}
 };
 function renderRecent(){
   const strip=$('recent-media');strip.replaceChildren();
@@ -460,9 +508,9 @@ for(const [button,input]of [['choose-photo','photo-input'],['choose-file','file-
 }
 $('camera-input').onchange=()=>{const file=$('camera-input').files[0];$('camera-input').value='';previewFile(file);};
 $('chat-camera').onclick=captures.camera;$('record-voice').onclick=captures.voice;
-$('emoji').onclick=emojiPicker({input:$('message-input'),changed:inputTyping,toast});
+$('emoji').onclick=()=>void chooseEmoji();
 $('message-input').oninput=inputTyping;$('message-input').onblur=stopTyping;
-$('messages').addEventListener('scroll',()=>queueMicrotask(pumpMedia),{passive:true});
+$('messages').addEventListener('scroll',()=>{queueMicrotask(pumpMedia);queueReceipts();},{passive:true});
 $('message-input').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();$('composer').requestSubmit();}};
 $('message-timer').onchange=()=>{if(selected){settings.timers[selected.id]=Number($('message-timer').value);saveSettings();}};
 $('peer-details').onclick=async()=>{if(!selected)return;$('safety-number').textContent=await safetyNumber(device.identity.keys,selected.keys);$('safety-dialog').showModal();};
@@ -516,11 +564,13 @@ $('forget-device').onclick=()=>{$('settings-dialog').close();$('forget-dialog').
 $('confirm-forget').onclick=async()=>{
   try{await api('/device','DELETE');if(ws){ws.onclose=null;ws.close();}clearTimeout(reconnectTimer);clearInterval(heartbeat);finishCall('');await vault('delete');transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();localStorage.removeItem('webcaller-settings');device=null;location.reload();}catch(e){toast(e.message);}
 };
-function clearMessage(m){if(viewerMessage?.id===m.id)closeViewer();if(m.blobURL)URL.revokeObjectURL(m.blobURL);m.blobURL=null;m.blob=null;m.location=null;m.text='';m.attachment=null;}
-setInterval(()=>{for(const [id,expiry]of deletedMessages)if(expiry<=Date.now())deletedMessages.delete(id);for(const [id,expiry]of typingSeen)if(expiry<=Date.now())typingSeen.delete(id);renderTyping();let changed=false;for(const [id,m]of messages)if(m.expiresAt<=Date.now()){clearMessage(m);messages.delete(id);changed=true;}if(changed&&selected)renderMessages();},1000);
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&device){unlockSound();if(!wsReady)connect();else sync().catch(()=>{});if(call?.started)navigator.wakeLock?.request('screen').then(lock=>wakeLock=lock).catch(()=>{});}if(document.visibilityState==='hidden'){locationShare.close();$('attachment-dialog').close();stopTyping();typingPeers.clear();renderTyping();captures.close();closeViewer();clearDraft();$('draft-dialog').close();$('emoji-dialog').close();transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();$('messages').replaceChildren();}});
+function clearMessage(m){m.reactions=null;m.receipt=null;m.versions=null;m.pinVersion=null;m.replyTo=null;if(viewerMessage?.id===m.id)closeViewer();if(m.blobURL)URL.revokeObjectURL(m.blobURL);m.blobURL=null;m.blob=null;m.location=null;m.text='';m.attachment=null;}
+setInterval(()=>{for(const [id,updates]of pendingMessageEvents)if(!updates.some(e=>e.envelope.expiresAt>Date.now()))pendingMessageEvents.delete(id);queueReceipts();for(const [id,expiry]of deletedMessages)if(expiry<=Date.now())deletedMessages.delete(id);for(const [id,expiry]of typingSeen)if(expiry<=Date.now())typingSeen.delete(id);renderTyping();let changed=false;for(const [id,m]of messages)if(m.expiresAt<=Date.now()){clearMessage(m);messages.delete(id);receiptWanted.delete(id);visibleSince.delete(id);changed=true;}if(changed&&selected)renderMessages();},1000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&device){unlockSound();if(!wsReady)connect();else sync().catch(()=>{});if(call?.started)navigator.wakeLock?.request('screen').then(lock=>wakeLock=lock).catch(()=>{});}if(document.visibilityState==='hidden'){actions.reset();clearTimeout(receiptTimer);receiptTimer=null;receiptWanted.clear();visibleSince.clear();pendingMessageEvents.clear();locationShare.close();$('attachment-dialog').close();stopTyping();typingPeers.clear();renderTyping();captures.close();closeViewer();clearDraft();$('draft-dialog').close();$('emoji-dialog').close();transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();$('messages').replaceChildren();$('pinned-message').textContent='';$('pinned-message').onclick=null;$('pinned-message').classList.add('hidden');}});
 window.addEventListener('online',()=>{if(device&&!wsReady)connect();});
 navigator.connection?.addEventListener('change',()=>{if(phone)void phone.sample();});
-window.addEventListener('pagehide',()=>{locationShare.close();output.stop();stopTyping();captures.close();closeViewer();clearDraft();phone?.close();transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();});
+window.addEventListener('pagehide',()=>{actions.reset();clearTimeout(receiptTimer);receiptWanted.clear();visibleSince.clear();pendingMessageEvents.clear();locationShare.close();output.stop();stopTyping();captures.close();closeViewer();clearDraft();phone?.close();transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();});
 unlockSound();
 void boot();
+
+document.addEventListener('close',queueReceipts,true);

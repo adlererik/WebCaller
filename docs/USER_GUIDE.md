@@ -16,7 +16,7 @@ The phone icon starts an audio-only call; the camera icon starts video. Allow th
 
 During a call: **Mute microphone** toggles outgoing voice; **Turn camera on/off** stops/restarts the camera or upgrades audio to video; **Switch to back/front camera** changes the lens while keeping the microphone running; **End call** hangs up. The duration and quality stay at the top. Central caller details fade after video connects and return when reconnecting. If autoplay is blocked, tap **Tap to hear the call**. Use **More call options** or the top information icon for settings. The top back arrow returns to chat while the call continues; **Return to call** brings back the controls.
 
-Voice calls use a plain dark screen with a central initials avatar and a bottom tray. **Speaker / audio output** switches to an exposed speaker when available, or opens output choices/help. Switching off selects the phone/system default, which the OS may still route through a speaker or headset. Android/iPhone browsers may not expose a built-in earpiece/speaker choice. Use the phone’s own audio controls in that case. Video hides the speaker button and requests a speaker when the browser exposes one; hardware routing remains controlled by the browser/OS.
+Voice calls use a plain dark screen with a central initials avatar and a bottom tray. **Speaker / audio output** switches to an exposed speaker when available, or opens output choices/help. Each voice call starts on a detected earpiece/receiver or headset when the browser exposes one. Speaker activates when you tap its button; switching it off returns to that receiver/headset. When no such output is exposed, the browser/system default is used and the OS may still route through a speaker. Android/iPhone browsers may not expose a built-in earpiece/speaker choice. Use the phone’s own audio controls in that case. Video hides the speaker button and requests a speaker when the browser exposes one; hardware routing remains controlled by the browser/OS.
 
 WebCaller uses full-duplex voice. On weak connections it reduces video first and may pause it completely. You can still talk while video is paused, if sufficient usable bandwidth remains. Reconnection attempts refresh ICE/TURN information. Long outages eventually end the call rather than leaving a false connected state.
 
@@ -40,11 +40,11 @@ Tap **+** for a bottom sheet with **Gallery**, **File** and **Location**. **Gall
 
 ## Share a location
 
-Tap **+** → **Location** → **Use current location**. Allow the browser’s location request. Check the map, add a place name if wanted, then press **Send location**. Nothing is sent to the contact until Send. This shares one position, not live tracking. No street-address lookup is performed; the optional place name and coordinates identify the spot. Accuracy depends on the phone’s GPS and surroundings.
+Tap **+** → **Location**. The app immediately requests your current position with high accuracy and without reusing a cached position. Allow the browser’s location request. Check the map, add a place name if wanted, then press **Send location**. Nothing is sent to the contact until Send. This shares one position, not live tracking. No street-address lookup is performed; the optional place name and coordinates identify the spot. Accuracy depends on the phone’s GPS and surroundings.
 
-Both phones see the map image and a Google Maps link. Tap the image for full-screen viewing, **Open in Maps** for directions, and **Close media** to return. If the map cannot load, a clearly labelled coordinate/pin preview and the link still work. Location media follows the disappearing timer and Delete for both. Updating an existing server needs a restart to enable the location permission header; no new secrets or ports are required.
+Both phones see the same encrypted map image. Android/other devices open Google Maps; Apple devices open Apple Maps. The link is chosen on the viewing device, so an Android sender can share a location with an iPhone recipient. Tap the image for full-screen viewing, **Open in Maps** for directions, and **Close media** to return. If the map cannot load, a clearly labelled coordinate/pin preview and the link still work. Location media follows the disappearing timer and Delete for both. Updating an existing server needs a restart to enable the location permission header; no new secrets or ports are required.
 
-Map previews use OpenStreetMap by default. After your explicit location tap, the browser requests only the few visible map tiles; the provider receives IP address and map area. The rendered image and coordinates travel encrypted to the contact. The recipient receives the encrypted image instead of automatically contacting the map provider. Opening Maps shares the coordinates with Google. Map tiles may remain in ordinary browser caches and provider logs; deleting the chat cannot erase those traces. No API key is required for the default service, which is best effort.
+Map previews use OpenStreetMap by default. After your explicit location tap, the browser requests only the few visible map tiles; the provider receives IP address and map area. The rendered image and coordinates travel encrypted to the contact. The recipient receives the encrypted image instead of automatically contacting the map provider. Opening Maps shares the coordinates with the chosen Maps provider. Map tiles may remain in ordinary browser caches and provider logs; deleting the chat cannot erase those traces. No API key is required for the default service, which is best effort.
 
 ## Delete for both
 
@@ -71,3 +71,27 @@ Three animated dots show when the other person types. Only a signed encrypted ty
 ## Safety number
 
 Tap your contact's name to see the safety number. Compare it through a channel you trust. Known key changes are blocked. The original invitation still depends on trusting its delivery channel. This is custom encryption, not audited Signal Protocol; see [Security](SECURITY.md).
+
+
+## Tap a message
+
+Tap a text bubble, long-press a bubble, or use its **Message options** button. The menu has a quick row of reactions and **More reactions** for the full searchable Unicode emoji picker. Tap your current emoji again to remove it. Reaction chips appear just below the bubble on both phones.
+
+- **Reply:** quote that message above your next text. Cancel using the small ×. Tap a sent quote to return to its original. A deleted or expired original becomes “Original message unavailable”; the reply does not keep a hidden copy of its text.
+- **Edit:** change your own text or media caption. Save updates both phones and adds an Edited label. Location cards keep their original coordinates and cannot be edited. Editing does not restart the timer.
+- **Forward:** choose one of your contacts. The copy gets the destination chat’s timer. Media may need to download first and cannot transfer during a call. A forwarded copy is independent of the original.
+- **Copy:** copy the text, caption, location link or file name to your clipboard. Copies outside this app are not removed by its disappearing timer.
+- **Select:** select up to 20 messages using the checkboxes, then Copy, Forward or Delete them. Use × to leave selection mode.
+- **Info:** see sent, received, seen, edited and expiry times. “Not yet” means the corresponding acknowledgement has not arrived.
+- **Pin / Unpin:** show a shortcut at the top of the chat on both phones. A pin does not keep a message after its timer expires.
+- **Delete for both:** confirm to remove the message and attached media for both participants. Either person can do this. Previously saved or forwarded copies cannot be recalled.
+
+## Delivery and seen marks
+
+An outgoing message gets one small green circled check when the recipient’s open app verifies/decrypts it. The time beside it is the received time. A second green circled check appears after the bubble has been visible in the active conversation. Receiving a push notification or storing ciphertext on the server does not count as receiving or viewing the message. Marks may arrive later when a phone reconnects; Info shows both exact timestamps. Receipt state is encrypted and expires with the message.
+
+## Appearance and permissions
+
+The app automatically follows the phone’s light/dark appearance, including changes while it is open. No theme setup is needed. The message text field has no blue focus box; keyboard focus remains visible on buttons.
+
+There is no extra app prompt for precise location. The browser/OS still requires permission when it has not already been granted. Choose Precise location in that system prompt if offered. A website cannot force precise GPS when the user or OS allows only approximate location. **Refresh location** obtains a new position; location is shared only after Send.

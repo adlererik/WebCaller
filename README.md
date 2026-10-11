@@ -4,7 +4,7 @@ A browser-only phone for Android, iPhone and desktop: adaptive mono Opus voice, 
 
 **Start here: [Beginner installation guide](docs/INSTALL.md).** Use a Debian 12/13 server, a domain name and the guided installer. Docker supplies Node.js 24; optional Caddy supplies HTTPS and optional coturn supplies your own free relay.
 
-This is the **v0.5.1 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
+This is the **v0.6.0 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
 
 ## What you get
 
@@ -66,3 +66,6 @@ Open `http://localhost:8080/calls`. Loopback HTTP is suitable for local tests; p
 ## Release and license
 
 [Release notes](CHANGELOG.md) describe the initial preview. Code is available under the [MIT license](LICENSE). Dependency notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Please report vulnerabilities privately using [SECURITY.md](SECURITY.md).
+
+
+New in v0.6.0: tap a message for emoji reactions, Reply, Edit, Forward, Copy, Select, Info, Pin and Delete for both. Delivery and viewed acknowledgements use two small green circled checks. The app follows system light/dark appearance, shares a fresh high-accuracy location with device-appropriate Maps links, and starts controllable voice output on an earpiece/headset. See the [user guide](docs/USER_GUIDE.md) for plain-language instructions and browser limitations.

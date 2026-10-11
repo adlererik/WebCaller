@@ -15,6 +15,8 @@ flowchart LR
 | File/directory | Responsibility |
 |---|---|
 | public/index.html, style.css, icon.svg | Responsive conversation UI, dialogs, call controls and local SVG assets |
+| public/message-actions.js, message-state.js, messages.css | Message actions, encrypted state validation, receipts/reactions/reply/pin rendering and automatic theme |
+| server/message-events.mjs | Authenticated encrypted state batches, bounded state history, parent expiry and WebSocket propagation |
 | public/chat-ui.js | Keyed message rendering, media bubbles and searchable Unicode emoji picker |
 | public/chat-capture.js | Separate camera/voice capture, cleanup and voice-note codec selection |
 | public/app.js | Enrollment, contact pins, encrypted chat/signaling, call state, ringing, notifications, timers and reconnect |
@@ -50,6 +52,8 @@ flowchart LR
 | POST /invite-info | Verify invitation/fingerprint and preview names without redemption (unauthenticated) |
 | GET /ice | Authenticated STUN/TURN config with temporary credentials |
 | POST /ticket | Short-lived single-use WebSocket authentication ticket |
+| GET /message-events | Latest encrypted states for the same 500 live messages returned by the mailbox |
+| POST /message-events | Up to 20 encrypted updates per atomic batch; sender-only edit, recipient-only delivery/read, participant reactions/pins |
 | GET /messages | Authorized unexpired ciphertext mailbox |
 | POST /messages | Validate/store idempotent signed ciphertext and notify recipient |
 | GET /message-deletions | Participant-scoped deletion markers until original message expiry |

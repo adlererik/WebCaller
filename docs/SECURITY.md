@@ -37,3 +37,10 @@ Push contains generic text, type, opaque call/test ID and deadlines, without nam
 ## Location privacy
 
 Location is optional, one-shot and previewed before Send. Coordinates/label/accuracy/capture time and the thumbnail are encrypted using the existing attachment/message format. Sender map-tile requests disclose map area/IP to the configured provider. The map image is transmitted to the recipient as encrypted media; receiving it does not automatically load third-party map tiles. Tapping Maps sends coordinates to that external service. Normal tile caches, browser history and provider metadata may remain after message expiry/deletion. The app’s no-store ciphertext policy does not erase external tile caches. Never claim zero location traces. Map provider configuration is public; do not embed private API keys. Only that provider’s image origin is added to CSP, and geolocation/speaker-selection are allowed for self only.
+
+
+## Message actions and receipts
+
+Edits, emoji reactions, pins and receipt timestamps are signed/encrypted with the same device keys as chat. The server sees participant IDs, target message IDs, event kinds, update time and expiry, but not the edited text, emoji or read/delivery timestamps inside the payload. It retains only the latest state per participant and kind. Updates cannot extend original expiry and are deleted with the parent message/device.
+
+An edit updates the visible message, but the original encrypted message envelope remains until deletion/expiry; this is not forensic erasure of the prior text. A recipient, forwarded copy, downloaded file, clipboard or screenshot may retain content. Replies avoid keeping a quoted plaintext copy after original deletion/expiry. A viewed acknowledgement is based on visible app UI, not an assurance a human read it. The timestamp comes from the recipient device clock. Pins never defeat disappearing-message expiry.

@@ -1,3 +1,4 @@
+import {remainingTime,updateCountdowns} from './message-expiry.js';
 import {locationText,defaultAttribution} from './location.js';
 import {mediaKind,fileSize} from './attachments.js';
 const node=(tag,cls,text)=>{const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=text;return el;};
@@ -10,6 +11,12 @@ function messageText(text){
   }
   span.append(document.createTextNode(text.slice(offset)));return span;
 }
+function transferCard(m,self,loading=false){
+  const card=node('div','transfer-card');card.setAttribute('role','progressbar');card.setAttribute('aria-valuemin','0');card.setAttribute('aria-valuemax','100');const percent=loading?m.loadProgress:m.percent;
+  if(Number.isInteger(percent))card.setAttribute('aria-valuenow',String(percent));
+  const label=loading?'Loading':m.from===self?'Sending':'Receiving';card.setAttribute('aria-label',label+' '+m.attachment.name);
+  const spinner=node('span','transfer-spinner');spinner.setAttribute('aria-hidden','true');const copy=node('div','transfer-copy');copy.append(node('strong','',m.attachment.name),node('span','transfer-caption',`${label}${Number.isInteger(percent)?' · '+percent+'%':''} · ${fileSize(m.attachment.size)}`));card.append(spinner,copy);return card;
+}
 export function drawMessages({container,list,self,options,openMedia,load,save,selection=new Set(),select=()=>{},jump=()=>{}}){
   const nearBottom=container.scrollHeight-container.scrollTop-container.clientHeight<100;
   const prior=new Map([...container.children].map(e=>[e.dataset.key,e])),desired=[];let previousDay;
@@ -17,24 +24,25 @@ export function drawMessages({container,list,self,options,openMedia,load,save,se
     const date=new Date(m.createdAt),day=date.toLocaleDateString();
     if(day!==previousDay){const key='day-'+day;let d=prior.get(key);if(!d){d=node('div','date-divider',date.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}));d.dataset.key=key;}desired.push(d);previousDay=day;}
     const original=list.find(p=>p.id===m.replyTo),quote=original?(original.location?'Current location':original.text||original.attachment?.name||'Message'):'Original message unavailable';
-    const uiKey=JSON.stringify([quote,m.editedAt,m.receipt,m.reactions,m.pinned,m.forwarded,selection.size>0,selection.has(m.id),m.blobURL||'',m.text,m.loading,m.loadError,m.attachment?.type,m.location]);let row=prior.get(m.id);
+    const uiKey=JSON.stringify([quote,m.editedAt,m.receipt,m.reactions,m.pinned,m.forwarded,selection.size>0,selection.has(m.id),m.blobURL||'',m.text,m.loading,m.loadError,m.attachment?.type,m.location,m.pending,m.percent,m.loadProgress]);let row=prior.get(m.id);
     if(!row||row.dataset.ui!==uiKey){
       row=node('div','message-row'+(m.from===self?' outgoing':''));row.dataset.key=m.id;row.dataset.ui=uiKey;
       const stack=node('div','message-stack'),bubble=node('div','message'+(m.from===self?' outgoing':''));stack.append(bubble);row.append(stack);bubble.tabIndex=0;
       row.classList.toggle('selected-message',selection.has(m.id));
-      if(selection.size){const check=node('input','message-select-box');check.type='checkbox';check.checked=selection.has(m.id);check.ariaLabel='Select message';check.onchange=()=>select(m);row.append(check);}
+      if(selection.size&&!m.pending){const check=node('input','message-select-box');check.type='checkbox';check.checked=selection.has(m.id);check.ariaLabel='Select message';check.onchange=()=>select(m);row.append(check);}
       if(m.forwarded)bubble.append(node('span','message-edited','Forwarded'));
       if(m.replyTo){const q=node('button','message-quote');q.type='button';q.ariaLabel='Go to replied message';q.append(node('strong','',original?(original.from===self?'You':'Reply'):'Reply'),node('span','',quote));q.onclick=()=>jump(m.replyTo);bubble.append(q);}
-      bubble.addEventListener('click',e=>{if(!e.target.closest('a,button,input,audio,video')&&!window.getSelection()?.toString())options(m);});
-      bubble.onkeydown=e=>{if(e.target===bubble&&(e.key==='Enter'||e.key===' ')){e.preventDefault();options(m);}};
+      bubble.addEventListener('click',e=>{if(!e.target.closest('a,button,input,audio,video')&&!window.getSelection()?.toString())if(!m.pending)options(m);});
+      bubble.onkeydown=e=>{if(e.target===bubble&&(e.key==='Enter'||e.key===' ')){e.preventDefault();if(!m.pending)options(m);}};
 
       let held=false,holdTimer,origin;
-      row.oncontextmenu=e=>{e.preventDefault();options(m);};
-      bubble.onpointerdown=e=>{if(e.pointerType==='touch'){held=false;origin=[e.clientX,e.clientY];holdTimer=setTimeout(()=>{held=true;options(m);},550);}};
+      row.oncontextmenu=e=>{e.preventDefault();if(!m.pending)options(m);};
+      bubble.onpointerdown=e=>{if(e.pointerType==='touch'){held=false;origin=[e.clientX,e.clientY];holdTimer=setTimeout(()=>{held=true;if(!m.pending)options(m);},550);}};
       for(const name of ['pointerup','pointercancel','pointerleave'])bubble.addEventListener(name,()=>clearTimeout(holdTimer));
       bubble.onpointermove=e=>{if(origin&&Math.hypot(e.clientX-origin[0],e.clientY-origin[1])>10)clearTimeout(holdTimer);};
       bubble.addEventListener('click',e=>{if(held){held=false;e.preventDefault();e.stopImmediatePropagation();}},true);
-      if(m.attachment){
+      if(m.pending){row.classList.add('pending-transfer');bubble.tabIndex=-1;bubble.append(transferCard(m,self));}
+      else if(m.attachment){
         const a=m.attachment,kind=mediaKind(a.type);bubble.classList.add('attachment-message',kind+'-message');if(m.location)bubble.classList.add('location-message');
         if(['image','video'].includes(kind)){
           const preview=node('button','media-preview');preview.type='button';preview.ariaLabel=m.location?'Open location preview':kind==='image'?'Open photo':'Play video';
@@ -43,13 +51,13 @@ export function drawMessages({container,list,self,options,openMedia,load,save,se
             media.addEventListener(kind==='image'?'load':'loadedmetadata',()=>{if(nearBottom)container.scrollTop=container.scrollHeight;});
             media.onerror=()=>{preview.classList.add('media-unavailable');};preview.append(media);
             if(kind==='video'){const play=node('span','media-play');play.append(glyph('play'));preview.append(play);}
-          }else preview.append(node('span','media-placeholder',m.loadError?'Tap to retry':m.loading?'Loading…':'Loading media…'));
+          }else{const placeholder=node('span','media-placeholder');if(m.loading)placeholder.append(transferCard(m,self,true));else placeholder.textContent=m.loadError?'Tap to retry':'Loading media…';preview.append(placeholder);}
           preview.onclick=()=>m.blobURL?openMedia(m):load(m);bubble.append(preview);
         }else if(kind==='audio'&&m.blobURL){
           const audio=node('audio','chat-audio');audio.src=m.blobURL;audio.controls=true;audio.preload='metadata';audio.ariaLabel='Voice message';bubble.append(audio);
           const expand=node('button','audio-expand','Open audio');expand.type='button';expand.onclick=()=>openMedia(m);bubble.append(expand);
         }else{
-          bubble.append(node('strong','attachment-name',kind==='audio'?'Voice message':a.name));
+          if(m.loading)bubble.append(transferCard(m,self,true));else bubble.append(node('strong','attachment-name',kind==='audio'?'Voice message':a.name));
           const action=node('button','attachment-action',m.blobURL?'Save file':m.loading?'Loading…':`${m.loadError?'Retry':kind==='audio'?'Play voice message':'Open file'} · ${fileSize(a.size)}`);
           action.type='button';action.disabled=!!m.loading;action.onclick=()=>m.blobURL?save(m):load(m);bubble.append(action);
         }
@@ -59,11 +67,13 @@ export function drawMessages({container,list,self,options,openMedia,load,save,se
       if(m.pinned)meta.append(node('span','pin-mark','Pinned'));
       if(m.editedAt)meta.append(node('span','message-edited','Edited'));
       const clock=node('time','message-time',new Date(time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));clock.dateTime=new Date(time).toISOString();clock.title=m.receipt?.deliveredAt?'Received '+new Date(time).toLocaleString():'Sent '+new Date(time).toLocaleString();meta.append(clock);
+      const expiry=node('span','message-expiry');expiry.dataset.expires=String(m.expiresAt);expiry.title='Disappears '+new Date(m.expiresAt).toLocaleString();expiry.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="9"/><path d="M12 8v5l3 2M9 1h6"/></svg>';expiry.append(node('span','expiry-value',remainingTime(m.expiresAt)));meta.append(expiry);
       const receipts=node('span','receipt-group');if(m.from===self)for(const [label,value]of [['Received',m.receipt?.deliveredAt],['Seen',m.receipt?.readAt]])if(value){const mark=node('span','receipt-check','✓');mark.title=label+' '+new Date(value).toLocaleString();mark.ariaLabel=mark.title;mark.dataset.receipt=label.toLowerCase();receipts.append(mark);}if(receipts.childElementCount)meta.append(receipts);
       bubble.append(meta);
-      if(m.reactions&&Object.keys(m.reactions).length){const chips=node('div','message-reactions'),counts=new Map();for(const emoji of Object.values(m.reactions))counts.set(emoji,(counts.get(emoji)||0)+1);for(const [value,count]of counts){const chip=node('button','reaction-chip',value);chip.type='button';chip.ariaLabel=`Reaction ${value}, ${count}`;chip.setAttribute('aria-pressed',String(m.reactions[self]===value));if(count>1)chip.append(node('span','reaction-count',count));chip.onclick=()=>options(m);chips.append(chip);}stack.append(chips);}
+      if(m.reactions&&Object.keys(m.reactions).length){const chips=node('div','message-reactions'),counts=new Map();for(const emoji of Object.values(m.reactions))counts.set(emoji,(counts.get(emoji)||0)+1);for(const [value,count]of counts){const chip=node('button','reaction-chip',value);chip.type='button';chip.ariaLabel=`Reaction ${value}, ${count}`;chip.setAttribute('aria-pressed',String(m.reactions[self]===value));if(count>1)chip.append(node('span','reaction-count',count));chip.onclick=()=>{if(!m.pending)options(m);};chips.append(chip);}stack.append(chips);}
 
-      const menu=node('button','message-options');menu.type='button';menu.ariaLabel='Message options';menu.append(glyph('more'));menu.onclick=()=>options(m);row.append(menu);
+      if(m.pending){row.oncontextmenu=e=>e.preventDefault();bubble.onkeydown=null;}
+      const menu=node('button','message-options');menu.type='button';menu.ariaLabel='Message options';menu.append(glyph('more'));menu.onclick=()=>{if(!m.pending)options(m);};if(!m.pending)row.append(menu);
     }
     desired.push(row);
   }
@@ -72,6 +82,7 @@ export function drawMessages({container,list,self,options,openMedia,load,save,se
   let cursor=container.firstChild;
   for(const el of desired){if(el===cursor)cursor=cursor.nextSibling;else container.insertBefore(el,cursor);}
   const keep=new Set(desired);for(const el of [...container.children])if(!keep.has(el))container.removeChild(el);
+  updateCountdowns(container);
   if(nearBottom||list.length<4)container.scrollTop=container.scrollHeight;
 }
 export function emojiPicker({input,changed,toast}){

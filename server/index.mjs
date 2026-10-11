@@ -53,7 +53,7 @@ export function createApp(options = {}) {
   if (pushReady) webpush.setVapidDetails(env.VAPID_SUBJECT || 'mailto:admin@example.com', env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
   const contacts = (id) => store.all('SELECT users.* FROM users JOIN contacts ON contacts.b=users.id WHERE contacts.a=?', id).map(userView);
   const related = (a, b) => !!store.get('SELECT 1 FROM contacts WHERE a=? AND b=?', a, b);
-  const handleAttachment=attachmentRoutes({store,related,validateEnvelope,fail,body,env});
+  const handleAttachment=attachmentRoutes({store,related,validateEnvelope,fail,body,env,cancelled:a=>{emit(a.sender,{type:'transfer-ended',id:a.message_id});emit(a.recipient,{type:'transfer-ended',id:a.message_id});}});
   const emit = (id, event) => { for (const ws of sockets.get(id) || []) if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(event)); };
   const handleMessageEvents=messageEventRoutes({store,body,fail,validateEnvelope,emit});
   const auth = (req) => {
@@ -226,7 +226,7 @@ export function createApp(options = {}) {
             if(attachment)store.run('UPDATE attachments SET committed=1 WHERE id=?',attachment.id);
           });
           emit(b.to, { type: 'message', envelope: b }); emit(u.id, { type: 'message', envelope: b });
-          void push(b.to, notificationPayload({type:'message',url:publicURL.href.replace(/\/$/,'')+'/',expiresAt:b.expiresAt}), Math.max(0, Math.min(60, Math.floor((b.expiresAt-Date.now())/1000))));
+          void push(b.to, notificationPayload({type:'message',messageId:b.id,peerId:b.from,recipientId:b.to,url:publicURL.href.replace(/\/$/,'')+'/',expiresAt:b.expiresAt}), Math.max(0, Math.min(60, Math.floor((b.expiresAt-Date.now())/1000))));
           return json(201, { id: b.id });
         }
         if (route === '/push' && req.method === 'POST') {
@@ -335,6 +335,14 @@ export function createApp(options = {}) {
         }
         rate(`ws:${ws.user}`, 240);
         if (b.type === 'ping') return ws.send(JSON.stringify({ type: 'pong' }));
+        if(b.type==='transfer'){
+          validateEnvelope(b.envelope,ws.user,true);if(b.envelope.expiresAt-b.envelope.createdAt>20000)fail(400,'Transfer update expires too late');
+          if(!/^[a-f0-9-]{36}$/.test(b.messageId||''))fail(400,'Invalid transfer');
+          const a=store.get('SELECT * FROM attachments WHERE message_id=? AND expires>?',b.messageId,Date.now());
+          if(!a||a.sender!==ws.user||a.recipient!==b.envelope.to||!related(a.sender,a.recipient))fail(403,'Unknown transfer');
+          if(a.committed)return;if(b.envelope.expiresAt>a.expires)fail(400,'Transfer update exceeds file expiry');
+          rate(`transfer:${ws.user}`,40);emit(a.recipient,{type:'transfer',messageId:b.messageId,envelope:b.envelope});return;
+        }
         if(b.type==='typing'){
           validateEnvelope(b.envelope,ws.user,true);
           if(b.envelope.expiresAt-b.envelope.createdAt>10000)fail(400,'Typing update expires too late');

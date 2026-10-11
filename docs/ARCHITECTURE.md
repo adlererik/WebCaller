@@ -29,6 +29,9 @@ flowchart LR
 | public/video-codecs.js | Bounded WebRTC encode/decode efficiency probes and mutual codec variant preferences |
 | public/transfer-policy.js | Call-health checks, 4 KB piece size and paced voice-first transfers |
 | public/media.js | Phone class, Opus SDP tuning, capture, sender adaptation, candidate queues, ICE restart and relay test |
+| public/message-intents.js | Identity-bound one-use message-notification navigation, no routing identifiers in URLs |
+| public/message-expiry.js | Compact expiry formatting and isolated countdown DOM updates |
+| public/transfer-state.js | Validation, version ordering and expiry of transient encrypted upload placeholders |
 | public/call-intents.js | Atomic one-use notification answer decision store, scoped to device/call with a 30-second validity limit |
 | public/sw.js | Call-state checks, generic notifications, foreground-ring coordination, notification actions and taps; no fetch cache |
 | public/call-setup.js | Phone detection, Home Screen guidance, notification permission and heard-alert verification |
@@ -83,3 +86,5 @@ The optional `archive-proxy.mjs` bypasses an existing Node site's visitor handle
 Typing uses authenticated WebSocket `{type:"typing", envelope}` events with signed encrypted payloads `{kind:"typing",active:boolean}` and an eight-second client TTL. It does not enter the call map/mailbox or offline replay. Deletion uses authenticated HTTP and metadata notifications; clients reject delayed envelopes for known deleted IDs.
 
 File activity uses signed encrypted `sharing` signals inside an existing participant-bound call. It is not stored in the mailbox or replayed; the receiving lease expires after 30 seconds. Local transfer completion/abort immediately restores the local current video budget. Notification decisions never come from URLs, socket offers or push arrivals; only worker notification-button clicks create them.
+
+Upload progress uses authenticated WebSocket `{type:"transfer", messageId, envelope}` events. Only the sender of a live, uncommitted reservation can publish to its exact recipient, with an envelope lifetime of at most 20 seconds bounded by the attachment deadline. The encrypted payload binds its target ID, metadata, percent and original timestamps; clients enforce immutable identity/deadline fields, monotonic progress, lease expiry and committed/deleted-message guards. It does not enter SQLite or offline replay. Discarding a reservation emits `{type:"transfer-ended",id}` to its two participants.

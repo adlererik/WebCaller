@@ -1,7 +1,7 @@
 import {CHUNK_SIZE,MAX_FILE_SIZE} from '../public/attachments.js';
 import {TRANSFER_PART_SIZE} from '../public/transfer-policy.js';
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
-export function attachmentRoutes({store,related,validateEnvelope,fail,body,env}){
+export function attachmentRoutes({store,related,validateEnvelope,fail,body,env,cancelled=()=>{}}){
   function quota(name,fallback){const value=Number(env[name]||fallback);if(!Number.isInteger(value)||value<10||value>65536)throw new Error(`${name} must be an integer between 10 and 65536 MB`);return value*1024*1024;}
   const userQuota=quota('ATTACHMENT_USER_QUOTA_MB',100),globalQuota=quota('ATTACHMENT_GLOBAL_QUOTA_MB',1024);
   return async(req,res,route,u,json)=>{
@@ -25,7 +25,7 @@ export function attachmentRoutes({store,related,validateEnvelope,fail,body,env})
     if(!a||![a.sender,a.recipient].includes(u.id)||!related(a.sender,a.recipient))fail(404,'Attachment unavailable or expired');
     if(req.method==='DELETE'&&!match[2]){
       if(a.sender!==u.id||a.committed)fail(403,'Only the sender can discard an unfinished transfer');
-      store.run('DELETE FROM attachments WHERE id=?',a.id);json(200,{ok:true});return true;
+      store.run('DELETE FROM attachments WHERE id=?',a.id);cancelled(a);json(200,{ok:true});return true;
     }
     const index=Number(match[2]);
     if(match[2]===undefined||index>=Math.ceil(a.size/CHUNK_SIZE))fail(404,'Chunk not found');

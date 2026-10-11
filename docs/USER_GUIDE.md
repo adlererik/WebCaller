@@ -118,3 +118,15 @@ If your notification shows **Answer**, press it to open and answer that particul
 Voice calls start with an exposed earpiece/headset where the browser allows it. If the control says **Audio output: controlled by your phone**, this browser does not expose a built-in earpiece/speaker switch. The website cannot manufacture that control; use a connected headset for private audio or the phone’s output picker if available. Video requests an exposed speaker and restores the previous voice route afterward. On unsupported browsers the OS chooses the actual route.
 
 When you send or fetch media during a call, video temporarily becomes smaller to make room while voice stays prioritized. It returns to the appropriate quality after sharing finishes. Very weak connections pause sharing and may pause video; the file resumes when there is spare capacity. Cached media opens without a new network transfer.
+
+## Message alerts, countdowns and sharing progress
+
+New message notifications say **New message**, without contact names or message text. Tap a new notification to open the sender’s conversation. If the message is still available, the app scrolls to it; if it disappeared or was deleted, the conversation opens with an explanation. An older notification generated before this update may still open the contact list.
+
+Every message has a small disappearing countdown beside its timestamp and delivery marks. Long timers show days/hours or hours/minutes; the last hour shows minutes/seconds and the last minute shows seconds. Its original deadline does not reset when read or edited. Updates do not reload images or interrupt media playback.
+
+During a file/media upload, connected phones show a spinner and **Sending / Receiving · percentage** placeholder in chat. It becomes the normal file or media bubble after the completed encrypted upload is verified. Opening an uncached attachment shows its own loading progress. Progress is temporary, encrypted and does not create message-history entries or a push alert for every update. A disconnected recipient sees progress after reconnecting if the sender is still announcing it; otherwise it sees the completed message when available. Cancelling, expiry or contact removal clears the placeholder; a lost connection lets an unrenewed placeholder expire within 20 seconds.
+
+The call settings icon is a cog. Voice/video rates sit directly beside their codec names, with connection quality to their right. Sharing retains the current voice-first bandwidth policy.
+
+For browser-history limitations and keeping this phone private, see [Browser privacy](BROWSER_PRIVACY.md). A website cannot erase browser history or hide that it has been used from someone inspecting the device.

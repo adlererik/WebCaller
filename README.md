@@ -4,7 +4,7 @@ A browser-only phone for Android, iPhone and desktop: adaptive mono Opus voice, 
 
 **Start here: [Beginner installation guide](docs/INSTALL.md).** Use a Debian 12/13 server, a domain name and the guided installer. Docker supplies Node.js 24; optional Caddy supplies HTTPS and optional coturn supplies your own free relay.
 
-This is the **v0.10.0 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
+This is the **v0.11.0 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
 
 ## What you get
 
@@ -13,20 +13,20 @@ This is the **v0.10.0 preview**. It has passing automated and synthetic-browser 
 - Optional video, microphone mute, front/back camera switch and upgrading an audio call to video. Codec preferences use shared encoding/decoding efficiency reports with compatible fallbacks. Timer and quality stay at the top while central details fade.
 - Signal-style Gallery/File/Location sheet, recent chat media, map cards, emoji, camera capture, voice notes, typing dots and delete-for-both.
 - Plain dark voice-call screen with top timer/quality and a five-button tray. Speaker/output switching where the browser exposes devices; phone-specific help elsewhere.
-- Encrypted one-to-one text, images, video, voice notes and files (up to 10 MB each) with disappearing timers, including unread/offline expiry.
+- Encrypted one-to-one text, images, video, voice notes and files (up to 10 MB each) with per-message countdowns and disappearing timers, including unread/offline expiry.
 - One-person, single-use invitations; recipients choose an optional name and accept.
 - Press-and-hold contact removal with confirmation, shared history/media deletion, active-call cleanup and protection against delayed uploads.
 - Private QR onboarding for the first phone, so nobody has to type a long setup secret.
 - Contact safety numbers, identity change detection, reconnection, relay diagnostics and guided call-alert setup with a locked-phone sound test, bounded high-urgency reminders and Answer/Decline notification actions where supported.
 - Local SQLite ciphertext storage, authenticated WebSocket signaling and temporary TURN credentials.
-- Files/media during calls; both video encoders temporarily yield bandwidth, with small encrypted transfers that wait when voice needs the link.
+- Files/media during calls with encrypted spinner/percentage placeholders on both phones; both video encoders temporarily yield bandwidth, with small encrypted transfers that wait when voice needs the link.
 - Aligned video/voice codec and rate rows, transparent video controls, cellular budgets for both endpoints and automatic Wi-Fi/cellular recovery. See [Call networking](docs/CALL_NETWORK.md).
 
 ## Know the limits before installing
 
-Call invitations detect the phone and guide the recipient through enabling alerts. Android can receive browser push; iPhone/iPad requires a Home Screen web app. A locked-phone sound test helps check setup. Up to three spaced alerts request the phone’s normal notification sound; the repeating ringtone plays when the page is open. OS settings, suspension, push delivery and connection still prevent guaranteed closed-phone ringing. See [Call alerts](docs/CALL_ALERTS.md).
+Call invitations detect the phone and guide the recipient through enabling alerts. Android can receive browser push; iPhone/iPad requires a Home Screen web app. Neutral New message notices open the intended conversation without putting routing IDs into the URL. A locked-phone sound test helps check setup. Up to three spaced alerts request the phone’s normal notification sound; the repeating ringtone plays when the page is open. OS settings, suspension, push delivery and connection still prevent guaranteed closed-phone ringing. See [Call alerts](docs/CALL_ALERTS.md).
 
-Audio cannot survive zero usable bandwidth or complete outages. Bitrate figures are codec payload ceilings; network overhead uses extra data. Browser support determines actual microphone processing, FEC, PLC and sender controls.
+Audio cannot survive zero usable bandwidth or complete outages. Bitrate figures are codec payload ceilings; network overhead uses extra data. Browser support determines actual microphone processing, FEC, PLC and sender controls. A normal website cannot erase global or synced browser history or hide its service-worker/storage usage; see [Browser privacy](docs/BROWSER_PRIVACY.md).
 
 Disappearing messages are not a guarantee of zero forensic traces. Screenshots, recipient copies, browser/OS history, provider metadata and external backups may remain. The custom encryption is **not Signal Protocol or Double Ratchet**, has no forward secrecy against compromise of a recipient's long-term private key, and is unaudited. See [security and privacy](docs/SECURITY.md).
 

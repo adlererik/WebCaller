@@ -36,3 +36,10 @@ test('notification actions bind one-time answering to the verified recipient; de
  const before=f.opened.length;await f.worker.handleNotificationClick(notice,'decline');assert.equal(f.declines,1);assert.equal(f.opened.length,before);assert.equal(await f.intents.take(f.owner),null);
  f.setDeclineStatus(503);await f.worker.handleNotificationClick(notice,'decline');assert.equal(f.shown.at(-1).title,'Open to decline the call');assert.equal(f.shown.at(-1).options.silent,true);assert.equal(await f.intents.take(f.owner),null);
 });
+test('neutral message notices open the intended chat through a one-use decision with no conversation URL',async t=>{
+ const f=await fixture(t),{messageIntents}=await import('../public/message-intents.js'),chat=messageIntents(),messageId=randomUUID(),peerId=randomUUID();
+ const data={type:'message',messageId,peerId,recipientId:f.owner,expiresAt:Date.now()+60000};await f.worker.handlePush(data);
+ const shown=f.shown.at(-1);assert.equal(shown.title,'New message');assert.ok(!JSON.stringify({title:shown.title,body:shown.options.body}).toLowerCase().includes('private'));assert.equal(shown.options.data.url,'https://phone.example/calls/');assert.equal(await chat.take(f.owner),null);
+ await f.worker.handleNotificationClick({data:shown.options.data,close(){}});assert.equal(f.opened.at(-1),'https://phone.example/calls/');const target=await chat.take(f.owner);assert.equal(target.peerId,peerId);assert.equal(target.messageId,messageId);
+ await f.worker.handleNotificationClick({data:{...shown.options.data,recipientId:randomUUID()},close(){}});assert.equal(await chat.take(f.owner),null);
+});

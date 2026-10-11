@@ -15,14 +15,14 @@ export function createCallAlerts({send,isWaiting,now=Date.now,setTimer=setTimeou
   return {start,stop,close(){for(const id of jobs.keys())stop(id);}};
 }
 
-export function notificationPayload({type,callId,testId,revision=0,url,expiresAt,callExpiresAt}) {
+export function notificationPayload({type,callId,testId,revision=0,url,expiresAt,callExpiresAt,messageId,peerId,recipientId}) {
   const call=type==='call',test=type==='test';
-  const title=call?'Incoming call':test?'Call alert test':'New private message';
+  const title=call?'Incoming call':test?'Call alert test':'New message';
   const body=call?'Tap to open your phone and answer.':test?'Tap here if you heard this alert.':'Open your phone to read it.';
-  const tag=call?`call-${callId}-${revision}`:test?`test-${testId}`:'private-message';
+  const tag=call?`call-${callId}-${revision}`:test?`test-${testId}`:'message-alert';
   const navigate=new URL(url);if(test)navigate.hash='alert-test='+testId;
-  return {type,callId,testId,revision,expiresAt,callExpiresAt,
+  return {type,callId,testId,revision,expiresAt,callExpiresAt,...(type==='message'?{messageId,peerId,recipientId}:{}),
     web_push:8030,mutable:true,notification:{title,body,tag,navigate:navigate.href,silent:false,
       icon:new URL('./icon-192.png',url).href,
-      data:{type,callId,testId,expiresAt,callExpiresAt}}};
+      data:{type,callId,testId,expiresAt,callExpiresAt,...(type==='message'?{messageId,peerId,recipientId}:{})}}};
 }

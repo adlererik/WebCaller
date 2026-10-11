@@ -40,3 +40,6 @@ test('Home Screen handoff retains only invitation fragment; owner and test fragm
   clearEntryFragment(location,history);assert.equal(urls[1],'/calls/');
   clearEntryFragment({...location,hash:'#alert-test=uuid'},history,true);assert.equal(urls[2],'/calls/');
 });
+test('message push text is neutral; metadata routes the chat without putting IDs into the app URL',()=>{
+ const p=notificationPayload({type:'message',messageId:'id',peerId:'peer',recipientId:'recipient',url:'https://phone.example/calls/',expiresAt:9000});assert.equal(p.notification.title,'New message');assert.equal(p.notification.tag,'message-alert');assert.equal(p.notification.navigate,'https://phone.example/calls/');assert.equal(p.notification.data.messageId,'id');assert.equal(p.peerId,'peer');assert.ok(!p.notification.body.includes('Private'));
+});

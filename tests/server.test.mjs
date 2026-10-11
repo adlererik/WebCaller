@@ -407,3 +407,21 @@ test('background notification decline is recipient-only, origin checked, idempot
  const sharing=once(b,'message');a.send(JSON.stringify({type:'signal',kind:'sharing',callId:next,envelope:await seal(f.alice.identity,f.alice.user.id,peer,{kind:'sharing',callId:next,active:true},120)}));const routed=JSON.parse((await sharing)[0]);assert.equal(routed.kind,'sharing');assert.equal((await open(bob.identity,bob.user.id,reverse,routed.envelope)).active,true);
  const error=once(a,'message');a.send(JSON.stringify({type:'signal',kind:'sharing',callId:randomUUID(),envelope:await seal(f.alice.identity,f.alice.user.id,peer,{kind:'sharing'},120)}));assert.equal(JSON.parse((await error)[0]).error,'Unknown call');
 });
+test('upload progress is participant-bound, transient, encrypted and cancelled on a discarded reservation',async t=>{
+ const f=await fixture();t.after(()=>f.app.close());const {bob}=await f.pair(),{bob:outsider}=await f.pair(),a=await f.socket(f.alice),b=await f.socket(bob),x=await f.socket(outsider);t.after(()=>{a.close();b.close();x.close();});
+ const peer={id:bob.user.id,keys:bob.identity.keys},file=new File([new Uint8Array(5000)],'Example.bin'),attachment=newAttachment(file),original=await seal(f.alice.identity,f.alice.user.id,peer,{kind:'attachment',attachment},60);
+ await f.request('/attachments',{method:'POST',token:f.alice.token,body:{id:attachment.id,size:attachment.size,envelope:original}});
+ const payload={kind:'transfer',target:original.id,createdAt:original.createdAt,expiresAt:original.expiresAt,percent:42,attachment:{id:attachment.id,name:attachment.name,size:attachment.size,type:attachment.type}},encrypted=await seal(f.alice.identity,f.alice.user.id,peer,payload,20);
+ const incoming=once(b,'message');a.send(JSON.stringify({type:'transfer',messageId:original.id,envelope:encrypted}));const event=JSON.parse((await incoming)[0]);assert.equal(event.type,'transfer');assert.equal(event.messageId,original.id);assert.equal((await open(bob.identity,bob.user.id,{id:f.alice.user.id,keys:f.alice.identity.keys},event.envelope)).percent,42);
+ assert.equal(f.app.store.get('SELECT COUNT(*) n FROM messages').n,0);assert.equal(f.app.store.get('SELECT COUNT(*) n FROM message_events').n,0);assert.ok(!JSON.stringify(event).includes('Example.bin'));
+ const error=once(x,'message');x.send(JSON.stringify({type:'transfer',messageId:original.id,envelope:await seal(outsider.identity,outsider.user.id,peer,payload,20)}));assert.equal(JSON.parse((await error)[0]).error,'Unknown transfer');
+ const long=once(a,'message');a.send(JSON.stringify({type:'transfer',messageId:original.id,envelope:await seal(f.alice.identity,f.alice.user.id,peer,payload,30)}));assert.equal(JSON.parse((await long)[0]).error,'Transfer update expires too late');
+ const endA=once(a,'message'),endB=once(b,'message');await f.request('/attachments/'+attachment.id,{method:'DELETE',token:f.alice.token});for(const end of [endA,endB]){const e=JSON.parse((await end)[0]);assert.equal(e.type,'transfer-ended');assert.equal(e.id,original.id);}
+ const late=once(a,'message');a.send(JSON.stringify({type:'transfer',messageId:original.id,envelope:encrypted}));assert.equal(JSON.parse((await late)[0]).error,'Unknown transfer');
+});
+test('message push opens the correct sender conversation without plaintext names, content or routing IDs in its URL',async t=>{
+ const deliveries=[],f=await fixture(true,{}, {sendPush:async(sub,payload)=>deliveries.push(JSON.parse(payload))});t.after(()=>f.app.close());const {bob}=await f.pair();
+ await f.request('/push',{method:'POST',token:bob.token,body:{endpoint:'https://fcm.googleapis.com/test/message',keys:{auth:'test',p256dh:'test'}}});
+ const e=await seal(f.alice.identity,f.alice.user.id,{id:bob.user.id,keys:bob.identity.keys},{kind:'text',text:'Synthetic secret text'},60);await f.request('/messages',{method:'POST',token:f.alice.token,body:e});await new Promise(r=>setImmediate(r));
+ const p=deliveries[0];assert.equal(p.messageId,e.id);assert.equal(p.peerId,f.alice.user.id);assert.equal(p.recipientId,bob.user.id);assert.equal(p.notification.title,'New message');assert.equal(p.notification.navigate,'https://example.com/calls/');assert.ok(!JSON.stringify(p).includes('Synthetic secret text'));assert.ok(!JSON.stringify(p).includes('Alice'));assert.ok(!JSON.stringify(p).includes('Private'));
+});

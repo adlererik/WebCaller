@@ -1,6 +1,7 @@
 import {vault} from './crypto.js';
 import {callIntents} from './call-intents.js';
-const intents=callIntents();
+import {messageIntents} from './message-intents.js';
+const intents=callIntents(),chatIntents=messageIntents();
 // No asset cache or message history. Push contains only generic alert text.
 const home=()=>new URL('./',self.registration.scope).href;
 async function closeCall(callId){
@@ -33,12 +34,12 @@ export async function handlePush(data){
   const actions=call&&!stale?[{action:'answer',title:'Answer'},{action:'decline',title:'Decline'}].slice(0,globalThis.Notification?.maxActions??2):[];
   const url=new URL(home());if(test)url.hash='alert-test='+data.testId;
   // A visible, silent result for stale pushes respects Apple's userVisibleOnly rule.
-  const title=stale?(call?'Call ended':test?'Alert test expired':'Message expired'):call?'Incoming call':test?'Call alert test':'New private message';
+  const title=stale?(call?'Call ended':test?'Alert test expired':'Message expired'):call?'Incoming call':test?'Call alert test':'New message';
   await self.registration.showNotification(title,{
     body:stale?'Open your phone to check.':call?(actions.length?'Answer this call or tap to open your phone.':'Tap to open your phone and answer.'):test?'Tap here if you heard this alert.':'Open your phone to read it.',
-    tag:call?`call-${data.callId}-${Number(data.revision)||0}`:test?`test-${data.testId}`:'private-message',
+    tag:call?`call-${data.callId}-${Number(data.revision)||0}`:test?`test-${data.testId}`:'message-alert',
     actions,requireInteraction:call&&!stale,renotify:call&&!silent,silent,...(!silent?{vibrate:call?[400,180,400]:[300]}:{}),
-    data:{url:url.href,callId:data.callId,testId:data.testId,expiresAt:data.callExpiresAt||data.expiresAt},
+    data:{url:url.href,type:data.type,messageId:data.messageId,peerId:data.peerId,recipientId:data.recipientId,callId:data.callId,testId:data.testId,expiresAt:data.callExpiresAt||data.expiresAt},
     icon:new URL('./icon-192.png',home()).href,badge:new URL('./icon-192.png',home()).href
   });
 }
@@ -61,6 +62,10 @@ export async function handleNotificationClick(notification,action=''){
   if(validCall&&action==='answer'){
     const details=await callDetails(data.callId),device=await vault('get').catch(()=>null);
     if(details?.state==='ringing'&&details.canAnswer===true&&device?.user?.id)await intents.put(device.user.id,data.callId,Math.min(data.expiresAt,details.expiresAt));
+  }
+  if(data.type==='message'&&/^[a-f0-9-]{36}$/.test(data.messageId||'')&&/^[a-f0-9-]{36}$/.test(data.peerId||'')){
+    const device=await vault('get').catch(()=>null);
+    if(device?.user?.id===data.recipientId)await chatIntents.put(device.user.id,data.messageId,data.peerId,Date.now()+120000);
   }
   const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});
   const existing=windows.find(c=>c.url.startsWith(home()));

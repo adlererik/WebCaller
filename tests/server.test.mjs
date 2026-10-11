@@ -221,3 +221,33 @@ test('answered and cancelled calls stop real server reminders; call status is pa
   const next=randomUUID(),again=once(b,'message');await signal(a,f.alice,bob,'offer',next);await again;const cancel=once(b,'message');await signal(a,f.alice,bob,'hangup',next);await cancel;await new Promise(r=>setTimeout(r,200));
   assert.equal(deliveries.length,2);
 });
+test('location preview and coordinates are encrypted for both phones and deleted together',async t=>{
+ const f=await fixture();t.after(()=>f.app.close());const {bob}=await f.pair();
+ const location={lat:0,lon:0,accuracy:15,capturedAt:Date.now(),label:'Synthetic meeting point',preview:'pin'};
+ const file=new File([new Uint8Array([137,80,78,71,1,2,3])],'location.png',{type:'image/png'}),attachment=newAttachment(file),key=await attachmentKey(attachment);
+ const payload={kind:'attachment',attachment,location,text:'Synthetic meeting point'};
+ const envelope=await seal(f.alice.identity,f.alice.user.id,{id:bob.user.id,keys:bob.identity.keys},payload,60);
+ await f.request('/attachments',{method:'POST',token:f.alice.token,body:{id:attachment.id,size:file.size,envelope}});
+ const cipher=await encryptChunk(key,attachment,0,envelope.expiresAt,await file.arrayBuffer());
+ const path=f.url+'/calls/api/attachments/'+attachment.id+'/chunks/0';
+ assert.equal((await fetch(path,{method:'PUT',headers:{Origin:f.origin,Authorization:'Bearer '+f.alice.token},body:cipher})).status,201);
+ assert.equal((await f.request('/messages',{method:'POST',token:f.alice.token,body:envelope})).status,201);
+ for(const [self,other]of [[f.alice,bob],[bob,f.alice]]){
+  const saved=(await f.request('/messages',{token:self.token})).body[0];
+  const decrypted=await open(self.identity,self.user.id,{id:other.user.id,keys:other.identity.keys},saved);assert.deepEqual(decrypted.location,location);
+  const download=await fetch(path,{headers:{Authorization:'Bearer '+self.token}});assert.equal(download.status,200);
+  assert.deepEqual(new Uint8Array(await decryptChunk(key,attachment,0,envelope.expiresAt,await download.arrayBuffer())),new Uint8Array(await file.arrayBuffer()));
+ }
+ const stored=f.app.store.get('SELECT envelope FROM messages').envelope;assert.ok(!stored.includes('Synthetic meeting point'));assert.ok(!stored.includes('capturedAt'));
+ assert.equal((await f.request('/messages/'+envelope.id,{method:'DELETE',token:bob.token})).status,200);
+ assert.equal(f.app.store.get('SELECT COUNT(*) AS n FROM attachment_chunks').n,0);
+ assert.deepEqual((await f.request('/messages',{token:f.alice.token})).body,[]);
+});
+test('location permission and tile CSP allow only the configured map origin',async t=>{
+ const f=await fixture();t.after(()=>f.app.close());const res=await fetch(f.url+'/calls/');
+ assert.match(res.headers.get('permissions-policy'),/geolocation=\(self\)/);assert.match(res.headers.get('permissions-policy'),/speaker-selection=\(self\)/);
+ assert.match(res.headers.get('content-security-policy'),/img-src 'self' data: blob: https:\/\/tile.openstreetmap.org/);
+ assert.equal(res.headers.get('referrer-policy'),'no-referrer');
+ assert.equal((await f.request('/config')).body.mapTileURL,'https://tile.openstreetmap.org/{z}/{x}/{y}.png');
+ assert.throws(()=>createApp({dataDir:':memory:',env:{PUBLIC_URL:'https://example.com/calls',MAP_TILE_URL:'http://evil.test/{z}/{x}/{y}.png'}}),/MAP_TILE_URL/);
+});

@@ -1,3 +1,4 @@
+import {locationText,defaultAttribution} from './location.js';
 import {mediaKind,fileSize} from './attachments.js';
 const node=(tag,cls,text)=>{const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=text;return el;};
 const glyph=(name)=>{const span=node('span');span.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true">${name==='play'?'<path d="m9 5 11 7-11 7Z"/>':'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>'}</svg>`;return span;};
@@ -15,7 +16,7 @@ export function drawMessages({container,list,self,options,openMedia,load,save}){
   for(const m of list){
     const date=new Date(m.createdAt),day=date.toLocaleDateString();
     if(day!==previousDay){const key='day-'+day;let d=prior.get(key);if(!d){d=node('div','date-divider',date.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}));d.dataset.key=key;}desired.push(d);previousDay=day;}
-    const uiKey=JSON.stringify([m.blobURL||'',m.text,m.loading,m.loadError,m.attachment?.type]);let row=prior.get(m.id);
+    const uiKey=JSON.stringify([m.blobURL||'',m.text,m.loading,m.loadError,m.attachment?.type,m.location]);let row=prior.get(m.id);
     if(!row||row.dataset.ui!==uiKey){
       row=node('div','message-row'+(m.from===self?' outgoing':''));row.dataset.key=m.id;row.dataset.ui=uiKey;
       const bubble=node('div','message'+(m.from===self?' outgoing':''));row.append(bubble);
@@ -26,9 +27,9 @@ export function drawMessages({container,list,self,options,openMedia,load,save}){
       bubble.onpointermove=e=>{if(origin&&Math.hypot(e.clientX-origin[0],e.clientY-origin[1])>10)clearTimeout(holdTimer);};
       bubble.addEventListener('click',e=>{if(held){held=false;e.preventDefault();e.stopImmediatePropagation();}},true);
       if(m.attachment){
-        const a=m.attachment,kind=mediaKind(a.type);bubble.classList.add('attachment-message',kind+'-message');
+        const a=m.attachment,kind=mediaKind(a.type);bubble.classList.add('attachment-message',kind+'-message');if(m.location)bubble.classList.add('location-message');
         if(['image','video'].includes(kind)){
-          const preview=node('button','media-preview');preview.type='button';preview.ariaLabel=kind==='image'?'Open photo':'Play video';
+          const preview=node('button','media-preview');preview.type='button';preview.ariaLabel=m.location?'Open location preview':kind==='image'?'Open photo':'Play video';
           if(m.blobURL){const media=node(kind==='image'?'img':'video','chat-media');media.src=m.blobURL;
             if(kind==='image')media.alt=a.name;else{media.muted=true;media.playsInline=true;media.preload='metadata';}
             media.addEventListener(kind==='image'?'load':'loadedmetadata',()=>{if(nearBottom)container.scrollTop=container.scrollHeight;});
@@ -45,7 +46,7 @@ export function drawMessages({container,list,self,options,openMedia,load,save}){
           action.type='button';action.disabled=!!m.loading;action.onclick=()=>m.blobURL?save(m):load(m);bubble.append(action);
         }
       }
-      if(m.text)bubble.append(messageText(m.text));
+      if(m.location){bubble.append(messageText(locationText(m.location)));if(m.location.preview==='map'){const source=m.location.attribution||defaultAttribution,credit=node('a','map-credit',source.text);credit.href=source.url;credit.target='_blank';credit.rel='noopener noreferrer';bubble.append(credit);}}else if(m.text)bubble.append(messageText(m.text));
       const meta=node('span','message-meta',date.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));bubble.append(meta);
       const menu=node('button','message-options');menu.type='button';menu.ariaLabel='Message options';menu.append(glyph('more'));menu.onclick=()=>options(m);row.append(menu);
     }

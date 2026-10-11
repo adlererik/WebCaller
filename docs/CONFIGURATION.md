@@ -23,6 +23,9 @@ Copy `.env.example` or use the installer/setup command. `.env` is private, ignor
 | TURN_LAN_IP | Fixed LAN IPv4 behind a home router; empty on directly public VPS |
 | ATTACHMENT_USER_QUOTA_MB | Pending/completed file plaintext-size reservation per sender, default 100 MB |
 | ATTACHMENT_GLOBAL_QUOTA_MB | Total reserved file size on this server, default 1024 MB |
+| MAP_TILE_URL | Optional public HTTPS `{z}/{x}/{y}` tile template, or same-origin path; defaults to OpenStreetMap |
+| MAP_TILE_ATTRIBUTION | Visible copyright text for the selected tile provider; default © OpenStreetMap contributors |
+| MAP_TILE_ATTRIBUTION_URL | HTTPS copyright/license page shown with map cards |
 | TURN_REALM | Coturn auth realm, default webcaller |
 
 `npm run setup` fills missing owner/relay/VAPID secrets and preserves existing values. An incomplete VAPID pair is rejected; do not rotate half of it. App `.env` changes require container recreation/restart. Native systemd uses the EnvironmentFile; restart that service too.
@@ -30,3 +33,5 @@ Copy `.env.example` or use the installer/setup command. `.env` is private, ignor
 Compose profiles: default starts only the app; `--profile https` adds Caddy; `--profile turn` adds the Linux-host-networked relay. They can be combined. `.runtime/compose-profiles` is the private installer selection, not a public config file.
 
 Each file is limited to 10 MB. Quota values must be integers from 10 to 65536 MB; ciphertext tags and SQLite overhead consume additional storage.
+
+Map configuration is public through `/api/config`; never put secret keys in these values. Select a provider whose terms permit browser tile previews, anonymous CORS canvas rendering and expected traffic. Set its required attribution text/URL together with the template. The default requests only displayed tiles with normal cache behavior and an origin referrer; no offline/bulk downloads. OpenStreetMap’s community tile service has no availability guarantee or paid subscription in this project. For larger deployments choose a suitable provider or self-host. See the [tile usage policy](https://operations.osmfoundation.org/policies/tiles/).

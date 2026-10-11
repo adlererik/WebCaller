@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.5.0 — Media sheet, location and voice-call layout
+
+- Replace the + menu with a bottom sheet: recent visible chat media and Gallery, File and Location. The phone’s camera roll remains behind its native picker.
+- Preview and send a one-time location with an encrypted map thumbnail, optional place name and Maps link. Media/coordinates disappear and delete together; no live tracking or server-side geocoding.
+- Plain dark voice-call screen, top name/timer/quality, central initials avatar, bottom Speaker/Camera/Mic/More/Hang up tray, and return-to-call navigation.
+- Route audio using exposed browser devices, prefer speaker for video where available, restore the chosen voice output when video stops, and offer phone-specific help where routing is unavailable. No native earpiece/speaker guarantee is claimed.
+- 40 automated tests pass, with synthetic two-browser media/location/call checks and responsive 390 px layout checks. Existing identities, encryption formats, TURN settings and stored messages remain compatible. Refresh both phones after updating.
+
 ## v0.4.0 — Easier invitations and call alerts
 
 - Optional recipient-name prefilling and verified invitation preview.

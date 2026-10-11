@@ -1,4 +1,4 @@
-# Verification of v0.4.0
+# Verification of v0.5.0
 
 ## Scope
 
@@ -29,3 +29,11 @@ Guaranteed closed-browser/locked-phone ringing with no install, usable speech th
 Disposable local browser fixtures use simulated platform/permission/subscription APIs and a fake push transport. They verify prefilled recipient name, iPhone guidance before invitation consumption, Home Screen acceptance, Android direct onboarding, test/lock-phone instructions, no-sound help, blocked-permission help, consumed-launch-link handling and incoming labelled Answer/Decline. A 390 px iframe checks responsive layout; it is not an iPhone simulator. The page creates actual Web Audio oscillators, but subjective sound, notification delivery and locked-phone behavior still need the built-in sound test on physical phones. No real contacts, microphones or live push subscriptions are used by these fixtures.
 
 This update does not change the WebRTC codec/network stack or container/deployment dependencies. Previous container/relay checks apply to those unchanged parts; the new call-alert checks do not re-certify real phone audio or OS background behavior.
+
+## v0.5.0 sharing and call-layout checks
+
+40 Node tests pass, including coordinate validation/safe Maps link construction, map projection boundaries, cancellation of late geolocation, encrypted location/thumbnail decryption by both participants and transactional removal, restricted geolocation/output permissions and tile CSP, real exposed output-ID selection, output failure/unplug handling, video speaker preference/voice restoration, unsupported browsers and cancellation/reset after hangup. Existing attachment expiry tests apply to location images as the same attachment format.
+
+Disposable browser fixtures verify the three sheet actions, recent loaded chat photos, preview-before-send using synthetic coordinates/tiles, automatic map cards on both phones, full-screen map viewing, actual two-browser WebRTC using synthetic audio/cameras, speaker-button state against simulated sink selection, audio-to-video upgrade, hidden speaker in video, front/back switching and call minimize/return. A 390 px iframe verifies all five 54 px touch controls fit within the call tray and the sheet fits the screen. A separate browser request confirms real OpenStreetMap tiles can load using a public synthetic test point; it does not query anyone’s real location. Browser fixtures do not certify physical-phone speaker routing, GPS accuracy or audible quality. No real microphones/cameras, user media, contacts or push recipients are used.
+
+No container, TURN, codec or deployment dependencies changed. Existing deployment validation remains relevant; this UI update does not repeat unrelated container/network tests or certify physical Android/iPhone audio routing.

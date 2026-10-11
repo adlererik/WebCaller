@@ -8,6 +8,7 @@ import webpush from 'web-push';
 import { createStore } from './store.mjs';
 import {attachmentRoutes} from './attachments.mjs';
 import {CHUNK_SIZE} from '../public/attachments.js';
+import {validAttribution,defaultAttribution} from '../public/location.js';
 import {createCallAlerts,notificationPayload} from './call-alerts.mjs';
 
 const root = fileURLToPath(new URL('../public/', import.meta.url));
@@ -37,6 +38,13 @@ export function createApp(options = {}) {
   const publicURL = new URL(env.PUBLIC_URL || 'http://localhost:8080/calls');
   const base = publicURL.pathname.replace(/\/$/, '') || '/calls';
   const origin = publicURL.origin;
+  const mapTileURL=env.MAP_TILE_URL||'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  const mapProvider=new URL(mapTileURL,origin);
+  if((mapProvider.protocol!=='https:'&&mapProvider.origin!==origin)||mapProvider.username||mapProvider.password||!['{z}','{x}','{y}'].every(part=>mapTileURL.includes(part)))throw new Error('MAP_TILE_URL must be an HTTPS tile template (or same-origin) with {z}, {x} and {y}.');
+  const mapAttribution={text:env.MAP_TILE_ATTRIBUTION||defaultAttribution.text,url:env.MAP_TILE_ATTRIBUTION_URL||defaultAttribution.url};
+  if(!validAttribution(mapAttribution))throw new Error('Invalid map attribution. Supply text and an HTTPS copyright URL.');
+  const mapImageSource=mapProvider.origin===origin?'':mapProvider.origin;
+
   const store = createStore(options.dataDir || env.DATA_DIR || './data');
   const sockets = new Map(), tickets = new Map(), calls = new Map(), rates = new Map();
   const alertTests=new Map(),testTimers=new Set();
@@ -87,9 +95,9 @@ export function createApp(options = {}) {
     return { iceServers, turn: iceServers.length > 1, expiresAt: Date.now() + 7200000 };
   }
   const securityHeaders = {
-    'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; media-src 'self' blob:; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+    'Content-Security-Policy': `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: ${mapImageSource}; connect-src 'self'; media-src 'self' blob:; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`,
     'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff',
-    'Permissions-Policy': 'camera=(self), microphone=(self), geolocation=()',
+    'Permissions-Policy': 'camera=(self), microphone=(self), geolocation=(self), speaker-selection=(self)',
     'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY'
   };
   const server = http.createServer(async (req, res) => {
@@ -102,7 +110,7 @@ export function createApp(options = {}) {
       if (path.startsWith(`${base}/api/`)) {
         if (req.method !== 'GET' && req.headers.origin !== origin) fail(403, 'Unrecognized origin');
         const route = path.slice((base + '/api').length);
-        if (route === '/config' && req.method === 'GET') return json(200, { base, publicURL: publicURL.href.replace(/\/$/, ''), vapidPublicKey: env.VAPID_PUBLIC_KEY || null, bootstrap: !store.get('SELECT id FROM users LIMIT 1'), turnConfigured: Boolean((env.TURN_SECRET && env.TURN_URLS) || (env.CF_TURN_KEY_ID && env.CF_TURN_API_TOKEN)) });
+        if (route === '/config' && req.method === 'GET') return json(200, { base, mapTileURL, mapAttribution, publicURL: publicURL.href.replace(/\/$/, ''), vapidPublicKey: env.VAPID_PUBLIC_KEY || null, bootstrap: !store.get('SELECT id FROM users LIMIT 1'), turnConfigured: Boolean((env.TURN_SECRET && env.TURN_URLS) || (env.CF_TURN_KEY_ID && env.CF_TURN_API_TOKEN)) });
         if(route==='/invite-info'&&req.method==='POST'){
           rate(`invite-info:${req.socket.remoteAddress}`,30);const b=await body(req);
           if(typeof b.invite!=='string'||b.invite.length>100)fail(400,'Open the full invitation link');

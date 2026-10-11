@@ -13,6 +13,8 @@ These are sender payload caps, not total network usage or guaranteed output rate
 
 Stats are sampled every three seconds. Packet loss in received audio and sender RTCP reports, round-trip delay, jitter and available outgoing bitrate can trigger a downgrade. Recovery from weak/critical requires five healthy samples to avoid oscillation. Severe congestion disables outgoing video encodings while leaving audio enabled. Camera-off stops its track; camera-on requests it again.
 
+Connection preference is always Automatic. Saved manual settings no longer affect calls. Timer and quality remain at the top; central details fade once video connects. Switching front/back cameras releases only the video device before requesting the other lens, replaces its sender track without SDP renegotiation, and attempts restoration if a lens is unavailable.
+
 ## Opus and microphone processing
 
 Capture requests mono, 48 kHz input, acoustic echo cancellation (AEC), noise suppression (NS) and automatic gain control (AGC). Opus is preferred. SDP preserves existing parameters and requests in-band forward error correction (FEC), discontinuous transmission (DTX/VAD), mono and a maximum average bitrate. Sender caps adapt separately. Full-duplex means both people may speak simultaneously.
@@ -27,6 +29,10 @@ WebSocket messages route encrypted offers, answers and ICE only between contacts
 
 Signed encrypted envelopes have expiry, sender/recipient, IDs and ciphertext. The encrypted mailbox is idempotent. Expiry is checked server-side and client-side; stored ciphertext is purged once per second and on startup/read. Optional push is generic and short-lived. No service worker fetch cache is created. Browser keys, tokens and contacts persist so the device can be used again.
 
+## Encrypted attachments
+
+A signed encrypted message carries a random per-file AES-256-GCM key and nonce prefix. Each 64 KB plaintext chunk is encrypted with a distinct indexed nonce; authenticated data binds the file ID, chunk order, size and expiry. Contents are uploaded sequentially to an authenticated contact-only mailbox and cannot be announced until all expected chunks exist. Filename/type/key stay inside the message envelope. Quotas limit pending and completed uploads. Chat sync fetches metadata only; loading content is a user action. Files expire alongside their messages and are removed with device deletion. Downloads and screenshots cannot be erased outside the app.
+
 ## Deliberately absent
 
-No native mobile app, install prompt, SIM/phone-number registration, group calls/chats, attachments, federation, Double Ratchet, audited security claim or guaranteed background ringing. This initial version is one-to-one calling and text. See [Verification](VERIFICATION.md).
+No native mobile app, install prompt, SIM/phone-number registration, group calls/chats, federation, Double Ratchet, audited security claim or guaranteed background ringing. This version is one-to-one calling, text and attachments. See [Verification](VERIFICATION.md).

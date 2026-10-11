@@ -13,6 +13,9 @@ export function createStore(dir) {
     CREATE INDEX IF NOT EXISTS messages_expiry ON messages(expires);
     CREATE INDEX IF NOT EXISTS messages_recipient ON messages(recipient,created);
     CREATE TABLE IF NOT EXISTS push (owner TEXT NOT NULL REFERENCES users(id), endpoint TEXT PRIMARY KEY, subscription TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS attachments (id TEXT PRIMARY KEY, message_id TEXT UNIQUE NOT NULL, sender TEXT NOT NULL REFERENCES users(id), recipient TEXT NOT NULL REFERENCES users(id), expires INTEGER NOT NULL, size INTEGER NOT NULL, envelope TEXT NOT NULL, committed INTEGER NOT NULL DEFAULT 0);
+    CREATE TABLE IF NOT EXISTS attachment_chunks (attachment TEXT NOT NULL REFERENCES attachments(id) ON DELETE CASCADE, part INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY(attachment,part));
+    CREATE INDEX IF NOT EXISTS attachments_expiry ON attachments(expires);
   `);
   const run = (sql, ...args) => db.prepare(sql).run(...args);
   const get = (sql, ...args) => db.prepare(sql).get(...args);
@@ -23,6 +26,7 @@ export function createStore(dir) {
     catch (e) { db.exec('ROLLBACK'); throw e; }
   };
   const purge = (now = Date.now()) => {
+    run('DELETE FROM attachments WHERE expires<=?', now);
     run('DELETE FROM messages WHERE expires<=?', now);
     run('DELETE FROM invites WHERE expires<=?', now);
   };

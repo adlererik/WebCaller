@@ -6,6 +6,8 @@ import { randomBytes, randomUUID, createHash, createHmac, timingSafeEqual, creat
 import { WebSocketServer, WebSocket } from 'ws';
 import webpush from 'web-push';
 import { createStore } from './store.mjs';
+import {attachmentRoutes} from './attachments.mjs';
+import {CHUNK_SIZE} from '../public/attachments.js';
 
 const root = fileURLToPath(new URL('../public/', import.meta.url));
 const hash = (v) => createHash('sha256').update(v).digest('hex');
@@ -40,6 +42,7 @@ export function createApp(options = {}) {
   if (pushReady) webpush.setVapidDetails(env.VAPID_SUBJECT || 'mailto:admin@example.com', env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
   const contacts = (id) => store.all('SELECT users.* FROM users JOIN contacts ON contacts.b=users.id WHERE contacts.a=?', id).map(userView);
   const related = (a, b) => !!store.get('SELECT 1 FROM contacts WHERE a=? AND b=?', a, b);
+  const handleAttachment=attachmentRoutes({store,related,validateEnvelope,fail,body,env});
   const emit = (id, event) => { for (const ws of sockets.get(id) || []) if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(event)); };
   const auth = (req) => {
     const token = req.headers.authorization?.match(/^Bearer ([\w-]{43})$/)?.[1];
@@ -78,7 +81,7 @@ export function createApp(options = {}) {
     return { iceServers, turn: iceServers.length > 1, expiresAt: Date.now() + 7200000 };
   }
   const securityHeaders = {
-    'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+    'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; media-src 'self' blob:; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
     'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff',
     'Permissions-Policy': 'camera=(self), microphone=(self), geolocation=()',
     'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY'
@@ -125,7 +128,8 @@ export function createApp(options = {}) {
           emit(result.contact.id, { type: 'contacts' });
           return json(201, result);
         }
-        const u = auth(req); rate(u.id);
+        const u = auth(req); rate(route.startsWith('/attachments')?'attachment:'+u.id:u.id,route.startsWith('/attachments')?600:120);
+        if(await handleAttachment(req,res,route,u,json))return;
         if (route === '/me' && req.method === 'GET') return json(200, { user: userView(u), contacts: contacts(u.id) });
         if (route === '/invite' && req.method === 'POST') {
           rate(`invite:${u.id}`, 10);
@@ -146,7 +150,15 @@ export function createApp(options = {}) {
           if (!related(u.id, b.to)) fail(403, 'Invite this person first');
           const prior = store.get('SELECT sender,envelope FROM messages WHERE id=?', b.id);
           if (prior) { if (prior.sender !== u.id || prior.envelope !== JSON.stringify(b)) fail(409, 'Message identifier conflict'); return json(200, { id: b.id }); }
-          store.run('INSERT INTO messages VALUES(?,?,?,?,?,?)', b.id, u.id, b.to, b.expiresAt, b.createdAt, JSON.stringify(b));
+          const attachment=store.get('SELECT * FROM attachments WHERE message_id=?',b.id);
+          if(attachment){
+            if(attachment.sender!==u.id||attachment.envelope!==JSON.stringify(b))fail(409,'Attachment message does not match');
+            if(store.get('SELECT COUNT(*) AS n FROM attachment_chunks WHERE attachment=?',attachment.id).n!==Math.ceil(attachment.size/CHUNK_SIZE))fail(409,'Finish uploading the file first');
+          }
+          store.transaction(()=>{
+            store.run('INSERT INTO messages VALUES(?,?,?,?,?,?)', b.id, u.id, b.to, b.expiresAt, b.createdAt, JSON.stringify(b));
+            if(attachment)store.run('UPDATE attachments SET committed=1 WHERE id=?',attachment.id);
+          });
           emit(b.to, { type: 'message', envelope: b }); emit(u.id, { type: 'message', envelope: b });
           void push(b.to, { type: 'message', url: base + '/', expiresAt: b.expiresAt }, Math.max(0, Math.min(60, Math.floor((b.expiresAt-Date.now())/1000))));
           return json(201, { id: b.id });
@@ -166,6 +178,7 @@ export function createApp(options = {}) {
         if (route === '/device' && req.method === 'DELETE') {
           const peers = contacts(u.id);
           store.transaction(() => {
+            store.run('DELETE FROM attachments WHERE sender=? OR recipient=?',u.id,u.id);
             store.run('DELETE FROM messages WHERE sender=? OR recipient=?', u.id, u.id);
             store.run('DELETE FROM invites WHERE owner=?', u.id);
             store.run('DELETE FROM push WHERE owner=?', u.id);

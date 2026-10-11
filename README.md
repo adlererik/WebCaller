@@ -4,14 +4,14 @@ A browser-only phone for Android, iPhone and desktop: adaptive mono Opus voice, 
 
 **Start here: [Beginner installation guide](docs/INSTALL.md).** Use a Debian 12/13 server, a domain name and the guided installer. Docker supplies Node.js 24; optional Caddy supplies HTTPS and optional coturn supplies your own free relay.
 
-This is the **v0.1.0 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
+This is the **v0.2.0 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
 
 ## What you get
 
 - Voice calls in both directions at once, with mono Opus, requested echo cancellation, noise suppression, gain control, FEC and DTX.
 - Voice-first adaptation: video steps down and pauses as loss, delay or bandwidth deteriorate. Data saver is the default when the network type is unknown.
-- Optional video, microphone mute, camera toggle and upgrading an audio call to video.
-- Encrypted one-to-one text with disappearing timers, including unread/offline expiry.
+- Optional video, microphone mute, front/back camera switch and upgrading an audio call to video. Timer and quality stay at the top while central details fade.
+- Encrypted one-to-one text, images and files (up to 10 MB each) with disappearing timers, including unread/offline expiry.
 - One-person, single-use invitations; recipients choose an optional name and accept.
 - Private QR onboarding for the first phone, so nobody has to type a long setup secret.
 - Contact safety numbers, identity change detection, reconnection, relay diagnostics and optional generic browser notifications.

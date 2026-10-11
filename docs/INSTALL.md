@@ -27,16 +27,16 @@ Download the release:
 ```sh
 sudo apt update
 sudo apt install -y curl tar
-curl -fL https://github.com/adlererik/WebCaller/releases/download/v0.1.0/WebCaller-v0.1.0.tar.gz -o WebCaller-v0.1.0.tar.gz
-curl -fL https://github.com/adlererik/WebCaller/releases/download/v0.1.0/SHA256SUMS.txt -o SHA256SUMS.txt
+curl -fL https://github.com/adlererik/WebCaller/releases/download/v0.2.0/WebCaller-v0.2.0.tar.gz -o WebCaller-v0.2.0.tar.gz
+curl -fL https://github.com/adlererik/WebCaller/releases/download/v0.2.0/SHA256SUMS.txt -o SHA256SUMS.txt
 ```
 
 Check the archive before extracting:
 
 ```sh
-grep 'WebCaller-v0.1.0.tar.gz$' SHA256SUMS.txt | sha256sum -c -
-tar -xzf WebCaller-v0.1.0.tar.gz
-cd WebCaller-v0.1.0
+grep 'WebCaller-v0.2.0.tar.gz$' SHA256SUMS.txt | sha256sum -c -
+tar -xzf WebCaller-v0.2.0.tar.gz
+cd WebCaller-v0.2.0
 ```
 
 A successful checksum says `OK`. Stop if it fails. Alternatively download/extract the ZIP on your computer and copy the folder to your server.
@@ -95,7 +95,7 @@ On the first phone choose **Invite someone → Share invitation** or **Copy link
 
 Tap the phone icon for voice or the camera icon for video. Allow the microphone and, for video, the camera. Test both call directions, then put the devices on different internet connections. Open Settings → **Check calling connection**. A relay allocation test is useful, but a real cross-network conversation is the final check.
 
-Keep the page open to receive calls. A browser-only website cannot guarantee closed-browser or locked-phone ringing. On Safari choose **Wi-Fi quality** in settings when you know you are on Wi-Fi; unknown networks default to saving data.
+Keep the page open to receive calls. A browser-only website cannot guarantee closed-browser or locked-phone ringing. Connection management is always **Automatic**; unknown networks default to saving data. Ringing activates with your first normal tap or keypress, without a separate setup switch.
 
 ## If something goes wrong
 

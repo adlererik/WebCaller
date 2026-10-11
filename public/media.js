@@ -35,6 +35,7 @@ export class Phone {
     Object.assign(this,{signal,update,remote,local,ended,preference});
     this.pc=null; this.stream=null; this.candidates=[]; this.localCandidates=[]; this.videoWanted=false; this.muted=false;
     this.profile=networkMode(preference()); this.stable=0; this.last=null; this.restartAt=0; this.applying=false;
+    this.facingMode='user';this.cameraBusy=false;
   }
   async prepare(ice, video=false, caller=false) {
     this.caller=caller; this.videoWanted=video;
@@ -48,6 +49,7 @@ export class Phone {
     const codecs=RTCRtpSender.getCapabilities?.('audio')?.codecs?.filter(c=>c.mimeType.toLowerCase()==='audio/opus');
     if (codecs?.length) this.pc.getTransceivers().find(t=>t.sender===this.audioSender)?.setCodecPreferences?.(codecs);
     const track=this.stream.getVideoTracks()[0];
+    if(track)this.facingMode=track.getSettings().facingMode||'user';
     if(track){
       this.videoSender=this.pc.addTrack(track,this.stream);
       this.videoTransceiver=this.pc.getTransceivers().find(t=>t.sender===this.videoSender);
@@ -61,6 +63,10 @@ export class Phone {
       let stream=this.remote.srcObject; if(!stream) this.remote.srcObject=stream=new MediaStream();
       if(!stream.getTracks().some(t=>t.id===track.id)) stream.addTrack(track);
       this.remote.play().catch(()=>this.update({needsPlayback:true}));
+      if(track.kind==='video'){
+        const changed=()=>this.update({remoteVideo:!track.muted&&track.readyState==='live'});
+        track.onmute=changed;track.onunmute=changed;track.onended=changed;changed();
+      }
     };
     this.pc.onconnectionstatechange=()=>{
       const state=this.pc.connectionState; this.update({state});
@@ -125,15 +131,50 @@ export class Phone {
     }catch{this.update({warning:'Waiting for signaling…'});}
   }
   async toggleVideo() {
+    if(this.cameraBusy)throw new Error('The camera is switching. Try again shortly.');
     if(this.videoWanted){this.videoWanted=false;await this.videoSender.replaceTrack(null);this.stream.getVideoTracks().forEach(t=>{t.stop();this.stream.removeTrack(t);});}
     else{
       const pc=this.pc;
       const p=PROFILES[this.profile];
-      const stream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:p.width},height:{ideal:p.height},frameRate:{ideal:p.fps},facingMode:'user'},audio:false});
+      const stream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:p.width},height:{ideal:p.height},frameRate:{ideal:p.fps},facingMode:{ideal:this.facingMode}},audio:false});
       if(this.pc!==pc){stream.getTracks().forEach(t=>t.stop());throw new Error('Call cancelled');}
       const track=stream.getVideoTracks()[0];this.stream.addTrack(track);await this.videoSender.replaceTrack(track);this.videoWanted=true;
     }
+    this.update({localVideo:this.videoWanted,cameraFacing:this.facingMode});
     await this.applyProfile();await this.signal('video',{enabled:this.videoWanted});return this.videoWanted;
+  }
+  async switchCamera(){
+    if(!this.pc||!this.videoWanted||this.cameraBusy)throw new Error('Turn on the camera before switching.');
+    this.cameraBusy=true;
+    const pc=this.pc,old=this.stream.getVideoTracks()[0],settings=old?.getSettings()||{},prior=settings.facingMode||this.facingMode,next=prior==='environment'?'user':'environment',p=PROFILES[this.profile];
+    let fresh;
+    const capture=async camera=>{
+      const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{width:{ideal:p.width},height:{ideal:p.height},frameRate:{ideal:p.fps},...camera}});
+      if(this.pc!==pc){stream.getTracks().forEach(t=>t.stop());throw new Error('Call cancelled');}
+      return stream.getVideoTracks()[0];
+    };
+    const install=async(track,facing)=>{
+      try{
+        await this.videoSender.replaceTrack(track);
+        if(this.pc!==pc)throw new Error('Call cancelled');
+        this.stream.addTrack(track);this.local.srcObject=this.stream;this.facingMode=track.getSettings().facingMode||facing;
+        this.update({localVideo:true,cameraFacing:this.facingMode});await this.applyProfile();
+      }catch(error){track.stop();if(this.stream?.getVideoTracks().includes(track))this.stream.removeTrack(track);throw error;}
+    };
+    // Some phones permit only one open camera. Release video; keep microphone alive.
+    old?.stop();if(old)this.stream.removeTrack(old);
+    try{
+      fresh=await capture({facingMode:{exact:next}});
+      if(settings.deviceId&&fresh.getSettings().deviceId===settings.deviceId)throw new Error('No other camera is available.');
+      await install(fresh,next);return this.facingMode;
+    }catch(error){
+      fresh?.stop();if(fresh&&this.stream)this.stream.removeTrack(fresh);
+      if(this.pc===pc){
+        try{const restored=await capture(settings.deviceId?{deviceId:{exact:settings.deviceId}}:{facingMode:{ideal:prior}});await install(restored,prior);}
+        catch{if(this.pc===pc){this.videoWanted=false;await this.videoSender.replaceTrack(null);this.update({localVideo:false});await this.signal('video',{enabled:false});}}
+      }
+      throw error;
+    }finally{this.cameraBusy=false;}
   }
   mute(){this.muted=!this.muted;this.stream?.getAudioTracks().forEach(t=>t.enabled=!this.muted);return this.muted;}
   async setSender(sender,video,p){
@@ -154,7 +195,7 @@ export class Phone {
       await this.setSender(this.audioSender,false,p);await this.setSender(this.videoSender,true,p);
       const track=this.stream?.getVideoTracks()[0];
       if(track){track.enabled=p.video>0;await track.applyConstraints({width:{ideal:p.width},height:{ideal:p.height},frameRate:{max:p.fps}}).catch(()=>{});}
-      this.update({profile:this.profile,label:p.label,videoPaused:this.videoWanted&&p.video===0,audioSettings:this.stream?.getAudioTracks()[0]?.getSettings()});
+      this.update({profile:this.profile,label:p.label,videoPaused:this.videoWanted&&p.video===0,localVideo:this.videoWanted,cameraFacing:this.facingMode,audioSettings:this.stream?.getAudioTracks()[0]?.getSettings()});
     }finally{this.applying=false;}
   }
   async sample(){

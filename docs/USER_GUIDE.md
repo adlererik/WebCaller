@@ -14,7 +14,7 @@ The left conversation list shows your contacts and unread indicators. **Search p
 
 The phone icon starts an audio-only call; the camera icon starts video. Allow the microphone when requested. An incoming call presents answer and decline buttons. Microphone/camera permissions are requested when making or answering, not when accepting an invitation.
 
-During a call: **Mute microphone** toggles outgoing voice; **Toggle camera** stops/restarts the camera or upgrades audio to video; **End call** hangs up. The call duration and quality label show call state. If autoplay is blocked, tap **Tap to hear the call**. Settings remain available through the gear.
+During a call: **Mute microphone** toggles outgoing voice; **Toggle camera** stops/restarts the camera or upgrades audio to video; **Switch to back/front camera** changes the lens while keeping the microphone running; **End call** hangs up. The duration and quality stay at the top. Central caller details fade after video connects and return when reconnecting. If autoplay is blocked, tap **Tap to hear the call**. Settings remain available through the gear.
 
 WebCaller uses full-duplex voice. On weak connections it reduces video first and may pause it completely. You can still talk while video is paused, if sufficient usable bandwidth remains. Reconnection attempts refresh ICE/TURN information. Long outages eventually end the call rather than leaving a false connected state.
 
@@ -24,11 +24,21 @@ Type a message and use the send button. Text is encrypted for sender and recipie
 
 Settings → **Disappearing messages** chooses 30 seconds, 5 minutes, 1 hour, 24 hours (default), or 7 days for new messages you send in that conversation. The sender's signed timer starts at send time, including unread/offline messages. Changing the setting does not extend existing messages or override the other sender's timer. Copying/screenshotting content can preserve it outside WebCaller.
 
+## Images and files
+
+Tap the little **+** next to the message box, then **Photo** or **File**. Choose one item up to 10 MB. File contents, filename, type and file key are encrypted; the server sees transfer size and routing/expiry metadata. A progress line shows the transfer. Files use this chat’s disappearing timer starting when encryption begins; choose a longer timer for a large file on a slow link.
+
+Received photos show **View photo**; other files show **Download file**. Contents load only when tapped, saving data and avoiding repeated downloads during chat sync. Common raster photos display inline. Other types, including SVG/HTML and unsupported photo formats, download rather than execute in chat. Once loaded, **Save file** downloads a copy. Saved copies remain outside WebCaller and are not erased by the disappearing timer.
+
+Transfers are unavailable during calls and stop if a call starts or the page is hidden. Retry after the call or on returning to the page. This protects call audio and avoids leaving decrypted files in a background chat. Blob previews are revoked on expiry/backgrounding. Files awaiting completion and completed files share the server’s expiring storage quota; a full quota means wait for older items to expire.
+
+A website cannot reliably prevent operating-system screenshots or another camera photographing the screen. This app clears background chat previews and hides chat in print layouts; those controls do not block screenshots.
+
 ## Settings
 
-**Connection:** Automatic uses Wi-Fi quality only if the browser explicitly reports Wi-Fi/Ethernet. Unknown networks, including Safari, use data saver. Choose Always save data to cap quality; choose Wi-Fi quality when appropriate. Video still adapts under congestion.
+**Connection · Automatic:** always used. It selects Wi-Fi quality only if the browser explicitly reports Wi-Fi/Ethernet. Unknown networks, including Safari, use data saver. Video still adapts under congestion. Older saved manual modes are ignored.
 
-**Enable ringing on this page:** a user gesture allows the active page to play its ring tone. Sound permission, device Focus/mute and OS suspension still apply.
+**Ringing:** enabled automatically. The first ordinary tap or keypress unlocks browser sound. There is no separate Enable ringing step. Sound restrictions, device Focus/mute and OS suspension still apply.
 
 **Enable browser notifications:** optional generic notifications where the browser supports them. Notification text contains no message bodies/contact names. iPhone push requires a Home Screen installation; this project does not ask you to install. Browser/OS notification history may remain.
 

@@ -31,3 +31,26 @@ test('Opus negotiation preserves existing fmtp options and requests FEC, DTX and
   for(const x of ['foo=bar','useinbandfec=1','usedtx=1','stereo=0','maxaveragebitrate=20000'])assert.ok(tuned.includes(x));
   assert.equal((tuned.match(/a=fmtp:111/g)||[]).length,1);
 });
+function cameraFixture(){
+ const events=[],audio={kind:'audio',enabled:true,stop(){events.push('audio-stopped');}},old={kind:'video',stop(){events.push('old-stopped');},getSettings:()=>({facingMode:'user',deviceId:'front'}),applyConstraints:async()=>{}};
+ const tracks=[audio,old],phone=new Phone({signal:async()=>{},update:()=>{},local:{},remote:{},preference:()=> 'auto'});
+ phone.pc={};phone.stream={getVideoTracks:()=>tracks.filter(t=>t.kind==='video'),getAudioTracks:()=>[audio],addTrack:t=>tracks.push(t),removeTrack:t=>tracks.splice(tracks.indexOf(t),1)};phone.videoWanted=true;
+ phone.videoSender={replaceTrack:async track=>events.push(track?.getSettings().deviceId||'none')};phone.applyProfile=async()=>{};
+ const make=(mode,id)=>({kind:'video',stop(){events.push(id+'-stopped');},getSettings:()=>({facingMode:mode,deviceId:id}),applyConstraints:async()=>{}});
+ return {phone,events,make,audio};
+}
+test('switching camera releases video before capture and keeps the microphone',async t=>{
+ const prior=Object.getOwnPropertyDescriptor(globalThis,'navigator');t.after(()=>{if(prior)Object.defineProperty(globalThis,'navigator',prior);else delete globalThis.navigator;});
+ const f=cameraFixture();Object.defineProperty(globalThis,'navigator',{configurable:true,value:{mediaDevices:{getUserMedia:async c=>{
+  assert.equal(c.audio,false);assert.equal(c.video.facingMode.exact,'environment');assert.equal(f.events[0],'old-stopped');return {getVideoTracks:()=>[f.make('environment','back')]};
+ }}}});
+ assert.equal(await f.phone.switchCamera(),'environment');assert.equal(f.phone.stream.getAudioTracks()[0],f.audio);assert.ok(!f.events.includes('audio-stopped'));assert.equal(f.phone.videoWanted,true);
+});
+test('failed camera switching restores the front camera without ending audio',async t=>{
+ const prior=Object.getOwnPropertyDescriptor(globalThis,'navigator');t.after(()=>{if(prior)Object.defineProperty(globalThis,'navigator',prior);else delete globalThis.navigator;});
+ const f=cameraFixture();Object.defineProperty(globalThis,'navigator',{configurable:true,value:{mediaDevices:{getUserMedia:async c=>{
+  if(c.video.facingMode?.exact)throw Object.assign(new Error('No rear camera'),{name:'OverconstrainedError'});
+  assert.equal(c.video.deviceId.exact,'front');return {getVideoTracks:()=>[f.make('user','front')]};
+ }}}});
+ await assert.rejects(f.phone.switchCamera(),/No rear camera/);assert.equal(f.phone.facingMode,'user');assert.equal(f.phone.stream.getVideoTracks()[0].getSettings().deviceId,'front');assert.ok(!f.events.includes('audio-stopped'));assert.equal(f.phone.videoWanted,true);
+});

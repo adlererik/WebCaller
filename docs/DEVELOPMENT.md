@@ -20,6 +20,6 @@ Read [CONTRIBUTING.md](../CONTRIBUTING.md). Small changes should include meaning
 
 ## Building a release
 
-Set the package version and CHANGELOG, run checks/tests/container smoke tests, stage source and run the source audit before committing. Tag the reviewed commit. `node scripts/package-release.mjs v0.1.0` archives only tracked files, produces ZIP/tar.gz and SHA256SUMS.txt under ignored .runtime/releases. Upload those assets to a GitHub release for that tag. Never tar the working directory with .env/data/runtime included. The GitHub automatic source archives are also available.
+Set the package version and CHANGELOG, run checks/tests/container smoke tests, stage source and run the source audit before committing. Tag the reviewed commit. `node scripts/package-release.mjs v0.2.0` archives only tracked files, produces ZIP/tar.gz and SHA256SUMS.txt under ignored .runtime/releases. Upload those assets to a GitHub release for that tag. Never tar the working directory with .env/data/runtime included. The GitHub automatic source archives are also available.
 
 CI runs install, syntax, tests, tracked-source audit and builds the app/relay containers with read-only repository permissions. It uses pinned action commits. No deployment, signing key or provider secret is required to test this source.

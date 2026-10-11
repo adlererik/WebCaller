@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 — 2026-10-11
+
+- Add a chat + menu for encrypted images/files up to 10 MB, chunked transfer, contact authorization, storage quotas and disappearance cleanup.
+- Always use Automatic connection management and activate ringing with ordinary user interaction.
+- Fade central caller details in connected video, keep timer/quality at the top, and add front/back camera switching with microphone continuity and restoration on failure.
+- Revoke decrypted previews on background/expiry and hide chat in print layouts; screenshots remain outside browser control.
+- Add five regression tests for encrypted file integrity, authorization/expiry/quota and camera switching; 20 tests pass.
+- Add attachment tables on startup; preserve existing identities and text messages. Refresh both phones after updating.
+
 ## 0.1.0 — 2026-10-11
 
 Initial public preview of WebCaller.

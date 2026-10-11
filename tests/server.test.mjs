@@ -6,11 +6,12 @@ import {WebSocket} from 'ws';
 import webpush from 'web-push';
 import {createApp} from '../server/index.mjs';
 import {newIdentity,seal,open,fingerprint} from '../public/crypto.js';
+import {newAttachment,attachmentKey,encryptChunk,decryptChunk,CHUNK_SIZE,MAX_FILE_SIZE} from '../public/attachments.js';
 
-async function fixture(push=false){
+async function fixture(push=false,extra={}){
   const origin='https://example.com';
   const vapid=push?webpush.generateVAPIDKeys():{};
-  const app=createApp({dataDir:':memory:',env:{PUBLIC_URL:origin+'/calls',BOOTSTRAP_TOKEN:'test-owner-code',VAPID_PUBLIC_KEY:vapid.publicKey||'',VAPID_PRIVATE_KEY:vapid.privateKey||'',CF_TURN_KEY_ID:'',CF_TURN_API_TOKEN:'',TURN_SECRET:'test-turn-secret',TURN_URLS:'turn:relay.test:3478?transport=udp'}});
+  const app=createApp({dataDir:':memory:',env:{PUBLIC_URL:origin+'/calls',BOOTSTRAP_TOKEN:'test-owner-code',VAPID_PUBLIC_KEY:vapid.publicKey||'',VAPID_PRIVATE_KEY:vapid.privateKey||'',CF_TURN_KEY_ID:'',CF_TURN_API_TOKEN:'',TURN_SECRET:'test-turn-secret',TURN_URLS:'turn:relay.test:3478?transport=udp',...extra}});
   app.server.listen(0,'127.0.0.1');await once(app.server,'listening');
   const url=`http://127.0.0.1:${app.server.address().port}`;
   async function request(path,{method='GET',body,token,requestOrigin=origin}={}){
@@ -77,4 +78,48 @@ test('WebSocket routes encrypted calls and replays invitations after reconnect',
   const response=await seal(bob.identity,bob.user.id,{id:f.alice.user.id,keys:f.alice.identity.keys},{kind:'answer',callId,description:{type:'answer',sdp:'answer'}},120);
   const delivered=once(a,'message');b.send(JSON.stringify({type:'signal',kind:'answer',callId,envelope:response}));
   assert.equal(JSON.parse((await delivered)[0]).kind,'answer');a.close();b.close();
+});
+test('encrypted attachments require complete upload, stay private and disappear with device/expiry',async t=>{
+ const f=await fixture();t.after(()=>f.app.close());const {bob}=await f.pair(),{bob:other}=await f.pair();
+ const file=new File([new Uint8Array(CHUNK_SIZE+3).fill(83)],'hidden-filename.txt',{type:'text/plain'}),a=newAttachment(file);
+ const envelope=await seal(f.alice.identity,f.alice.user.id,{id:bob.user.id,keys:bob.identity.keys},{kind:'attachment',attachment:a},60),key=await attachmentKey(a);
+ const init={id:a.id,size:a.size,envelope};
+ assert.equal((await f.request('/attachments',{method:'POST',token:f.alice.token,body:init})).status,201);
+ assert.equal((await f.request('/attachments',{method:'POST',token:f.alice.token,body:init})).status,200);
+ assert.equal((await f.request('/messages',{method:'POST',token:f.alice.token,body:envelope})).status,409);
+ const path='/attachments/'+a.id+'/chunks/0';
+ assert.equal((await f.request(path)).status,401);
+ assert.equal((await f.request(path,{token:other.token})).status,404);
+ assert.equal((await f.request(path,{token:bob.token})).status,404);
+ const raw=async(method,index,token,bytes)=>fetch(f.url+'/calls/api/attachments/'+a.id+'/chunks/'+index,{method,headers:{Origin:f.origin,Authorization:'Bearer '+token,'Content-Type':'application/octet-stream'},body:bytes});
+ const ciphers=[];
+ for(let i=0;i<a.chunks;i++){
+  ciphers.push(await encryptChunk(key,a,i,envelope.expiresAt,await file.slice(i*CHUNK_SIZE,(i+1)*CHUNK_SIZE).arrayBuffer()));
+  assert.equal((await raw('PUT',i,bob.token,ciphers[i])).status,403);
+  assert.equal((await raw('PUT',i,f.alice.token,new Uint8Array(1))).status,400);
+  assert.equal((await raw('PUT',i,f.alice.token,ciphers[i])).status,201);
+ }
+ assert.equal((await raw('PUT',0,f.alice.token,new Uint8Array(ciphers[0].byteLength))).status,409);
+ assert.equal((await f.request('/messages',{method:'POST',token:f.alice.token,body:envelope})).status,201);
+ const download=await raw('GET',0,bob.token);assert.equal(download.status,200);assert.equal(download.headers.get('cache-control'),'no-store');
+ assert.deepEqual(new Uint8Array(await decryptChunk(key,a,0,envelope.expiresAt,await download.arrayBuffer())),new Uint8Array(CHUNK_SIZE).fill(83));
+ assert.ok(!f.app.store.get('SELECT envelope FROM attachments').envelope.includes(file.name));
+ assert.equal((await raw('PUT',0,f.alice.token,ciphers[0])).status,403);
+ assert.equal((await f.request('/device',{method:'DELETE',token:bob.token})).status,200);
+ assert.equal(f.app.store.get('SELECT COUNT(*) AS n FROM attachment_chunks').n,0);
+ assert.equal(f.app.store.get('SELECT COUNT(*) AS n FROM attachments').n,0);
+ const pending=await seal(f.alice.identity,f.alice.user.id,{id:other.user.id,keys:other.identity.keys},{kind:'attachment',attachment:a},60);
+ assert.equal((await f.request('/attachments',{method:'POST',token:f.alice.token,body:{id:a.id,size:a.size,envelope:pending}})).status,201);
+ f.app.store.purge(pending.expiresAt+1);assert.equal(f.app.store.get('SELECT COUNT(*) AS n FROM attachments').n,0);
+});
+test('attachment size and storage quotas prevent unbounded uploads',async t=>{
+ const f=await fixture(false,{ATTACHMENT_USER_QUOTA_MB:'10',ATTACHMENT_GLOBAL_QUOTA_MB:'10'});t.after(()=>f.app.close());const {bob}=await f.pair();
+ const make=()=>seal(f.alice.identity,f.alice.user.id,{id:bob.user.id,keys:bob.identity.keys},{kind:'attachment'},60);
+ const first={id:randomUUID(),size:MAX_FILE_SIZE,envelope:await make()};
+ assert.equal((await f.request('/attachments',{method:'POST',token:f.alice.token,body:{...first,size:MAX_FILE_SIZE+1}})).status,400);
+ assert.equal((await f.request('/attachments',{method:'POST',token:f.alice.token,body:first})).status,201);
+ assert.equal((await f.request('/attachments',{method:'POST',token:f.alice.token,body:{id:randomUUID(),size:1,envelope:await make()}})).status,413);
+ assert.equal((await f.request('/attachments/'+first.id,{method:'DELETE',token:bob.token})).status,403);
+ assert.equal((await f.request('/attachments/'+first.id,{method:'DELETE',token:f.alice.token})).status,200);
+ assert.equal(f.app.store.get('SELECT COUNT(*) AS n FROM attachments').n,0);
 });

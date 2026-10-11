@@ -21,8 +21,12 @@ Copy `.env.example` or use the installer/setup command. `.env` is private, ignor
 | APP_PORT | Host loopback HTTP port mapped to the app's internal 8080 |
 | TURN_PUBLIC_IP | Globally routable IPv4 for the self-hosted relay container |
 | TURN_LAN_IP | Fixed LAN IPv4 behind a home router; empty on directly public VPS |
+| ATTACHMENT_USER_QUOTA_MB | Pending/completed file plaintext-size reservation per sender, default 100 MB |
+| ATTACHMENT_GLOBAL_QUOTA_MB | Total reserved file size on this server, default 1024 MB |
 | TURN_REALM | Coturn auth realm, default webcaller |
 
 `npm run setup` fills missing owner/relay/VAPID secrets and preserves existing values. An incomplete VAPID pair is rejected; do not rotate half of it. App `.env` changes require container recreation/restart. Native systemd uses the EnvironmentFile; restart that service too.
 
 Compose profiles: default starts only the app; `--profile https` adds Caddy; `--profile turn` adds the Linux-host-networked relay. They can be combined. `.runtime/compose-profiles` is the private installer selection, not a public config file.
+
+Each file is limited to 10 MB. Quota values must be integers from 10 to 65536 MB; ciphertext tags and SQLite overhead consume additional storage.

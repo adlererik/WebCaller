@@ -19,6 +19,9 @@ export function createStore(dir) {
     CREATE TABLE IF NOT EXISTS message_deletions (id TEXT PRIMARY KEY, sender TEXT NOT NULL REFERENCES users(id), recipient TEXT NOT NULL REFERENCES users(id), expires INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS message_deletions_expiry ON message_deletions(expires);
   `);
+  // Additive migrations preserve existing accounts and single-use invitations.
+  if(!db.prepare('PRAGMA table_info(invites)').all().some(c=>c.name==='name'))db.exec("ALTER TABLE invites ADD COLUMN name TEXT NOT NULL DEFAULT ''");
+  if(!db.prepare('PRAGMA table_info(push)').all().some(c=>c.name==='confirmed'))db.exec('ALTER TABLE push ADD COLUMN confirmed INTEGER NOT NULL DEFAULT 0');
   const run = (sql, ...args) => db.prepare(sql).run(...args);
   const get = (sql, ...args) => db.prepare(sql).get(...args);
   const all = (sql, ...args) => db.prepare(sql).all(...args);

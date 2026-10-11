@@ -6,7 +6,10 @@ export function readEntryFragment(hash) {
   const setupCode=!invitation&&rawSetup&&/^[A-Za-z0-9_-]{16,128}$/.test(rawSetup)?rawSetup:null;
   return {invitation,setupCode,name:setupCode?(params.get('name')||'').trim().slice(0,48):''};
 }
-export function clearEntryFragment(location,history) {
+export function clearEntryFragment(location,history,preserveInvitation=false) {
   const params=new URLSearchParams(location.hash.replace(/^#/,''));
-  if(params.has('invite')||params.has('setup'))history.replaceState(null,'',location.pathname+location.search);
+  if(params.has('invite')||params.has('setup')||params.has('alert-test')){
+    const fragment=preserveInvitation&&params.has('invite')?'#invite='+encodeURIComponent(params.get('invite')):'';
+    history.replaceState(null,'',location.pathname+location.search+fragment);
+  }
 }

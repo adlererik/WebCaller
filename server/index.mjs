@@ -8,6 +8,7 @@ import webpush from 'web-push';
 import { createStore } from './store.mjs';
 import {attachmentRoutes} from './attachments.mjs';
 import {CHUNK_SIZE} from '../public/attachments.js';
+import {createCallAlerts,notificationPayload} from './call-alerts.mjs';
 
 const root = fileURLToPath(new URL('../public/', import.meta.url));
 const hash = (v) => createHash('sha256').update(v).digest('hex');
@@ -38,6 +39,7 @@ export function createApp(options = {}) {
   const origin = publicURL.origin;
   const store = createStore(options.dataDir || env.DATA_DIR || './data');
   const sockets = new Map(), tickets = new Map(), calls = new Map(), rates = new Map();
+  const alertTests=new Map(),testTimers=new Set();
   const pushReady = Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY);
   if (pushReady) webpush.setVapidDetails(env.VAPID_SUBJECT || 'mailto:admin@example.com', env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
   const contacts = (id) => store.all('SELECT users.* FROM users JOIN contacts ON contacts.b=users.id WHERE contacts.a=?', id).map(userView);
@@ -55,14 +57,18 @@ export function createApp(options = {}) {
     if (!r || r.until < now) rates.set(key, { count: 1, until: now + 60000 });
     else if (++r.count > limit) fail(429, 'Please wait a moment and try again');
   };
-  async function push(id, payload, ttl = 60) {
+  async function push(id, payload, ttl = 60, topic, endpoint) {
     if (!pushReady) return;
-    const rows = store.all('SELECT * FROM push WHERE owner=?', id);
+    const rows = endpoint?store.all('SELECT * FROM push WHERE owner=? AND endpoint=?',id,endpoint):store.all('SELECT * FROM push WHERE owner=?', id);
     await Promise.allSettled(rows.map(async (row) => {
-      try { await webpush.sendNotification(JSON.parse(row.subscription), JSON.stringify(payload), { TTL: ttl, urgency: 'high', timeout: 10000 }); }
+      try { await (options.sendPush||webpush.sendNotification)(JSON.parse(row.subscription), JSON.stringify(payload), { TTL: ttl, urgency: 'high', timeout: 10000, ...(topic?{topic}:{}) }); }
       catch (e) { if (e.statusCode === 404 || e.statusCode === 410) store.run('DELETE FROM push WHERE endpoint=?', row.endpoint); }
     }));
   }
+  const alerts=createCallAlerts({isWaiting:id=>{const c=calls.get(id);return !!c&&!c.answered&&c.expiresAt>Date.now();},
+    ...(options.alertTiming||{}),send:(c,revision,expiresAt)=>push(c.to,notificationPayload({type:'call',callId:c.id,revision,
+      url:publicURL.href.replace(/\/$/,'')+'/',expiresAt,callExpiresAt:c.expiresAt}),
+      Math.max(0,Math.floor((expiresAt-Date.now())/1000)),hash(c.id).slice(0,32))});
   async function ice(id) {
     if (env.CF_TURN_KEY_ID && env.CF_TURN_API_TOKEN) {
       const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(env.CF_TURN_KEY_ID)}/credentials/generate-ice-servers`, {
@@ -97,6 +103,15 @@ export function createApp(options = {}) {
         if (req.method !== 'GET' && req.headers.origin !== origin) fail(403, 'Unrecognized origin');
         const route = path.slice((base + '/api').length);
         if (route === '/config' && req.method === 'GET') return json(200, { base, publicURL: publicURL.href.replace(/\/$/, ''), vapidPublicKey: env.VAPID_PUBLIC_KEY || null, bootstrap: !store.get('SELECT id FROM users LIMIT 1'), turnConfigured: Boolean((env.TURN_SECRET && env.TURN_URLS) || (env.CF_TURN_KEY_ID && env.CF_TURN_API_TOKEN)) });
+        if(route==='/invite-info'&&req.method==='POST'){
+          rate(`invite-info:${req.socket.remoteAddress}`,30);const b=await body(req);
+          if(typeof b.invite!=='string'||b.invite.length>100)fail(400,'Open the full invitation link');
+          const invitation=store.get('SELECT * FROM invites WHERE hash=? AND expires>?',hash(b.invite),Date.now());
+          if(!invitation)fail(410,'This invitation has expired or was already accepted. Ask for a new invitation.');
+          const owner=store.get('SELECT * FROM users WHERE id=?',invitation.owner);
+          if(b.fingerprint!==hash(owner.keys))fail(403,'This invitation could not be verified. Ask for a new link.');
+          return json(200,{from:owner.name,name:invitation.name,expiresAt:invitation.expires});
+        }
         if (route === '/register' && req.method === 'POST') {
           rate(`register:${req.socket.remoteAddress}`, 10);
           const b = await body(req);
@@ -133,8 +148,9 @@ export function createApp(options = {}) {
         if (route === '/me' && req.method === 'GET') return json(200, { user: userView(u), contacts: contacts(u.id) });
         if (route === '/invite' && req.method === 'POST') {
           rate(`invite:${u.id}`, 10);
+          const b=await body(req);if(b.name!==undefined&&b.name!==''&&!validName(b.name))fail(400,'Use a name of up to 48 characters');
           const token = secret(), expiresAt = Date.now() + 86400000;
-          store.run('INSERT INTO invites VALUES(?,?,?)', hash(token), u.id, expiresAt);
+          store.run('INSERT INTO invites(hash,owner,expires,name) VALUES(?,?,?,?)', hash(token), u.id, expiresAt,(b.name||'').trim());
           return json(201, { url: `${publicURL.href.replace(/\/$/,'')}/#invite=${token}.${hash(u.keys)}`, expiresAt });
         }
         if (route === '/ice' && req.method === 'GET') { rate(`ice:${u.id}`, 12); return json(200, await ice(u.id)); }
@@ -177,7 +193,7 @@ export function createApp(options = {}) {
             if(attachment)store.run('UPDATE attachments SET committed=1 WHERE id=?',attachment.id);
           });
           emit(b.to, { type: 'message', envelope: b }); emit(u.id, { type: 'message', envelope: b });
-          void push(b.to, { type: 'message', url: base + '/', expiresAt: b.expiresAt }, Math.max(0, Math.min(60, Math.floor((b.expiresAt-Date.now())/1000))));
+          void push(b.to, notificationPayload({type:'message',url:publicURL.href.replace(/\/$/,'')+'/',expiresAt:b.expiresAt}), Math.max(0, Math.min(60, Math.floor((b.expiresAt-Date.now())/1000))));
           return json(201, { id: b.id });
         }
         if (route === '/push' && req.method === 'POST') {
@@ -189,11 +205,40 @@ export function createApp(options = {}) {
           if (endpoint.protocol !== 'https:' || endpoint.port || !allowed.some(h => endpoint.hostname === h || endpoint.hostname.endsWith('.' + h)) || !b.keys?.p256dh || !b.keys?.auth || JSON.stringify(b).length > 4096) fail(400, 'Unsupported push service');
           if (store.get('SELECT endpoint FROM push WHERE endpoint=? AND owner<>?', b.endpoint, u.id)) fail(409, 'Subscription belongs to another device');
           if (store.get('SELECT COUNT(*) AS n FROM push WHERE owner=?', u.id).n >= 5 && !store.get('SELECT endpoint FROM push WHERE endpoint=?', b.endpoint)) fail(429, 'Too many subscriptions');
-          store.run('INSERT OR REPLACE INTO push VALUES(?,?,?)', u.id, b.endpoint, JSON.stringify(b)); return json(200, { ok: true });
+          const subscription=JSON.stringify({endpoint:b.endpoint,keys:{auth:b.keys.auth,p256dh:b.keys.p256dh}});
+          const prior=store.get('SELECT subscription,confirmed FROM push WHERE endpoint=?',b.endpoint);
+          store.run('INSERT OR REPLACE INTO push(owner,endpoint,subscription,confirmed) VALUES(?,?,?,?)', u.id, b.endpoint, subscription,prior?.subscription===subscription?prior.confirmed:0); return json(200, { ok: true });
+        }
+        if(route==='/push/status'&&req.method==='POST'){
+          const b=await body(req),row=store.get('SELECT confirmed FROM push WHERE owner=? AND endpoint=?',u.id,b.endpoint||'');
+          return json(200,{configured:pushReady,subscribed:!!row,confirmed:!!row?.confirmed});
+        }
+        if(route==='/push/test'&&req.method==='POST'){
+          rate('push-test:'+u.id,3);const b=await body(req);
+          if(!pushReady||!store.get('SELECT 1 FROM push WHERE owner=? AND endpoint=?',u.id,b.endpoint||''))fail(409,'Enable call alerts on this phone first');
+          const id=randomUUID(),expiresAt=Date.now()+600000;alertTests.set(id,{owner:u.id,endpoint:b.endpoint,expiresAt,sent:false});
+          const timer=setTimeout(()=>{testTimers.delete(timer);const test=alertTests.get(id);if(!test)return;test.sent=true;
+            void push(u.id,notificationPayload({type:'test',testId:id,url:publicURL.href.replace(/\/$/,'')+'/',expiresAt:Date.now()+15000}),15,hash(id).slice(0,32),test.endpoint);
+          },options.testAlertDelay??8000);timer.unref();testTimers.add(timer);
+          return json(202,{testId:id,delay:8,expiresAt});
+        }
+        if(route==='/push/test-result'&&req.method==='POST'){
+          const b=await body(req),test=alertTests.get(b.testId);
+          if(!test||test.owner!==u.id||test.expiresAt<=Date.now()||!test.sent)fail(410,'Send a fresh test alert first');
+          if(b.heard!==true)fail(400,'Only confirm after hearing the alert');
+          store.run('UPDATE push SET confirmed=? WHERE owner=? AND endpoint=?',Date.now(),u.id,test.endpoint);alertTests.delete(b.testId);return json(200,{ok:true});
+        }
+        const callStatus=route.match(/^\/calls\/([a-f0-9-]{36})$/);
+        if(callStatus&&req.method==='GET'){
+          const c=calls.get(callStatus[1]);
+          if(c&&![c.to,c.from].includes(u.id))fail(404,'Call unavailable');
+          return json(200,{state:!c||c.expiresAt<=Date.now()?'ended':c.answered?'answered':'ringing',expiresAt:c?.expiresAt||null});
         }
         if (route === '/push' && req.method === 'DELETE') { store.run('DELETE FROM push WHERE owner=?', u.id); return json(200, { ok: true }); }
         if (route === '/device' && req.method === 'DELETE') {
           const peers = contacts(u.id);
+          for(const [id,c] of calls)if(c.to===u.id||c.from===u.id){alerts.stop(id);calls.delete(id);emit(c.to===u.id?c.from:c.to,{type:'call-ended',callId:id,reason:'Device removed'});}
+          for(const [id,test] of alertTests)if(test.owner===u.id)alertTests.delete(id);
           store.transaction(() => {
             store.run('DELETE FROM attachments WHERE sender=? OR recipient=?',u.id,u.id);
             store.run('DELETE FROM messages WHERE sender=? OR recipient=?', u.id, u.id);
@@ -245,7 +290,7 @@ export function createApp(options = {}) {
           if (!sockets.has(ws.user)) sockets.set(ws.user, new Set()); sockets.get(ws.user).add(ws);
           ws.send(JSON.stringify({ type: 'ready' }));
           const pending = [...calls.values()].find(c => c.to === ws.user && c.expiresAt > Date.now());
-          if (pending) ws.send(JSON.stringify({ type: 'signal', envelope: pending.envelope, kind: 'offer', callId: pending.id }));
+          if (pending&&!pending.answered) ws.send(JSON.stringify({ type: 'signal', envelope: pending.envelope, kind: 'offer', callId: pending.id }));
           return;
         }
         rate(`ws:${ws.user}`, 240);
@@ -266,14 +311,15 @@ export function createApp(options = {}) {
           if ([...calls.values()].some(c => [c.from,c.to].includes(ws.user) || [c.from,c.to].includes(target))) {
             ws.send(JSON.stringify({ type: 'busy', callId: b.callId })); return;
           }
-          calls.set(b.callId, { id: b.callId, from: ws.user, to: target, envelope: b.envelope, expiresAt: Math.min(b.envelope.expiresAt, Date.now()+90000), answered: false });
+          const waiting={ id: b.callId, from: ws.user, to: target, envelope: b.envelope, expiresAt: Math.min(b.envelope.expiresAt, Date.now()+90000), answered: false };
+          calls.set(b.callId,waiting);
           emit(target, b);
-          void push(target, { type: 'call', url: base + '/', callId: b.callId, expiresAt: Date.now()+60000 });
+          alerts.start(waiting);
           return;
         }
         if (b.kind !== 'receipt' && (!active || ![active.from,active.to].includes(ws.user) || ![active.from,active.to].includes(target) || ws.user === target)) fail(403, 'Unknown call');
-        if (b.kind === 'answer') { active.answered = true; active.expiresAt = Date.now()+14400000; }
-        if (b.kind === 'hangup') { calls.delete(b.callId); emit(ws.user, b); }
+        if (b.kind === 'answer') { if(active.to!==ws.user)fail(403,'Only the recipient can answer');active.answered = true; active.expiresAt = Date.now()+14400000;alerts.stop(b.callId); }
+        if (b.kind === 'hangup') { alerts.stop(b.callId);calls.delete(b.callId); emit(ws.user, b); }
         emit(target, b);
       } catch (e) { ws.send(JSON.stringify({ type: 'error', error: e.status ? e.message : 'Invalid request' })); }
     });
@@ -284,6 +330,9 @@ export function createApp(options = {}) {
         const timer = setTimeout(() => {
           if (sockets.has(ws.user)) return;
           for (const [id,c] of calls) if ([c.from,c.to].includes(ws.user)) {
+            // A sleeping recipient must be able to return from its push alert.
+            if(!c.answered&&c.to===ws.user)continue;
+            alerts.stop(id);
             calls.delete(id); emit(c.from, { type:'call-expired', callId:id }); emit(c.to, { type:'call-expired', callId:id });
           }
         },45000); timer.unref();
@@ -295,12 +344,13 @@ export function createApp(options = {}) {
     const now = Date.now(); store.purge(now);
     for (const [t, v] of tickets) if (v.expires < now) tickets.delete(t);
     for (const [key, v] of rates) if (v.until < now) rates.delete(key);
-    for (const [id, c] of calls) if (c.expiresAt < now) { calls.delete(id); emit(c.from, { type: 'call-expired', callId: id }); emit(c.to, { type: 'call-expired', callId: id }); }
+    for (const [id, c] of calls) if (c.expiresAt < now) { alerts.stop(id);calls.delete(id); emit(c.from, { type: 'call-expired', callId: id }); emit(c.to, { type: 'call-expired', callId: id }); }
+    for(const [id,test]of alertTests)if(test.expiresAt<=now)alertTests.delete(id);
   }, 1000); cleanup.unref();
   const heartbeat = setInterval(() => {
     for (const ws of wss.clients) { if (!ws.isAlive) { ws.terminate(); continue; } ws.isAlive = false; ws.ping(); }
   }, 30000); heartbeat.unref();
-  return { server, store, base, close: async () => { clearInterval(cleanup); clearInterval(heartbeat); for (const ws of wss.clients) ws.terminate(); wss.close(); await new Promise(r => server.close(r)); store.close(); } };
+  return { server, store, base, close: async () => { alerts.close();testTimers.forEach(clearTimeout);clearInterval(cleanup); clearInterval(heartbeat); for (const ws of wss.clients) ws.terminate(); wss.close(); await new Promise(r => server.close(r)); store.close(); } };
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const app = createApp();

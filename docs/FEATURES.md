@@ -39,4 +39,12 @@ Rounded green/gray bubbles, media captions, searchable self-hosted Unicode emoji
 
 ## Deliberately absent
 
-No native mobile app, install prompt, SIM/phone-number registration, group calls/chats, federation, Double Ratchet, audited security claim or guaranteed background ringing. This version is one-to-one calling, text and attachments. See [Verification](VERIFICATION.md).
+No native mobile app, SIM/phone-number registration, group calls/chats, federation, Double Ratchet, audited security claim or guaranteed background ringing. This version is one-to-one calling, text and attachments. See [Verification](VERIFICATION.md).
+
+## Call alerts and invitations
+
+Inviters can prefill the recipient’s name. Invitation preview verifies the inviter fingerprint without consuming the link. iPhone/iPad guides Home Screen setup before enrollment; Android goes directly to acceptance and alerts. Permission requests follow an explicit tap. A test is sent after eight seconds to this browser’s subscription only; readiness is recorded only when its owner confirms hearing it, never inferred from delivery.
+
+Pending calls send an initial generic push plus reminders at 15 and 35 seconds, with at most eight seconds of push-provider queue life per attempt. A per-call topic coalesces undelivered pushes. Answer, decline, hangup, expiry and device removal cancel remaining timers. An unopened recipient’s offer remains available up to the original 90-second deadline.
+
+The service worker checks authenticated call state before sounding an alert, replaces earlier notifications for the call, and avoids a duplicate ding when a visible page confirms it is already audibly ringing. Stale alerts still show a silent generic notification to respect Apple’s user-visible push requirement. Declarative Web Push with `mutable:true` allows supported Apple browsers to display a generic fallback if the worker cannot run. Already delivered notifications and in-flight pushes cannot always be recalled, and the OS may quiet repeated alerts. The repeating dual-tone ringtone requires an active page and browser sound permission. See [Call alerts](CALL_ALERTS.md).

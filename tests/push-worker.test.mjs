@@ -1,0 +1,20 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+test('push worker suppresses ended/expired sounds, avoids double ringing and opens only its own phone',async t=>{
+  const prior={self:globalThis.self,indexedDB:globalThis.indexedDB,fetch:globalThis.fetch};
+  t.after(()=>{for(const [key,value]of Object.entries(prior))if(value===undefined)delete globalThis[key];else globalThis[key]=value;});
+  const handlers={},shown=[],closed=[];let state='ringing',clients=[];
+  globalThis.indexedDB={open(){const req={};queueMicrotask(()=>{req.result={close(){},transaction(){const tx={objectStore:()=>({get(){const r={};queueMicrotask(()=>{r.result={token:'test-device-token'};r.onsuccess();tx.oncomplete();});return r;}})};return tx;}};req.onsuccess();});return req;}};
+  globalThis.fetch=async(url,options)=>{assert.equal(new URL(url).origin,'https://phone.example');assert.equal(options.headers.Authorization,'Bearer test-device-token');assert.equal(options.cache,'no-store');return {ok:true,json:async()=>({state})};};
+  globalThis.self={registration:{scope:'https://phone.example/calls/',getNotifications:async()=>shown.map(({options})=>({data:options.data,close:()=>closed.push(options.tag)})),showNotification:async(title,options)=>shown.push({title,options})},clients:{matchAll:async()=>clients,openWindow:async url=>opened.push(url)},addEventListener:(name,handler)=>{handlers[name]=handler;}};
+  const opened=[];const {handlePush}=await import('../public/sw.js');const id=randomUUID(),live={type:'call',callId:id,expiresAt:Date.now()+8000,callExpiresAt:Date.now()+90000,revision:0};
+  await handlePush(live);assert.equal(shown.at(-1).title,'Incoming call');assert.equal(shown.at(-1).options.silent,false);
+  state='answered';await handlePush({...live,revision:1});assert.equal(shown.at(-1).title,'Call ended');assert.equal(shown.at(-1).options.silent,true);assert.ok(closed.length);assert.equal('vibrate'in shown.at(-1).options,false);
+  state='ringing';clients=[{url:'https://phone.example/calls/',visibilityState:'visible',postMessage:(data,ports)=>{assert.equal(data.type,'ringing-query');ports[0].postMessage({ringing:true});ports[0].close();}}];
+  await handlePush({...live,revision:2});assert.equal(shown.at(-1).options.silent,true);assert.equal(shown.at(-1).options.renotify,false);
+  clients=[];await handlePush({...live,expiresAt:Date.now()-1});assert.equal(shown.at(-1).options.silent,true);
+  const count=shown.length;await handlePush({type:'call',callId:'invalid',expiresAt:Date.now()+9999});assert.equal(shown.length,count);
+  const testId=randomUUID();await handlePush({type:'test',testId,expiresAt:Date.now()+15000});assert.equal(shown.at(-1).options.data.url,'https://phone.example/calls/#alert-test='+testId);
+  let work;handlers.notificationclick({notification:{data:{url:'https://evil.example/'},close(){}},waitUntil:p=>work=p});await work;assert.deepEqual(opened,['https://phone.example/calls/']);
+});

@@ -6,7 +6,7 @@ The first browser uses the owner's private setup QR/link. Other people accept an
 
 ## Conversations and invitations
 
-**Invite someone** creates a link for one person. **Share invitation** opens the device's normal share sheet when supported; **Copy link** copies it. A recipient opens the full link, optionally enters a name and presses **Accept invitation**. The link is single use and expires after 24 hours. Share it privately; its fragment contains the invite secret and inviter identity fingerprint.
+**Invite someone** lets you enter the recipient’s name (optional), then **Create invitation** creates a link for one person. **Share invitation** opens the device's normal share sheet when supported; **Copy link** copies it. A recipient opens the full link, optionally enters a name and presses **Accept invitation**. The recipient’s name is already filled in if supplied. On iPhone/iPad, the link first explains how to add the website to the Home Screen, then accept from its icon. After acceptance, a short call-alert setup asks for notification permission and a locked-phone sound test. The link is single use and expires after 24 hours. Share it privately; its fragment contains the invite secret and inviter identity fingerprint.
 
 The left conversation list shows your contacts and unread indicators. **Search people** filters it locally. Tap a person to open their conversation. On narrow screens the back arrow returns to the list. Only established contacts can route messages or calls to one another.
 
@@ -52,7 +52,7 @@ Three animated dots show when the other person types. Only a signed encrypted ty
 
 **Ringing:** enabled automatically. The first ordinary tap or keypress unlocks browser sound. There is no separate Enable ringing step. Sound restrictions, device Focus/mute and OS suspension still apply.
 
-**Enable browser notifications:** optional generic notifications where the browser supports them. Notification text contains no message bodies/contact names. iPhone push requires a Home Screen installation; this project does not ask you to install. Browser/OS notification history may remain.
+**Set up call alerts:** follow the same guided setup shown after accepting an invitation. Allow notifications, tap **Send test alert**, close the page and lock your phone. An alert should arrive after about eight seconds. Tap it, then press **I heard it** only if it made a sound. **I didn’t hear anything** gives phone-specific sound/permission help. iPhone requires the website’s Home Screen icon; use that icon for calls afterward. Call reminders request the normal notification sound up to three times; the open page uses a repeating ringtone. Notification text contains no message bodies/contact names. Browser/OS notification history may remain. See [Call alerts](CALL_ALERTS.md).
 
 **Check calling connection:** attempts a relay-only ICE allocation. Success means a relay candidate was allocated, not that every network or full media path works. Test a real call across separate networks.
 

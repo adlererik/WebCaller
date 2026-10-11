@@ -23,7 +23,10 @@ flowchart LR
 | server/attachments.mjs | Authenticated chunk upload/download, pending transfer cleanup and storage quotas |
 | public/onboarding.js | Parse invite/setup fragments, invitation precedence and removing secrets from the address |
 | public/media.js | Phone class, Opus SDP tuning, capture, sender adaptation, candidate queues, ICE restart and relay test |
-| public/sw.js | Optional generic push notification handling; no page/message fetch cache |
+| public/sw.js | Call-state checks, generic notifications, foreground-ring coordination and notification taps; no fetch cache |
+| public/call-setup.js | Phone detection, Home Screen guidance, notification permission and heard-alert verification |
+| public/manifest.webmanifest | Stable web app identity/scope, Home Screen display and icons; document URL is the launch fallback |
+| server/call-alerts.mjs | Bounded cancellable reminder scheduler and declarative push payloads |
 | server/index.mjs | HTTP/API/auth, ciphertext mailbox, contact-authorized WebSocket routing, push and TURN credentials |
 | server/store.mjs | SQLite schema, transactions, secure deletion, expiry and storage helpers |
 | scripts/setup.mjs | Generate missing private secrets while preserving existing values |
@@ -43,7 +46,8 @@ flowchart LR
 | POST /register | First browser, using private owner code and browser public keys |
 | POST /join | Redeem single-use invitation; create/reuse device and connect contacts |
 | GET /me | Authenticated self/contact metadata |
-| POST /invite | Create one-person invitation |
+| POST /invite | Create one-person invitation, with optional recipient name |
+| POST /invite-info | Verify invitation/fingerprint and preview names without redemption (unauthenticated) |
 | GET /ice | Authenticated STUN/TURN config with temporary credentials |
 | POST /ticket | Short-lived single-use WebSocket authentication ticket |
 | GET /messages | Authorized unexpired ciphertext mailbox |
@@ -55,6 +59,10 @@ flowchart LR
 | GET /attachments/:id/chunks/:part | Sender/recipient download after all chunks are committed |
 | DELETE /attachments/:id | Sender-only cancellation of an unfinished transfer |
 | POST/DELETE /push | Register/remove provider-restricted push subscription |
+| POST /push/status | Current subscription’s registration and user-confirmed test state |
+| POST /push/test | Send a delayed test to the authenticated owner’s selected subscription |
+| POST /push/test-result | Confirm a sent, unexpired test after the user reports hearing it |
+| GET /calls/:id | Participant-only ringing/answered/ended status for stale-alert suppression |
 | DELETE /device | Delete device-related records, close sockets and notify contacts |
 
 `/calls/health` is a simple health endpoint. `/calls/ws` upgrades with an allowed Origin; its first frame consumes the ticket. Encrypted call frames carry call IDs/kinds and sealed offers/answers/ICE. Offers to an offline recipient are held in RAM for 90 seconds; server restarts discard them. SQLite attachment tables are created additively on startup. Chunk blobs reference their manifest with cascading deletion. The original message tables are retained. Message envelope fields include version, IDs, sender/recipient, creation/expiry, ephemeral public key, nonce, ciphertext copies and signature. Browser tokens/keys are never embedded in server logs by the app.

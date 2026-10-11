@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.4.0 — Easier invitations and call alerts
+
+- Optional recipient-name prefilling and verified invitation preview.
+- Phone-specific onboarding: iPhone/iPad Home Screen handoff before invitation acceptance; Android notification permission and a locked-phone sound test.
+- A delayed test bound to the current subscription, with explicit heard/silent confirmation and phone settings help.
+- At most three short-lived call pushes, cancellable reminders, stale-call checks, foreground sound coordination and Apple declarative fallback.
+- Recognisable repeating foreground ringtone, labelled Answer/Decline, tap-to-ring fallback and duplicate reconnect prevention.
+- Additive migrations preserve existing users, keys, message records and push subscriptions. No guaranteed closed-phone ringtone or OS-sound override is claimed.
+
+
 ## 0.3.0 — 2026-10-11
 
 - Match the supplied Signal-style chat reference with rounded green/gray bubbles, integrated composer controls, edge-to-edge media and captions.

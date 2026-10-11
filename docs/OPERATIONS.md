@@ -19,7 +19,7 @@ sudo docker compose build webcaller
 sudo docker compose --profile https --profile turn up -d --build
 ```
 
-Use only your chosen profiles. Do not run `npm run setup` to rotate keys, delete the data volume or rename the Compose project. v0.3.0 adds deletion markers; v0.2.0 added attachment tables/indexes on startup with CREATE TABLE IF NOT EXISTS; it preserves existing identities and messages. New versions may require schema migration; read the release notes. This preview does not provide account recovery/export or browser identity synchronization.
+Use only your chosen profiles. Do not run `npm run setup` to rotate keys, delete the data volume or rename the Compose project. v0.4.0 adds optional invite names and push sound-confirmation columns through additive migrations; v0.3.0 adds deletion markers; v0.2.0 added attachment tables/indexes on startup with CREATE TABLE IF NOT EXISTS; it preserves existing identities and messages. New versions may require schema migration; read the release notes. This preview does not provide account recovery/export or browser identity synchronization.
 
 ## Backups and disappearing messages
 
@@ -38,3 +38,5 @@ Caddy renews its web certificate automatically. Coturn domain certificates mount
 `sudo docker compose --profile https --profile turn down` stops/removes containers while retaining named volumes. Remove your router/firewall forwarding if no longer needed. Deleting named volumes with `down -v` permanently removes server data and Caddy state; do so only intentionally after deciding whether you need recovery. Remove private .env/certs yourself when finished. Existing external provider records, client storage and recipient copies are separate.
 
 Both phones should refresh the page after this update to load the new composer, media preview and deletion controls. Preserve browser site data when refreshing; clearing storage removes the identity.
+
+After v0.4.0, refresh each phone without clearing its site data. Existing users can open **Settings → Set up call alerts**; new invitees see the guide automatically. Preserve the VAPID key pair so current subscriptions remain valid. Server restart clears pending calls and unfinished ten-minute sound tests; send a fresh test afterward. Notification delivery needs server HTTPS outbound access to the selected browser push provider, in addition to normal web signaling and TURN. No new inbound port is needed.

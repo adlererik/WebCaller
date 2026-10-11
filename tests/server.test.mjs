@@ -8,10 +8,10 @@ import {createApp} from '../server/index.mjs';
 import {newIdentity,seal,open,fingerprint} from '../public/crypto.js';
 import {newAttachment,attachmentKey,encryptChunk,decryptChunk,CHUNK_SIZE,MAX_FILE_SIZE} from '../public/attachments.js';
 
-async function fixture(push=false,extra={}){
+async function fixture(push=false,extra={},options={}){
   const origin='https://example.com';
   const vapid=push?webpush.generateVAPIDKeys():{};
-  const app=createApp({dataDir:':memory:',env:{PUBLIC_URL:origin+'/calls',BOOTSTRAP_TOKEN:'test-owner-code',VAPID_PUBLIC_KEY:vapid.publicKey||'',VAPID_PRIVATE_KEY:vapid.privateKey||'',CF_TURN_KEY_ID:'',CF_TURN_API_TOKEN:'',TURN_SECRET:'test-turn-secret',TURN_URLS:'turn:relay.test:3478?transport=udp',...extra}});
+  const app=createApp({...options,dataDir:':memory:',env:{PUBLIC_URL:origin+'/calls',BOOTSTRAP_TOKEN:'test-owner-code',VAPID_PUBLIC_KEY:vapid.publicKey||'',VAPID_PRIVATE_KEY:vapid.privateKey||'',CF_TURN_KEY_ID:'',CF_TURN_API_TOKEN:'',TURN_SECRET:'test-turn-secret',TURN_URLS:'turn:relay.test:3478?transport=udp',...extra}});
   app.server.listen(0,'127.0.0.1');await once(app.server,'listening');
   const url=`http://127.0.0.1:${app.server.address().port}`;
   async function request(path,{method='GET',body,token,requestOrigin=origin}={}){
@@ -177,4 +177,47 @@ test('typing updates are encrypted, short-lived, contact-only and never stored o
   const late=once(a,'message');a.send(JSON.stringify({type:'typing',envelope:await seal(f.alice.identity,f.alice.user.id,peer,{kind:'typing',active:true},30)}));
   assert.equal(JSON.parse((await late)[0]).type,'error');
   b.close();const reconnected=await f.socket(bob);assert.equal(f.app.store.get('SELECT COUNT(*) AS n FROM messages').n,0);reconnected.close();a.close();
+});
+
+// Real HTTP/WebSocket enrollment with a fake push transport; no third-party traffic.
+test('named invite preview verifies the inviter without consuming the invitation',async t=>{
+  const f=await fixture();t.after(()=>f.app.close());
+  const created=await f.request('/invite',{method:'POST',token:f.alice.token,body:{name:'Grandma'}});
+  const [invite,fp]=new URL(created.body.url).hash.slice(8).split('.');
+  const preview=()=>f.request('/invite-info',{method:'POST',body:{invite,fingerprint:fp}});
+  assert.deepEqual((await preview()).body.name,'Grandma');assert.equal((await preview()).body.from,'Alice');
+  assert.equal((await f.request('/invite-info',{method:'POST',body:{invite,fingerprint:'wrong'}})).status,403);
+  const identity=await newIdentity();assert.equal((await f.request('/join',{method:'POST',body:{invite,fingerprint:fp,name:'Grandma',keys:identity.keys}})).status,201);
+  assert.equal((await preview()).status,410);
+});
+test('sound tests target this subscription, require its owner and never infer audible success',async t=>{
+  const deliveries=[],f=await fixture(true,{}, {testAlertDelay:10,sendPush:async(subscription,payload,options)=>deliveries.push({subscription,payload:JSON.parse(payload),options})});t.after(()=>f.app.close());const {bob}=await f.pair();
+  const endpoint='https://fcm.googleapis.com/test/one',other='https://fcm.googleapis.com/test/two',keys={auth:'fake-auth',p256dh:'fake-key'};
+  for(const ep of [endpoint,other])assert.equal((await f.request('/push',{method:'POST',token:f.alice.token,body:{endpoint:ep,keys}})).status,200);
+  const status=()=>f.request('/push/status',{method:'POST',token:f.alice.token,body:{endpoint}});
+  assert.equal((await status()).body.confirmed,false);
+  assert.equal((await f.request('/push/test',{method:'POST',token:bob.token,body:{endpoint}})).status,409);
+  const test=await f.request('/push/test',{method:'POST',token:f.alice.token,body:{endpoint}});assert.equal(test.status,202);
+  await new Promise(r=>setTimeout(r,30));assert.equal(deliveries.length,1);assert.equal(deliveries[0].subscription.endpoint,endpoint);assert.equal(deliveries[0].payload.type,'test');assert.equal(deliveries[0].options.TTL,15);
+  assert.equal((await status()).body.confirmed,false);
+  assert.equal((await f.request('/push/test-result',{method:'POST',token:bob.token,body:{testId:test.body.testId,heard:true}})).status,410);
+  assert.equal((await f.request('/push/test-result',{method:'POST',token:f.alice.token,body:{testId:test.body.testId,heard:false}})).status,400);
+  assert.equal((await f.request('/push/test-result',{method:'POST',token:f.alice.token,body:{testId:test.body.testId,heard:true}})).status,200);
+  assert.equal((await status()).body.confirmed,true);assert.equal(f.app.store.get('SELECT confirmed FROM push WHERE endpoint=?',other).confirmed,0);
+  assert.equal((await f.request('/push',{method:'POST',token:f.alice.token,body:{endpoint,expirationTime:null,keys}})).status,200);assert.equal((await status()).body.confirmed,true);
+  assert.equal((await f.request('/push/test-result',{method:'POST',token:f.alice.token,body:{testId:test.body.testId,heard:true}})).status,410);
+});
+test('answered and cancelled calls stop real server reminders; call status is participant-only',async t=>{
+  const deliveries=[],f=await fixture(true,{}, {alertTiming:{delays:[80,160]},sendPush:async(sub,payload,options)=>deliveries.push({payload:JSON.parse(payload),options})});t.after(()=>f.app.close());const {bob}=await f.pair(),{bob:outsider}=await f.pair();
+  await f.request('/push',{method:'POST',token:bob.token,body:{endpoint:'https://fcm.googleapis.com/test/calls',keys:{auth:'a',p256dh:'b'}}});
+  const a=await f.socket(f.alice),b=await f.socket(bob);t.after(()=>{a.close();b.close();});
+  async function signal(socket,from,to,kind,callId){const envelope=await seal(from.identity,from.user.id,{id:to.user.id,keys:to.identity.keys},{kind,callId},90);socket.send(JSON.stringify({type:'signal',kind,callId,envelope}));}
+  const id=randomUUID(),incoming=once(b,'message');await signal(a,f.alice,bob,'offer',id);await incoming;
+  assert.equal((await f.request('/calls/'+id,{token:bob.token})).body.state,'ringing');assert.equal((await f.request('/calls/'+id,{token:outsider.token})).status,404);
+  const answered=once(a,'message');await signal(b,bob,f.alice,'answer',id);await answered;await new Promise(r=>setTimeout(r,200));
+  assert.equal(deliveries.length,1);assert.ok(deliveries[0].options.TTL<=8);assert.equal(deliveries[0].options.urgency,'high');assert.equal(deliveries[0].payload.mutable,true);assert.equal((await f.request('/calls/'+id,{token:bob.token})).body.state,'answered');
+  const ended=once(b,'message');await signal(a,f.alice,bob,'hangup',id);await ended;
+  assert.equal((await f.request('/calls/'+id,{token:bob.token})).body.state,'ended');
+  const next=randomUUID(),again=once(b,'message');await signal(a,f.alice,bob,'offer',next);await again;const cancel=once(b,'message');await signal(a,f.alice,bob,'hangup',next);await cancel;await new Promise(r=>setTimeout(r,200));
+  assert.equal(deliveries.length,2);
 });

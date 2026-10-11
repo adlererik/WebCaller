@@ -27,16 +27,16 @@ Download the release:
 ```sh
 sudo apt update
 sudo apt install -y curl tar
-curl -fL https://github.com/adlererik/WebCaller/releases/download/v0.3.0/WebCaller-v0.3.0.tar.gz -o WebCaller-v0.3.0.tar.gz
-curl -fL https://github.com/adlererik/WebCaller/releases/download/v0.3.0/SHA256SUMS.txt -o SHA256SUMS.txt
+curl -fL https://github.com/adlererik/WebCaller/releases/download/v0.4.0/WebCaller-v0.4.0.tar.gz -o WebCaller-v0.4.0.tar.gz
+curl -fL https://github.com/adlererik/WebCaller/releases/download/v0.4.0/SHA256SUMS.txt -o SHA256SUMS.txt
 ```
 
 Check the archive before extracting:
 
 ```sh
-grep 'WebCaller-v0.3.0.tar.gz$' SHA256SUMS.txt | sha256sum -c -
-tar -xzf WebCaller-v0.3.0.tar.gz
-cd WebCaller-v0.3.0
+grep 'WebCaller-v0.4.0.tar.gz$' SHA256SUMS.txt | sha256sum -c -
+tar -xzf WebCaller-v0.4.0.tar.gz
+cd WebCaller-v0.4.0
 ```
 
 A successful checksum says `OK`. Stop if it fails. Alternatively download/extract the ZIP on your computer and copy the folder to your server.
@@ -91,11 +91,11 @@ A manual alternative is to privately read `BOOTSTRAP_TOKEN` from `.env` and past
 
 ## 5. Invite someone and test
 
-On the first phone choose **Invite someone → Share invitation** or **Copy link**. The other person opens the complete link in their phone browser and presses **Accept invitation**. Their name is optional. Each invitation works once and lasts 24 hours.
+On the first phone choose **Invite someone**, optionally enter their name, then **Create invitation → Share invitation** or **Copy link**. The other person opens the complete link in their phone browser and presses **Accept invitation**. Their name is optional. Each invitation works once and lasts 24 hours.
 
 Tap the phone icon for voice or the camera icon for video. Allow the microphone and, for video, the camera. Test both call directions, then put the devices on different internet connections. Open Settings → **Check calling connection**. A relay allocation test is useful, but a real cross-network conversation is the final check.
 
-Keep the page open to receive calls. A browser-only website cannot guarantee closed-browser or locked-phone ringing. Connection management is always **Automatic**; unknown networks default to saving data. Ringing activates with your first normal tap or keypress, without a separate setup switch.
+The invitation guides the other person through call alerts. Android asks for notification permission. iPhone/iPad first explains **Share → Add to Home Screen → Add**, then finishes the invitation from the new icon. Both get a sound test: tap **Send test alert**, lock the phone, listen, tap the alert, then confirm **I heard it**. Use the Home Screen icon on iPhone afterward. Closed-phone alerts remain dependent on OS settings and push delivery. See [the simple call-alert guide](CALL_ALERTS.md). Connection management is always **Automatic**; unknown networks default to saving data. Ringing activates with your first normal tap or keypress, without a separate setup switch.
 
 ## If something goes wrong
 
@@ -107,7 +107,7 @@ Keep the page open to receive calls. A browser-only website cannot guarantee clo
 | Website unreachable | DNS, Caddy certificate, port forwarding or Tunnel route; `sudo docker compose ps` |
 | App port occupied | Choose a free `APP_PORT` in `.env`; change the proxy target to the same port |
 | Page works but calls fail | TURN credentials and external relay ports; Tunnel is not a media relay |
-| iPhone does not ring when closed | Unsupported in this no-install model; keep the page active |
+| iPhone does not ring when closed | Open from the Home Screen icon, enable alerts, then run the locked-phone sound test; check Silent mode/Focus |
 | Very slow internet | Audio adapts and video pauses; complete outages cannot carry a call |
 
 For updates use [Operations](OPERATIONS.md); do not regenerate `.env` or delete the data volume.

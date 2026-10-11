@@ -1,10 +1,10 @@
 # WebCaller
 
-A browser-only phone for Android, iPhone and desktop: adaptive mono Opus voice, optional video, encrypted disappearing text, and simple invitations. No SIM, phone number, native app or Home Screen installation is required.
+A browser-only phone for Android, iPhone and desktop: adaptive mono Opus voice, optional video, encrypted disappearing text, and simple invitations. No SIM, phone number or native app is required. iPhone background call alerts need this website saved to the Home Screen.
 
 **Start here: [Beginner installation guide](docs/INSTALL.md).** Use a Debian 12/13 server, a domain name and the guided installer. Docker supplies Node.js 24; optional Caddy supplies HTTPS and optional coturn supplies your own free relay.
 
-This is the **v0.3.0 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
+This is the **v0.4.0 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
 
 ## What you get
 
@@ -15,12 +15,12 @@ This is the **v0.3.0 preview**. It has passing automated and synthetic-browser t
 - Encrypted one-to-one text, images, video, voice notes and files (up to 10 MB each) with disappearing timers, including unread/offline expiry.
 - One-person, single-use invitations; recipients choose an optional name and accept.
 - Private QR onboarding for the first phone, so nobody has to type a long setup secret.
-- Contact safety numbers, identity change detection, reconnection, relay diagnostics and optional generic browser notifications.
+- Contact safety numbers, identity change detection, reconnection, relay diagnostics and guided call-alert setup with a locked-phone sound test and bounded reminders.
 - Local SQLite ciphertext storage, authenticated WebSocket signaling and temporary TURN credentials.
 
 ## Know the limits before installing
 
-A website cannot guarantee ringing when the browser is closed or the phone is locked. iPhone push requires a Home Screen installation, which this project does not request. Keep the page open for calling.
+Call invitations detect the phone and guide the recipient through enabling alerts. Android can receive browser push; iPhone/iPad requires a Home Screen web app. A locked-phone sound test helps check setup. Up to three spaced alerts request the phone’s normal notification sound; the repeating ringtone plays when the page is open. OS settings, suspension, push delivery and connection still prevent guaranteed closed-phone ringing. See [Call alerts](docs/CALL_ALERTS.md).
 
 Audio cannot survive zero usable bandwidth or complete outages. Bitrate figures are codec payload ceilings; network overhead uses extra data. Browser support determines actual microphone processing, FEC, PLC and sender controls.
 

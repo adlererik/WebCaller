@@ -47,7 +47,7 @@ export function createApp(options = {}) {
   const mapImageSource=mapProvider.origin===origin?'':mapProvider.origin;
 
   const store = createStore(options.dataDir || env.DATA_DIR || './data');
-  const sockets = new Map(), tickets = new Map(), calls = new Map(), rates = new Map();
+  const sockets = new Map(), tickets = new Map(), calls = new Map(), rates = new Map(), disconnectTimers=new Map();
   const alertTests=new Map(),testTimers=new Set();
   const pushReady = Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY);
   if (pushReady) webpush.setVapidDetails(env.VAPID_SUBJECT || 'mailto:admin@example.com', env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
@@ -298,6 +298,7 @@ export function createApp(options = {}) {
           if (b.type !== 'auth' || !ticket || ticket.expires < Date.now()) return ws.close(4401, 'Ticket expired');
           if ((sockets.get(ticket.id)?.size || 0) >= 4) return ws.close(4429, 'Too many tabs');
           ws.user = ticket.id; clearTimeout(deadline);
+          clearTimeout(disconnectTimers.get(ws.user));disconnectTimers.delete(ws.user);
           if (!sockets.has(ws.user)) sockets.set(ws.user, new Set()); sockets.get(ws.user).add(ws);
           ws.send(JSON.stringify({ type: 'ready' }));
           const pending = [...calls.values()].find(c => c.to === ws.user && c.expiresAt > Date.now());
@@ -338,7 +339,9 @@ export function createApp(options = {}) {
       clearTimeout(deadline);
       if (ws.user) { const set = sockets.get(ws.user); set?.delete(ws); if (!set?.size) sockets.delete(ws.user); }
       if (ws.user && !sockets.has(ws.user)) {
+        clearTimeout(disconnectTimers.get(ws.user));
         const timer = setTimeout(() => {
+          disconnectTimers.delete(ws.user);
           if (sockets.has(ws.user)) return;
           for (const [id,c] of calls) if ([c.from,c.to].includes(ws.user)) {
             // A sleeping recipient must be able to return from its push alert.
@@ -346,7 +349,7 @@ export function createApp(options = {}) {
             alerts.stop(id);
             calls.delete(id); emit(c.from, { type:'call-expired', callId:id }); emit(c.to, { type:'call-expired', callId:id });
           }
-        },45000); timer.unref();
+        },options.disconnectGraceMs??180000); timer.unref();disconnectTimers.set(ws.user,timer);
       }
     });
     ws.on('error', () => {});
@@ -361,7 +364,7 @@ export function createApp(options = {}) {
   const heartbeat = setInterval(() => {
     for (const ws of wss.clients) { if (!ws.isAlive) { ws.terminate(); continue; } ws.isAlive = false; ws.ping(); }
   }, 30000); heartbeat.unref();
-  return { server, store, base, close: async () => { alerts.close();testTimers.forEach(clearTimeout);clearInterval(cleanup); clearInterval(heartbeat); for (const ws of wss.clients) ws.terminate(); wss.close(); await new Promise(r => server.close(r)); store.close(); } };
+  return { server, store, base, close: async () => { alerts.close();testTimers.forEach(clearTimeout);disconnectTimers.forEach(clearTimeout);clearInterval(cleanup); clearInterval(heartbeat); for (const ws of wss.clients) ws.terminate(); wss.close(); await new Promise(r => server.close(r));disconnectTimers.forEach(clearTimeout); store.close(); } };
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const app = createApp();

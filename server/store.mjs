@@ -17,6 +17,7 @@ export function createStore(dir) {
     CREATE TABLE IF NOT EXISTS push (owner TEXT NOT NULL REFERENCES users(id), endpoint TEXT PRIMARY KEY, subscription TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS attachments (id TEXT PRIMARY KEY, message_id TEXT UNIQUE NOT NULL, sender TEXT NOT NULL REFERENCES users(id), recipient TEXT NOT NULL REFERENCES users(id), expires INTEGER NOT NULL, size INTEGER NOT NULL, envelope TEXT NOT NULL, committed INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE IF NOT EXISTS attachment_chunks (attachment TEXT NOT NULL REFERENCES attachments(id) ON DELETE CASCADE, part INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY(attachment,part));
+    CREATE TABLE IF NOT EXISTS attachment_parts (attachment TEXT NOT NULL REFERENCES attachments(id) ON DELETE CASCADE, chunk INTEGER NOT NULL, part INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY(attachment,chunk,part));
     CREATE INDEX IF NOT EXISTS attachments_expiry ON attachments(expires);
     CREATE TABLE IF NOT EXISTS message_deletions (id TEXT PRIMARY KEY, sender TEXT NOT NULL REFERENCES users(id), recipient TEXT NOT NULL REFERENCES users(id), expires INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS message_deletions_expiry ON message_deletions(expires);

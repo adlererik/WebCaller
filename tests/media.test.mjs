@@ -8,8 +8,8 @@ test('unknown networks save data and confirmed Wi-Fi allows higher quality',()=>
 test('ICE restart uses a changed relay before offering and ignores a cancelled refresh',async()=>{
   const changes=[],signals=[];
   const phone=new Phone({signal:async(kind,payload)=>signals.push({kind,payload}),update:()=>{},local:{},remote:{},preference:()=> 'saver'});
-  let configuration={iceServers:[{urls:'turn:old.invalid'}],iceTransportPolicy:'relay'};
-  phone.pc={getConfiguration:()=>configuration,setConfiguration:next=>{configuration=next;changes.push(next);},
+  let configuration={iceServers:[{urls:'turn:old.invalid'}],iceTransportPolicy:'relay',certificates:[{synthetic:true}]};
+  phone.pc={getConfiguration:()=>configuration,setConfiguration:next=>{assert.deepEqual(next.certificates,configuration.certificates);configuration=next;changes.push(next);},
     createOffer:async options=>{assert.equal(configuration.iceServers[0].urls,'turn:new.invalid');assert.equal(options.iceRestart,true);return {type:'offer',sdp:'v=0\r\n'};},
     setLocalDescription:async()=>{},close:()=>{}};
   phone.caller=true;phone.refreshIce=async()=>({iceServers:[{urls:'turn:new.invalid',username:'fresh',credential:'temporary'}]});
@@ -53,4 +53,30 @@ test('failed camera switching restores the front camera without ending audio',as
   assert.equal(c.video.deviceId.exact,'front');return {getVideoTracks:()=>[f.make('user','front')]};
  }}}});
  await assert.rejects(f.phone.switchCamera(),/No rear camera/);assert.equal(f.phone.facingMode,'user');assert.equal(f.phone.stream.getVideoTracks()[0].getSettings().deviceId,'front');assert.ok(!f.events.includes('audio-stopped'));assert.equal(f.phone.videoWanted,true);
+});
+test('finite link budgets lower video before voice and reduce capture load for CPU congestion',async()=>{
+ const {mediaBudget}=await import('../public/media.js');
+ const weak=mediaBudget('wifi',{bandwidth:60000});assert.equal(weak.video,0);assert.equal(weak.audio,27000);
+ const constrained=mediaBudget('wifi',{bandwidth:200000});assert.ok(constrained.video<=50000);assert.equal(constrained.fps,6);
+ const cell=mediaBudget('saver',{bandwidth:2000000});assert.equal(cell.video,120000);assert.equal(cell.audio,20000);
+ const cpu=mediaBudget('wifi',{},true);assert.equal(cpu.fps,12);assert.equal(cpu.width,640);assert.equal(cpu.video,350000);
+});
+test('either endpoint using cellular or an unknown network limits both directions',()=>{
+ const phone=new Phone({signal:async()=>{},update:()=>{},local:{},remote:{},preference:()=> 'wifi'});
+ assert.equal(phone.mode(),'saver');phone.remoteMode='wifi';assert.equal(phone.mode(),'wifi');phone.remoteMode='saver';assert.equal(phone.mode(),'saver');phone.close();
+});
+test('restart requests are queued during negotiation and failed signaling rolls back an unsent offer',async()=>{
+ const phone=new Phone({signal:async()=>{throw new Error('Offline');},update:()=>{},local:{},remote:{},preference:()=> 'auto'});
+ let queued=0,rolledBack=false;phone.queueRestart=()=>queued++;phone.caller=true;
+ phone.pc={signalingState:'have-remote-offer',connectionState:'disconnected',close(){}};
+ await phone.restart();assert.equal(queued,1);assert.equal(phone.restartPending,true);
+ phone.pc.signalingState='stable';phone.pc.getConfiguration=()=>({});phone.pc.createOffer=async()=>({type:'offer',sdp:'v=0\r\n'});phone.pc.setLocalDescription=async d=>{phone.pc.signalingState=d.type==='rollback'?'stable':'have-local-offer';if(d.type==='rollback')rolledBack=true;};
+ await phone.restart();assert.equal(rolledBack,true);assert.equal(phone.restartPending,true);assert.ok(queued>=2);phone.close();
+});
+test('unchanged relay settings are retained; incompatible browsers recover with valid existing credentials',async()=>{
+ const phone=new Phone({signal:async()=>{},update:()=>{},local:{},remote:{},preference:()=> 'auto'});let sets=0;
+ phone.pc={getConfiguration:()=>({bundlePolicy:'max-bundle'}),setConfiguration:()=>{sets++;throw Object.assign(new Error('Unsupported configuration update'),{name:'InvalidModificationError'});},close(){}};
+ phone.iceServers=[{urls:'turn:old.test'}];phone.iceExpiresAt=Date.now()+3600000;phone.refreshIce=async()=>({iceServers:phone.iceServers});await phone.refreshConfiguration();assert.equal(sets,0);
+ phone.refreshIce=async()=>({iceServers:[{urls:'turn:new.test'}]});await phone.refreshConfiguration();assert.equal(sets,1);assert.equal(phone.relayRefreshDeferred,true);
+ phone.iceExpiresAt=Date.now()-1;await assert.rejects(phone.refreshConfiguration(),/Unsupported/);phone.close();
 });

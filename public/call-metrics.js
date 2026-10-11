@@ -14,12 +14,20 @@ export function measureCall(report,previous=new Map()){
     source='RTP payload';
   }
   const samples=new Map();let upload=0,download=0,measured=false;
-  for(const s of counters){
+  const rates={audio:{send:0,receive:0,measured:false},video:{send:0,receive:0,measured:false}};
+  const observe=s=>{
     const key=s.type+':'+s.id,now={sent:s.bytesSent||0,received:s.bytesReceived||0,time:s.timestamp},prior=previous.get(key),elapsed=now.time-prior?.time;
-    if(prior&&Number.isFinite(elapsed)&&elapsed>0&&now.sent>=prior.sent&&now.received>=prior.received){
-      upload+=(now.sent-prior.sent)*8/elapsed;download+=(now.received-prior.received)*8/elapsed;measured=true;
-    }
     samples.set(key,now);
+    return prior&&Number.isFinite(elapsed)&&elapsed>0&&now.sent>=prior.sent&&now.received>=prior.received?
+      {send:(now.sent-prior.sent)*8/elapsed,receive:(now.received-prior.received)*8/elapsed}:null;
+  };
+  const deltas=new Map();
+  for(const s of new Set([...counters,...streams]))deltas.set(s,observe(s));
+  for(const s of counters){const delta=deltas.get(s);if(delta){upload+=delta.send;download+=delta.receive;measured=true;}}
+  for(const s of streams){
+    const mime=report.get(s.codecId)?.mimeType||'',kind=s.kind||s.mediaType||mime.split('/')[0],delta=deltas.get(s);
+    if(!rates[kind]||auxiliary.test(codecName(mime))||!delta)continue;
+    rates[kind].send+=delta.send;rates[kind].receive+=delta.receive;rates[kind].measured=true;
   }
   const codecs={audio:{send:new Set(),receive:new Set()},video:{send:new Set(),receive:new Set()}};
   for(const s of streams){
@@ -31,7 +39,8 @@ export function measureCall(report,previous=new Map()){
     const send=[...codecs[kind].send].sort().join('/'),receive=[...codecs[kind].receive].sort().join('/');
     return send&&receive&&send!==receive?`↑${send} ↓${receive}`:send||receive;
   };
-  return {samples,kbps:measured?upload+download:null,uploadKbps:measured?upload:null,downloadKbps:measured?download:null,rateSource:source,audioCodec:label('audio'),videoCodec:label('video')};
+  const split={};for(const [kind,rate]of Object.entries(rates)){split[kind+'Kbps']=rate.measured?rate.send+rate.receive:null;split[kind+'UploadKbps']=rate.measured?rate.send:null;split[kind+'DownloadKbps']=rate.measured?rate.receive:null;}
+  return {...split,samples,kbps:measured?upload+download:null,uploadKbps:measured?upload:null,downloadKbps:measured?download:null,rateSource:source,audioCodec:label('audio'),videoCodec:label('video')};
 }
 export function formatRate(kbps){
   if(!Number.isFinite(kbps)||kbps<0)return '';

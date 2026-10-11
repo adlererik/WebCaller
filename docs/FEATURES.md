@@ -5,13 +5,13 @@
 | Profile | Mono Opus payload ceiling | Video ceiling | Capture target |
 |---|---:|---:|---|
 | Wi-Fi | 48 kb/s | 900 kb/s | 960×540, 24 fps |
-| Data saver / unknown network | 20 kb/s | 120 kb/s | 320×180, 12 fps |
+| Cellular / unknown network / remote saver | 20 kb/s | 120 kb/s | 320×180, 12 fps |
 | Weak | 12 kb/s | 45 kb/s | 240×135, 6 fps |
 | Critical | 8 kb/s | Paused | Audio continues if transport permits |
 
 These are sender payload caps, not total network usage or guaranteed output rates. RTP, SRTP, IP, TURN, retransmissions and FEC add overhead. Browsers can control/ignore unsupported parameters. No arbitrary minimum bandwidth guarantees intelligible speech.
 
-Stats are sampled every three seconds. Packet loss in received audio and sender RTCP reports, round-trip delay, jitter and available outgoing bitrate can trigger a downgrade. Recovery from weak/critical requires five healthy samples to avoid oscillation. Severe congestion disables outgoing video encodings while leaving audio enabled. Camera-off stops its track; camera-on requests it again.
+Stats are sampled every second. Packet loss in received audio and sender RTCP reports, round-trip delay, jitter and available outgoing bitrate can trigger a downgrade. Recovery from weak/critical requires five healthy samples to avoid oscillation. Severe congestion disables outgoing video encodings while leaving audio enabled. Camera-off stops its track; camera-on requests it again. Link capacity can reduce the caps further; video gets the remaining budget after reserving voice and overhead. Persistent CPU pressure reduces capture load.
 
 Connection preference is always Automatic. Saved manual settings no longer affect calls. Timer and quality remain at the top; central details fade once video connects. Switching front/back cameras releases only the video device before requesting the other lens, replaces its sender track without SDP renegotiation, and attempts restoration if a lens is unavailable.
 
@@ -72,3 +72,11 @@ System appearance uses prefers-color-scheme CSS and matching browser theme-color
 Sent and verified received media is retained as complete encrypted chunk sets in IndexedDB, scoped to the local identity and message/attachment ID and bound to the original size/expiry. No attachment keys, filenames, MIME types or plaintext are added to that cache. Reopening uses authenticated local decryption instead of another media transfer. Deletion transactions remove bytes and store an expiring ID-only tombstone so a late transfer cannot restore them. Corrupt cached chunks are discarded and fetched again once. Expiry is enforced on every read/write and purge runs on startup, return to foreground and every minute while the page executes; closed browsers cannot physically purge until they run again. Forget this device clears the cache. Storage failure leaves messaging/calling usable and reports that reopening may download again. Browser storage remains subject to quota/eviction.
 
 Measured media rate and negotiated audio/video codec pills share the compact call-quality style at the top of both call layouts. The rate samples cumulative bytes using statistics timestamps, counts bundled transports once, falls back to RTP counters, and skips invalid/reset baselines. Codec IDs are resolved from active stream reports; repair codecs are not presented as the picture codec. [WebRTC statistics specification](https://www.w3.org/TR/webrtc-stats/).
+
+## Call sharing, codec efficiency and handovers (v0.8.0)
+
+See [Call networking](CALL_NETWORK.md) for the full policy, budgets, browser limitations and testing steps. During calls the + sheet, location, local camera snapshots and voice notes remain available. Camera/microphone capture clones live call tracks when available and stops only its own clones; call video lens selection remains on the call screen. Encrypted file transfers use paced 4 KB HTTP pieces during a call and wait on poor audio or reconnecting media. Outside calls the existing 64 KB encrypted chunk format and fast transfers are retained. Partial ciphertext assembles into original chunks on the server; uncommitted parts inherit quota, access controls and original expiry, with foreign-key cleanup. Network errors retry idempotent transfers, at most eight attempts per request.
+
+Both phones exchange signed encrypted codec efficiency summaries and network modes. Only variants reported smooth and efficient for both encoding and decoding on both phones receive the strongest preference: AV1, H.265, VP9, H.264, VP8. Unsupported/unknown efficiency leaves conservative compatible fallbacks; all repair codec capabilities remain available. Power-efficient does not prove hardware acceleration. Video adapts bitrate, frame rate and resolution without changing codecs on every speed fluctuation; a proven efficient alternative can be negotiated after sustained CPU limits.
+
+The header shows separate Voice/Video codec and combined send-plus-receive payload rates. Per-media rates use primary RTP counters, including retransmitted primary payload where reported, avoiding separate RTX double counting; bundled transport totals remain available in diagnostics. They exclude network headers, TURN overhead and chat/file traffic. A rate starts only after two valid statistics samples.

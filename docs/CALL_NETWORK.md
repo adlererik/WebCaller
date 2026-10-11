@@ -1,0 +1,54 @@
+# Calling on changing and weak networks
+
+## Sharing during a call
+
+Tap the call's back arrow to open chat, then use + for Gallery, File or Location. The call stays connected. Return to call brings the picture back. Camera snapshots can reuse your live call camera; switch its lens from the call screen. Voice notes reuse your local microphone, not the other person's call audio. Cancelling these captures stops the cloned tracks only.
+
+During a call, encrypted transfers use 4 KB pieces. Good confirmed Wi-Fi allows up to 128 kbps of file payload; cellular/unknown links allow up to 32 kbps. Missing bandwidth estimates halve those limits. Actual limits are also bounded by estimated spare capacity. Poor audio, low capacity, video-paused profiles or media reconnection pause file requests. They resume as conditions improve or the call ends. Files are additional user-requested data, outside the video budget. HTTP/TLS headers add overhead. A whole 64 KB request already started before a call may finish before pacing takes effect.
+
+Every request is authenticated and ciphertext is unchanged from earlier releases. The server assembles complete encrypted chunks from bounded pieces. Partial pieces cannot be edited, read before completion, or stored beyond the original attachment lifetime. Interrupted requests retry idempotently, at most eight attempts; deletion/expiry/authentication failures stop. Closing or backgrounding the page still cancels transfers to clear private drafts and plaintext from memory. It is not a persistent background upload service.
+
+## Automatic video codec selection
+
+The browser must expose a codec through its WebRTC RTP capabilities first. WebCaller then probes `MediaCapabilities.encodingInfo` and `decodingInfo` using `type: webrtc`, at the normal Wi-Fi target of 960×540/24 fps. The codec MIME type and format parameters, including H.264 profile, remain specific to each variant. Probes have a short timeout and do not require hardware model detection.
+
+Both endpoints exchange signed encrypted efficiency summaries. Variants reported supported, smooth and power-efficient for both encoding and decoding at both ends receive priority in this order: AV1, H.265, VP9, H.264, VP8. H.264/VP8 are conservative fallbacks when efficiency information is absent or inconclusive. Other exposed variants remain negotiable for compatibility. Original capability objects and RTX/RED/FEC options are preserved. Audio remains Opus when available.
+
+**Power-efficient is a browser estimate, not proof of full hardware acceleration.** An AV1 decoder alone does not establish an efficient AV1 encoder. Some browsers underreport support, and some codecs/hardware are not exposed to WebRTC at all. WebCaller cannot force access to them. Codec selection favors confirmed efficiency without device-model guesswork. See the [Media Capabilities specification](https://www.w3.org/TR/media-capabilities/) and [WebRTC specification](https://www.w3.org/TR/webrtc/).
+
+Bitrate, resolution and frame rate adapt with the same codec. Repeated codec changes on each fluctuation would add negotiation risk. Sustained CPU limits lower capture load; after ten limited samples, a mutually confirmed efficient alternative may be negotiated. The browser handles keyframes, retransmission feedback, pacing, congestion control and negotiated video repair mechanisms. These are not switches that can all be forced by JavaScript.
+
+## Data and voice priority
+
+| Network/profile | Voice cap per direction | Video cap per direction | Capture ceiling |
+|---|---:|---:|---|
+| Both ends confirmed Wi-Fi/Ethernet | 48 kbps | 900 kbps | 960×540, 24 fps |
+| Either end cellular, data saver or unknown | 20 kbps | 120 kbps | 320×180, 12 fps |
+| Weak | 12 kbps | 45 kbps | 240×135, 6 fps |
+| Critical | 8 kbps, further capacity limited | Paused | Voice first |
+
+The healthy cellular combined ceiling is about **2.1 MB per minute** of bidirectional codec payload: two directions × (120 + 20) kbps. Network headers, transport/relay overhead, repair and file transfers add data; silence and static pictures often use less. This is a conservative budget controlled by this app, not a claim to reproduce a proprietary Signal/WhatsApp algorithm or exact billable usage. Browser controls may differ.
+
+Actual estimated outgoing capacity can lower these caps further. The app reserves voice and overhead before assigning remaining capacity to video. Poor received audio, remote audio loss, jitter, delay and CPU congestion drive adaptation. Statistics are sampled each second; weak/critical recovery waits for five healthy samples. Very poor links pause picture transmission and file sharing before sacrificing voice. Voice uses mono Opus with requested FEC, DTX, AEC, noise suppression and gain control; concealment, jitter buffering and full duplex are handled by the browser.
+
+Browsers may hide whether a phone uses Wi-Fi or cellular. Unknown networks use the conservative cellular budget. The app cannot infer an unmetered connection from a high download speed. No codec can maintain a call through zero usable bandwidth, a complete outage or an OS terminating the browser.
+
+## Wi-Fi to cellular and back
+
+Connection-change/online events, failed/disconnected media and reconnected signaling trigger recovery. The same call ID and microphone remain in use. Only the original caller creates restart offers, avoiding simultaneous-offer conflicts. Requests made while negotiation is busy are queued; unanswered offers and signaling failures are retried. An unsent local offer is rolled back. ICE candidates are matched to their generation and fresh TURN settings are requested before gathering again.
+
+Both endpoints report their network mode, so one on Wi-Fi cannot force the other to receive the larger Wi-Fi budget. If an embedded browser refuses an ordinary ICE settings update, still-valid old relay credentials are retained for recovery. Normal supported browsers replace the relay settings and long calls refresh hourly. The app does not falsely report that a rejected refresh succeeded. Credentials close to expiry cannot be relied on indefinitely.
+
+The client and server allow up to three minutes of recovery before ending a disconnected active call. Reconnected authenticated sockets cancel stale disconnect timers. The original ringing/expiry rules still apply to unanswered calls. Switching radios can briefly interrupt sound while the OS acquires a usable path. JavaScript cannot guarantee a gap-free handover on every phone/network.
+
+## What the numbers mean
+
+Voice and Video pills show the actual negotiated codecs from active WebRTC stream reports and separate **send plus receive** payload rates in kbps/Mbps. Their tooltip gives each direction. These are measured byte deltas, not the maximum bitrate setting or link speed. Separate primary RTP counters avoid counting RTX payload twice. Diagnostics also retain bundled transport totals. Network headers, TURN overhead and file/chat requests are not included; use router/device counters to measure billed traffic. See the [WebRTC statistics specification](https://www.w3.org/TR/webrtc-stats/).
+
+## Test your phones
+
+1. Start voice, turn camera on/off and send an image/file while talking in both directions.
+2. Walk outside Wi-Fi coverage while cellular data is enabled, then return to Wi-Fi. Confirm the existing timer continues and neither phone needs to dial again. A short sound interruption is possible.
+3. Check the codec/rate display. Where network type is exposed, either cellular endpoint limits both video directions.
+4. Test a controlled weak/lossy connection. Picture and file transfers should reduce/pause before voice; improve the link and confirm recovery.
+5. Repeat Android/iPhone, headset/Bluetooth/speaker, front/back lens, direct and TURN-only paths. Actual hardware acceleration and power consumption require measurements on those physical devices.

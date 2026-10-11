@@ -1,3 +1,4 @@
+import {TRANSFER_PART_SIZE,transferPacer} from './transfer-policy.js';
 import { newIdentity, fingerprint, safetyNumber, seal, open, vault } from './crypto.js';
 import { Phone, testRelay } from './media.js';
 import {formatRate} from './call-metrics.js';
@@ -58,7 +59,7 @@ async function api(path,method='GET',data,signal){
   const headers={};if(device?.token)headers.Authorization=`Bearer ${device.token}`;if(data)headers['Content-Type']='application/json';
   const timeout=AbortSignal.timeout(20000);
   const r=await fetch(`${base}/api${path}`,{method,headers,body:data?JSON.stringify(data):undefined,cache:'no-store',signal:signal?AbortSignal.any([timeout,signal]):timeout});
-  const b=await r.json();if(!r.ok)throw new Error(b.error||'Request failed');return b;
+  const b=await r.json();if(!r.ok)throw Object.assign(new Error(b.error||'Request failed'),{status:r.status});return b;
 }
 const alerts=callSetup({api,config:()=>config,device:()=>device,save:()=>vault('put',device),toast});
 function connected(ready){wsReady=ready;$('connection').textContent=ready?'Ready for conversations':'Reconnecting…';$('connection').classList.toggle('online',ready);}
@@ -136,7 +137,7 @@ function updateComposer(){
   const input=$('message-input');input.style.height='auto';input.style.height=Math.max(42,Math.min(132,input.scrollHeight))+'px';input.style.overflowY=input.scrollHeight>132?'auto':'hidden';
 }
 function pumpMedia(){
-  if(!device||!selected||call||transfer||document.visibilityState!=='visible')return;
+  if(!device||!selected||transfer||document.visibilityState!=='visible')return;
   const bounds=$('messages').getBoundingClientRect();
   if(bounds.height<=0)return;
   const m=[...messages.values()].find(m=>{
@@ -165,16 +166,47 @@ async function acceptMessage(envelope,hydrating=false){
   if(selected?.id===peer.id)renderMessages();renderContacts();
 }
 function beginTransfer(label,automatic=false){
-  if(call){if(!automatic)toast('Send or open files after the call to keep your audio clear.');return null;}
   if(transfer){if(!automatic)toast('Wait for the current file transfer to finish.');return null;}
   const state={controller:new AbortController(),label};transfer=state;$('attach').disabled=true;$('attachment-progress').classList.remove('hidden');$('attachment-progress').textContent=label;return state;
 }
 function transferProgress(state,index,total){if(transfer===state)$('attachment-progress').textContent=`${state.label} · ${Math.round(index/total*100)}%`;}
-function endTransfer(state){if(transfer===state){transfer=null;$('attach').disabled=false;$('attachment-progress').classList.add('hidden');queueMicrotask(pumpMedia);}}
-function stopTransferForCall(){if(transfer){transfer.controller.abort();toast('File transfer stopped to keep your call clear. Try again after the call.');}}
+function endTransfer(state){clearTimeout(state.expiryTimer);if(transfer===state){transfer=null;$('attach').disabled=false;$('attachment-progress').classList.add('hidden');queueMicrotask(pumpMedia);}}
+const paceTransfer=transferPacer(()=>phone?{state:phone.pc?.connectionState,profile:phone.profile,mode:phone.mode(),stats:phone.stats}:call?{state:'connecting'}:null,waiting=>{
+  if(transfer&&waiting)$('attachment-progress').textContent=transfer.label+' · Waiting for connection · voice first';
+});
+function transferExpiry(state,expires){state.expiryTimer=setTimeout(()=>state.controller.abort(new DOMException('This file has expired.','AbortError')),Math.max(1,expires-Date.now()));}
+async function retryTransfer(state,request){
+  for(let attempt=0;;attempt++){
+    state.controller.signal.throwIfAborted();
+    try{return await request();}catch(error){
+      if(state.controller.signal.aborted||attempt>=7||error.status&&!([408,429,500,502,503,504].includes(error.status)))throw error;
+      if(transfer===state)$('attachment-progress').textContent=state.label+' · Reconnecting…';
+      await new Promise((resolve,reject)=>{
+        const signal=state.controller.signal,done=()=>{clearTimeout(timer);signal.removeEventListener('abort',abort);},abort=()=>{done();reject(signal.reason);};
+        const timer=setTimeout(()=>{done();resolve();},Math.min(16000,1000*2**attempt));signal.addEventListener('abort',abort,{once:true});
+      });
+    }
+  }
+}
 async function chunkRequest(path,method,state,data){
-  const res=await fetch(`${base}/api${path}`,{method,headers:{Authorization:`Bearer ${device.token}`,...(data?{'Content-Type':'application/octet-stream'}:{})},body:data,cache:'no-store',signal:AbortSignal.any([state.controller.signal,AbortSignal.timeout(120000)])});
-  if(!res.ok){const error=await res.json();throw new Error(error.error||'File transfer failed');}return res;
+  return retryTransfer(state,async()=>{
+    const size=data?.byteLength||TRANSFER_PART_SIZE;await paceTransfer(size,state.controller.signal);
+    const res=await fetch(`${base}/api${path}`,{method,priority:'low',headers:{Authorization:`Bearer ${device.token}`,...(data?{'Content-Type':'application/octet-stream'}:{})},body:data,cache:'no-store',signal:AbortSignal.any([state.controller.signal,AbortSignal.timeout(30000)])});
+    if(!res.ok){const body=await res.json().catch(()=>({}));throw Object.assign(new Error(body.error||'File transfer failed'),{status:res.status});}
+    // Finish receiving the body before starting another burst.
+    return method==='GET'?new Uint8Array(await res.arrayBuffer()):await res.json();
+  });
+}
+async function transferChunk(a,index,state,cipher){
+  const path=`/attachments/${a.id}/chunks/${index}`,method=cipher?'PUT':'GET';
+  if(!call)return chunkRequest(path,method,state,cipher);
+  const length=Math.min(CHUNK_SIZE,a.size-index*CHUNK_SIZE)+16,result=cipher?null:new Uint8Array(length),bytes=cipher?new Uint8Array(cipher):null;
+  for(let offset=0;offset<length;offset+=TRANSFER_PART_SIZE){
+    const part=Math.floor(offset/TRANSFER_PART_SIZE),data=bytes?.subarray(offset,offset+TRANSFER_PART_SIZE);
+    const received=await chunkRequest(path+'/parts/'+part,method,state,data);
+    if(result){if(received.length!==Math.min(TRANSFER_PART_SIZE,length-offset))throw new Error('Incomplete encrypted file part');result.set(received,offset);}
+  }
+  return result?.buffer;
 }
 async function sendFile(file,text='',sharedLocation,recipient=selected){
   if(sharedLocation&&!validLocation(sharedLocation))return toast('Invalid location.');
@@ -183,15 +215,15 @@ async function sendFile(file,text='',sharedLocation,recipient=selected){
   const state=beginTransfer(`Sending ${a.name} to ${peer.name}`);if(!state)return;
   let committed=false;const chunks=[],owner=device.user.id;
   try{
-    const envelope=await seal(device.identity,device.user.id,peer,{kind:'attachment',attachment:a,text,...(sharedLocation?{location:sharedLocation}:{})},timerFor(peer.id)),key=await attachmentKey(a);state.messageId=envelope.id;
-    await api('/attachments','POST',{id:a.id,size:a.size,envelope},state.controller.signal);
+    const envelope=await seal(device.identity,device.user.id,peer,{kind:'attachment',attachment:a,text,...(sharedLocation?{location:sharedLocation}:{})},timerFor(peer.id)),key=await attachmentKey(a);state.messageId=envelope.id;transferExpiry(state,envelope.expiresAt);
+    await retryTransfer(state,()=>api('/attachments','POST',{id:a.id,size:a.size,envelope},state.controller.signal));
     for(let index=0;index<a.chunks;index++){
       state.controller.signal.throwIfAborted();
       const bytes=new Uint8Array(await file.slice(index*CHUNK_SIZE,(index+1)*CHUNK_SIZE).arrayBuffer());
       const cipher=await encryptChunk(key,a,index,envelope.expiresAt,bytes);bytes.fill(0);
-      await chunkRequest(`/attachments/${a.id}/chunks/${index}`,'PUT',state,cipher);chunks.push(cipher);transferProgress(state,index+1,a.chunks);
+      await transferChunk(a,index,state,cipher);chunks.push(cipher);transferProgress(state,index+1,a.chunks);
     }
-    await api('/messages','POST',envelope,state.controller.signal);committed=true;
+    await retryTransfer(state,()=>api('/messages','POST',envelope,state.controller.signal));committed=true;
     if(!state.controller.signal.aborted)await keepMedia(owner,envelope,a,chunks);
     await acceptMessage(envelope);const m=messages.get(envelope.id);
     if(m&&document.visibilityState==='visible'&&!state.controller.signal.aborted){m.blob=file;m.blobURL=URL.createObjectURL(file);if(selected?.id===peer.id)renderMessages();}
@@ -207,7 +239,7 @@ async function loadAttachment(m,automatic=false){
   if(!m.attachment||m.expiresAt<=Date.now()||messages.get(m.id)!==m)return;
   if(m.blobURL)return automatic?undefined:mediaKind(m.attachment.type)==='file'?saveAttachment(m):openViewer(m);
   const a=m.attachment,state=beginTransfer(`Loading ${a.name}`,automatic);if(!state)return;
-  state.messageId=m.id;m.loading=true;m.loadError=null;renderMessages();const pieces=[];
+  state.messageId=m.id;transferExpiry(state,m.expiresAt);m.loading=true;m.loadError=null;renderMessages();const pieces=[];
   try{
     const key=await attachmentKey(a),owner=device.user.id;
     let chunks=await cachedMedia.get(owner,m,a),local=!!chunks;
@@ -217,7 +249,7 @@ async function loadAttachment(m,automatic=false){
       try{
         for(let index=0;index<a.chunks;index++){
           state.controller.signal.throwIfAborted();
-          const cipher=local?chunks[index]:await (await chunkRequest(`/attachments/${a.id}/chunks/${index}`,'GET',state)).arrayBuffer();
+          const cipher=local?chunks[index]:await transferChunk(a,index,state);
           pieces.push(new Uint8Array(await decryptChunk(key,a,index,m.expiresAt,cipher)));downloaded.push(cipher);transferProgress(state,index+1,a.chunks);
         }
         state.controller.signal.throwIfAborted();
@@ -254,14 +286,14 @@ function clearDraft(){
 }
 function previewFile(file){
   if(!file||!selected)return;
-  if(call||transfer)return toast('Finish the call or file transfer first.');
+  if(transfer)return toast('Finish the current file transfer first.');
   try{newAttachment(file);}catch(e){return toast(e.message);}
   clearDraft();draft={file,peer:selected.id,url:URL.createObjectURL(file)};const kind=mediaKind(file.type);
   if(kind!=='file'){const media=document.createElement(kind==='image'?'img':kind==='video'?'video':'audio');media.src=draft.url;if(kind==='image')media.alt=file.name;else{media.controls=true;media.playsInline=true;}$('draft-preview').append(media);}
   $('draft-name').textContent=`${file.name} · ${fileSize(file.size)}`;$('draft-dialog').showModal();
 }
-const locationShare=locationSharing({peer:()=>selected,busy:()=>!!(call||transfer),config:()=>config,onSend:(file,p)=>void sendFile(file,locationText(p),p)});
-const captures=chatCapture({busy:()=>!!(call||transfer),onFile:previewFile,toast});
+const locationShare=locationSharing({peer:()=>selected,busy:()=>!!transfer,config:()=>config,onSend:(file,p)=>void sendFile(file,locationText(p),p)});
+const captures=chatCapture({busy:()=>!!transfer,callStream:()=>phone?.stream,onFile:previewFile,toast});
 $('close-media').onclick=closeViewer;$('media-viewer').addEventListener('close',closeViewer);$('save-media').onclick=()=>viewerMessage&&saveAttachment(viewerMessage);
 $('draft-dialog').addEventListener('close',clearDraft);
 $('draft-form').onsubmit=e=>{e.preventDefault();if(!draft||draft.peer!==selected?.id)return;const file=draft.file,text=$('draft-caption').value.trim();clearDraft();$('draft-dialog').close();void sendFile(file,text);};
@@ -370,7 +402,7 @@ function ring(){
 }
 function stopRing(){for(const oscillator of ringNodes){try{oscillator.stop();}catch{}}ringNodes.clear();clearInterval(ringTimer);ringTimer=null;$('hear-ringing').classList.add('hidden');navigator.vibrate?.(0);}
 function showCall(incoming=false){
-  actions.reset();alerts.close();locationShare.close();$('attachment-dialog').close();$('audio-output-dialog').close();$('return-call').classList.add('hidden');$('settings-dialog').close();stopTransferForCall();stopTyping();captures.close();closeViewer();$('draft-dialog').close();$('emoji-dialog').close();
+  actions.reset();alerts.close();locationShare.close();$('attachment-dialog').close();$('audio-output-dialog').close();$('return-call').classList.add('hidden');$('settings-dialog').close();stopTyping();captures.close();closeViewer();$('draft-dialog').close();$('emoji-dialog').close();
   $('call-screen').classList.remove('hidden');$('call-screen').classList.remove('has-video');$('call-name').textContent=call.peer.name;$('call-avatar').textContent=initials(call.peer.name);
   $('call-screen').classList.remove('call-connected','has-remote-video');$('call-peer-top').textContent=call.peer.name;$('switch-camera').classList.add('hidden');
   $('call-status').textContent=incoming?(call.video?'Incoming video call':'Incoming voice call'):'Calling…';$('call-duration').textContent='';for(const id of ['call-rate','call-audio-codec','call-video-codec']){$(id).textContent='';$(id).classList.add('hidden');} $('call-quality').textContent='Voice first';$('call-warning').textContent='';
@@ -382,7 +414,7 @@ async function createPhone(video,caller){
   if(call?.id!==id)throw new Error('Call cancelled');
   if(!ice.turn)$('call-warning').textContent='Relay is not configured. Calls across some networks may fail.';
   phone=new Phone({signal,update:updateCall,remote:$('remote-media'),local:$('local-media'),ended:endCall,preference});phone.refreshIce=()=>api('/ice');
-  await phone.prepare(ice,video,caller);
+  phone.remoteCodecs=call.codecs;phone.remoteMode=call.mode;await phone.prepare(ice,video,caller);
   if(call?.id!==id)return;void output.start(video).catch(()=>{});
   for(const c of pendingCandidates.get(call.id)||[])await phone.candidate(c);pendingCandidates.delete(call.id);
 }
@@ -400,19 +432,23 @@ function updateCall(update){
   if(update.cameraFacing){$('local-media').dataset.facing=update.cameraFacing;$('switch-camera').ariaLabel=update.cameraFacing==='environment'?'Switch to front camera':'Switch to back camera';}
   if(update.label)$('call-quality').textContent=update.label;
   if(update.videoPaused)$('call-quality').textContent='Connection weak · camera paused';
-  if(update.warning)$('call-warning').textContent=update.warning;
+  if(update.warning!==undefined)$('call-warning').textContent=update.warning;
   if(update.needsPlayback)$('play-audio').classList.remove('hidden');
   if(update.stats){const s=update.stats;call.stats=s;renderCallMetrics();$('call-stats').textContent='Adapts to your connection';if($('settings-dialog').open)$('diagnostic-result').textContent=`${formatRate(s.kbps)||'Measuring…'} media · ${Math.round(s.rtt*1000)} ms · ${Math.round(s.loss*100)}% loss${s.relay?' · relayed':' · direct'}`;}
 }
 function renderCallMetrics(){
-  const s=call?.stats||{},rate=formatRate(s.kbps),video=!!(phone?.videoWanted||call?.remoteVideo);
-  for(const [id,text]of [['call-rate',rate],['call-audio-codec',s.audioCodec?'Voice · '+s.audioCodec:''],['call-video-codec',video&&s.videoCodec?'Video · '+s.videoCodec:'']]){$(id).textContent=text;$(id).classList.toggle('hidden',!text);}
-  $('call-rate').title=`Send ${formatRate(s.uploadKbps)||'—'} · Receive ${formatRate(s.downloadKbps)||'—'} · ${s.rateSource||'Media'}; excludes network headers, TURN overhead and messaging traffic`;
+  const s=call?.stats||{},video=!!(phone?.videoWanted||call?.remoteVideo);
+  $('call-rate').classList.add('hidden');
+  for(const [kind,visible]of [['audio',true],['video',video]]){
+    const node=$('call-'+kind+'-codec'),codec=s[kind+'Codec'],rate=formatRate(s[kind+'Kbps']);
+    node.textContent=codec?`${kind==='audio'?'Voice':'Video'} · ${codec}${rate?' · '+rate:''}`:'';node.classList.toggle('hidden',!visible||!codec);
+    node.title=`Send ${formatRate(s[kind+'UploadKbps'])||'—'} · Receive ${formatRate(s[kind+'DownloadKbps'])||'—'}; codec payload including retransmissions, excludes network headers, TURN overhead and file transfers`;
+  }
 }
 async function startCall(video=false){
   unlockSound();if(!selected||call)return;if(!wsReady)return toast('Wait for the connection to return.');
   const id=crypto.randomUUID();call={id,peer:selected,video,caller:true};showCall();
-  try{await createPhone(video,true);if(call?.id!==id)return;const description=await phone.description('offer');await signal('offer',{description,video});call.timeout=setTimeout(()=>{if(call?.id===id&&!call.started)void endCall('No answer. Try again later.');},90000);}
+  try{await createPhone(video,true);if(call?.id!==id)return;const description=await phone.description('offer');await signal('offer',{description,video,codecs:phone.codecSummary,mode:phone.localMode()});call.timeout=setTimeout(()=>{if(call?.id===id&&!call.started)void endCall('No answer. Try again later.');},90000);}
   catch(e){if(call?.id===id)finishCall(e.name==='NotAllowedError'?'Allow microphone access to make calls.':e.message);}
 }
 async function receiveSignal(b){
@@ -424,7 +460,7 @@ async function receiveSignal(b){
   seenSignals.add(b.envelope.id);if(seenSignals.size>2000)seenSignals.delete(seenSignals.values().next().value);
   if(b.kind==='offer'){
     if(call?.id===b.callId)return;if(call)return;
-    call={id:b.callId,peer,video:!!payload.video,caller:false,offer:payload.description};showCall(true);ring();
+    call={id:b.callId,peer,video:!!payload.video,caller:false,offer:payload.description,codecs:payload.codecs,mode:payload.mode};showCall(true);ring();
     call.timeout=setTimeout(()=>{if(call?.id===b.callId&&!call.started)finishCall('Missed call');},Math.max(1,b.envelope.expiresAt-Date.now()));return;
   }
   if(b.kind==='ice'){
@@ -432,18 +468,18 @@ async function receiveSignal(b){
     else{if(pendingCandidates.size>10)pendingCandidates.clear();const list=pendingCandidates.get(b.callId)||[];if(list.length<80)list.push(payload.candidate);pendingCandidates.set(b.callId,list);}return;
   }
   if(call?.id!==b.callId)return;
-  if(b.kind==='answer'){clearTimeout(call.timeout);await phone?.receive(payload.description);await phone?.replayCandidates();}
+  if(b.kind==='answer'){clearTimeout(call.timeout);phone?.setRemoteMode(payload.mode);const changed=phone?.setVideoPreferences(payload.codecs);await phone?.receive(payload.description);await phone?.replayCandidates();if(changed)void phone?.restart();}
   else if(b.kind==='hangup')finishCall(payload.reason||'Call ended');
   else if(b.kind==='restart'){
     if(payload.request)await phone?.restart();
-    else if(payload.description){await phone?.receive(payload.description);if(payload.description.type==='offer')await signal('restart',{description:await phone.description('answer')});await phone?.replayCandidates();}
+    else if(payload.description){phone?.setRemoteMode(payload.mode);phone?.setVideoPreferences(payload.codecs);await phone?.receive(payload.description);if(payload.description.type==='offer')await signal('restart',{description:await phone.description('answer'),codecs:phone.codecSummary,mode:phone.localMode()});await phone?.replayCandidates();}
   }
-  else if(b.kind==='video'){call.remoteVideo=!!payload.enabled;videoLayout();}
+  else if(b.kind==='video'){phone?.setRemoteMode(payload.mode);call.remoteVideo=!!payload.enabled;videoLayout();}
 }
 async function answerCall(){
   unlockSound();if(!call||!call.offer)return;stopRing();$('incoming-actions').classList.add('hidden');$('active-actions').classList.remove('hidden');$('call-status').textContent='Connecting…';
   const id=call.id;
-  try{await createPhone(call.video,false);if(call?.id!==id)return;await phone.receive(call.offer);await signal('answer',{description:await phone.description('answer')});navigator.serviceWorker?.controller?.postMessage({type:'call-ended',callId:id});await phone.replayCandidates();clearTimeout(call.timeout);}
+  try{await createPhone(call.video,false);if(call?.id!==id)return;await phone.receive(call.offer);await signal('answer',{description:await phone.description('answer'),codecs:phone.codecSummary,mode:phone.localMode()});navigator.serviceWorker?.controller?.postMessage({type:'call-ended',callId:id});await phone.replayCandidates();clearTimeout(call.timeout);}
   catch(e){if(call?.id===id)await endCall(e.name==='NotAllowedError'?'Allow microphone access to answer.':e.message);}
 }
 function finishCall(reason='Call ended'){
@@ -527,7 +563,7 @@ function renderRecent(){
   for(const m of recent){const b=document.createElement('button');b.type='button';b.className='recent-item';b.ariaLabel=`Send ${m.attachment.name} again`;const media=document.createElement(mediaKind(m.attachment.type)==='video'?'video':'img');media.src=m.blobURL;media.alt=m.attachment.name;media.muted=true;media.playsInline=true;media.preload='metadata';b.append(media);if(media.tagName==='VIDEO'){const play=document.createElement('span');play.className='recent-video';play.textContent='▶';b.append(play);}b.onclick=()=>{if(m.expiresAt<=Date.now()||!m.blob||messages.get(m.id)!==m)return;const file=new File([m.blob],m.attachment.name,{type:m.attachment.type});$('attachment-dialog').close();previewFile(file);};strip.append(b);}
 }
 $('attachment-dialog').addEventListener('close',()=>{$('recent-media').replaceChildren();});
-$('attach').onclick=()=>{if(selected&&!call){renderRecent();$('attachment-dialog').showModal();}else if(call)toast('Send files after the call to keep your audio clear.');};
+$('attach').onclick=()=>{if(selected){renderRecent();$('attachment-dialog').showModal();}};
 $('choose-location').onclick=()=>{$('attachment-dialog').close();locationShare.show();};
 for(const [button,input]of [['choose-photo','photo-input'],['choose-file','file-input']]){
   $(button).onclick=()=>{$('attachment-dialog').close();$(input).click();};
@@ -595,8 +631,8 @@ $('confirm-forget').onclick=async()=>{
 function clearMessage(m){m.reactions=null;m.receipt=null;m.versions=null;m.pinVersion=null;m.replyTo=null;if(viewerMessage?.id===m.id)closeViewer();if(m.blobURL)URL.revokeObjectURL(m.blobURL);m.blobURL=null;m.blob=null;m.location=null;m.text='';m.attachment=null;}
 setInterval(()=>{for(const [id,updates]of pendingMessageEvents)if(!updates.some(e=>e.envelope.expiresAt>Date.now()))pendingMessageEvents.delete(id);queueReceipts();for(const [id,expiry]of deletedMessages)if(expiry<=Date.now())deletedMessages.delete(id);for(const [id,expiry]of typingSeen)if(expiry<=Date.now())typingSeen.delete(id);renderTyping();let changed=false;for(const [id,m]of messages)if(m.expiresAt<=Date.now()){void cachedMedia.remove(device?.user.id,id,m.expiresAt);clearMessage(m);messages.delete(id);receiptWanted.delete(id);visibleSince.delete(id);changed=true;}if(changed&&selected)renderMessages();},1000);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&device){void cachedMedia.purge();unlockSound();if(!wsReady)connect();else sync().catch(()=>{});if(call?.started)navigator.wakeLock?.request('screen').then(lock=>wakeLock=lock).catch(()=>{});}if(document.visibilityState==='hidden'){actions.reset();clearTimeout(receiptTimer);receiptTimer=null;receiptWanted.clear();visibleSince.clear();pendingMessageEvents.clear();locationShare.close();$('attachment-dialog').close();stopTyping();typingPeers.clear();renderTyping();captures.close();closeViewer();clearDraft();$('draft-dialog').close();$('emoji-dialog').close();transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();$('messages').replaceChildren();$('pinned-message').textContent='';$('pinned-message').onclick=null;$('pinned-message').classList.add('hidden');}});
-window.addEventListener('online',()=>{if(device&&!wsReady)connect();});
-navigator.connection?.addEventListener('change',()=>{if(phone)void phone.sample();});
+window.addEventListener('online',()=>{if(device&&!wsReady)connect();if(phone)void phone.networkChanged();});
+navigator.connection?.addEventListener('change',()=>{if(phone)void phone.networkChanged();});
 window.addEventListener('pagehide',()=>{actions.reset();clearTimeout(receiptTimer);receiptWanted.clear();visibleSince.clear();pendingMessageEvents.clear();locationShare.close();output.stop();stopTyping();captures.close();closeViewer();clearDraft();phone?.close();transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();});
 unlockSound();
 void boot();

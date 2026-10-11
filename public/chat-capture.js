@@ -1,5 +1,5 @@
 // Capture is separate from calling: these streams never replace a call's microphone.
-export function chatCapture({busy,onFile,toast}){
+export function chatCapture({busy,callStream=()=>null,onFile,toast}){
   const $=id=>document.getElementById(id);
   let stream,recorder,parts=[],size=0,started=0,ticker,keep=false,facing='environment',generation=0;
   const release=()=>{stream?.getTracks().forEach(t=>t.stop());stream=null;$('camera-preview').srcObject=null;clearInterval(ticker);};
@@ -8,14 +8,16 @@ export function chatCapture({busy,onFile,toast}){
   async function captureCamera(exact=false){
     const current=++generation;release();$('camera-shutter').disabled=true;$('camera-flip').disabled=true;
     try{
-      const next=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:exact?{exact:facing}:{ideal:facing},width:{ideal:1600},height:{ideal:1200}}});
+      const track=callStream()?.getVideoTracks()[0],shared=track?.readyState==='live';
+      const next=shared?new MediaStream([track.clone()]):await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:exact?{exact:facing}:{ideal:facing},width:{ideal:1600},height:{ideal:1200}}});
+      $('camera-flip').dataset.shared=String(!!shared);
       if(current!==generation||!$('camera-dialog').open||busy()){next.getTracks().forEach(t=>t.stop());return;}
-      stream=next;facing=next.getVideoTracks()[0].getSettings().facingMode||facing;$('camera-preview').srcObject=next;$('camera-preview').dataset.facing=facing;
-      await $('camera-preview').play();$('camera-status').textContent='';$('camera-flip').ariaLabel=facing==='user'?'Switch to back camera':'Switch to front camera';
-    }finally{if(current===generation){$('camera-shutter').disabled=!stream;$('camera-flip').disabled=false;}}
+      stream=next;next.getTracks().forEach(t=>t.enabled=true);facing=(shared?track:next.getVideoTracks()[0]).getSettings().facingMode||facing;$('camera-preview').srcObject=next;$('camera-preview').dataset.facing=facing;
+      await $('camera-preview').play();$('camera-status').textContent=shared?'Using your call camera. Switch cameras from the call screen.':'';$('camera-flip').ariaLabel=facing==='user'?'Switch to back camera':'Switch to front camera';
+    }finally{if(current===generation){$('camera-shutter').disabled=!stream;$('camera-flip').disabled=$('camera-flip').dataset.shared==='true';}}
   }
   async function camera(){
-    if(busy())return toast('Finish the call or file transfer first.');
+    if(busy())return toast('Finish the current file transfer first.');
     if(!navigator.mediaDevices?.getUserMedia)return $('camera-input').click();
     close();$('camera-dialog').showModal();facing='environment';$('camera-status').textContent='Opening camera…';
     try{await captureCamera();}catch(e){$('camera-status').textContent=e.name==='NotAllowedError'?'Allow camera access, or use Phone camera below.':e.message;}
@@ -35,13 +37,14 @@ export function chatCapture({busy,onFile,toast}){
   $('camera-library').onclick=()=>{close();$('camera-input').click();};
   function stopRecording(){if(recorder?.state==='recording'){keep=true;$('recording-stop').disabled=true;recorder.stop();}}
   async function voice(){
-    if(busy())return toast('Finish the call or file transfer first.');
+    if(busy())return toast('Finish the current file transfer first.');
     if(!window.MediaRecorder||!navigator.mediaDevices?.getUserMedia)return toast('Voice recording is unavailable in this browser.');
     close();const current=++generation;$('voice-dialog').showModal();$('recording-status').textContent='Opening microphone…';$('recording-stop').disabled=true;
     try{
-      const next=await navigator.mediaDevices.getUserMedia({video:false,audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+      const track=callStream()?.getAudioTracks()[0];
+      const next=track?.readyState==='live'?new MediaStream([track.clone()]):await navigator.mediaDevices.getUserMedia({video:false,audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
       if(current!==generation||!$('voice-dialog').open||busy()){next.getTracks().forEach(t=>t.stop());return;}
-      stream=next;
+      stream=next;next.getAudioTracks().forEach(t=>t.enabled=true);
       const mime=['audio/mp4','audio/webm;codecs=opus','audio/ogg;codecs=opus','audio/webm'].find(t=>MediaRecorder.isTypeSupported(t));
       const active=new MediaRecorder(next,{...(mime?{mimeType:mime}:{}),audioBitsPerSecond:32000});recorder=active;parts=[];size=0;keep=false;started=Date.now();
       active.ondataavailable=e=>{if(current!==generation||!e.data.size)return;parts.push(e.data);size+=e.data.size;if(size>9*1024*1024)stopRecording();};

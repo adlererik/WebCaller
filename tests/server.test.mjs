@@ -286,3 +286,39 @@ test('encrypted message updates enforce roles, stay isolated, replace old state 
  const last=await seal(a.identity,a.user.id,peer,{kind:'text',text:'Device removal'},60);await f.request('/messages',{method:'POST',token:a.token,body:last});await post(a,[await update(a,'pin',{pinned:true},last.id)]);
  assert.equal((await f.request('/device',{method:'DELETE',token:bob.token})).status,200);assert.equal(f.app.store.get('SELECT COUNT(*) AS n FROM message_events').n,0);
 });
+test('paced encrypted parts authenticate, reject replacement, assemble legacy chunks, and delete all partial state',async t=>{
+ const f=await fixture();t.after(()=>f.app.close());const {bob}=await f.pair(),{bob:other}=await f.pair();
+ const file=new File([new Uint8Array(CHUNK_SIZE).fill(31)],'encrypted.dat'),a=newAttachment(file),key=await attachmentKey(a);
+ const envelope=await seal(f.alice.identity,f.alice.user.id,{id:bob.user.id,keys:bob.identity.keys},{kind:'attachment',attachment:a},60);
+ await f.request('/attachments',{method:'POST',body:{id:a.id,size:a.size,envelope},token:f.alice.token});
+ const cipher=new Uint8Array(await encryptChunk(key,a,0,envelope.expiresAt,await file.arrayBuffer())),path='/attachments/'+a.id+'/chunks/0';
+ const raw=(suffix,method='PUT',token=f.alice.token,body)=>fetch(f.url+'/calls/api'+path+suffix,{method,headers:{Origin:f.origin,Authorization:'Bearer '+token},body});
+ assert.equal((await raw('/parts/0','PUT',other.token,cipher.slice(0,4096))).status,404);
+ assert.equal((await raw('/parts/0','PUT',bob.token,cipher.slice(0,4096))).status,403);
+ assert.equal((await raw('/parts/17','PUT',f.alice.token,new Uint8Array(1))).status,404);
+ assert.equal((await raw('/parts/0','PUT',f.alice.token,new Uint8Array(4097))).status,413);
+ assert.equal((await raw('/parts/0','PUT',f.alice.token,cipher.slice(0,4096))).status,201);
+ assert.equal((await raw('/parts/0','PUT',f.alice.token,cipher.slice(0,4096))).status,200);
+ assert.equal((await raw('/parts/0','PUT',f.alice.token,new Uint8Array(4096))).status,409);
+ assert.equal((await f.request('/messages',{method:'POST',body:envelope,token:f.alice.token})).status,409);
+ for(let i=1;i<Math.ceil(cipher.length/4096);i++)assert.equal((await raw('/parts/'+i,'PUT',f.alice.token,cipher.slice(i*4096,(i+1)*4096))).status,201);
+ assert.equal(f.app.store.get('SELECT COUNT(*) AS n FROM attachment_parts').n,0);
+ assert.equal((await raw('/parts/16','PUT',f.alice.token,cipher.slice(65536))).status,200);
+ assert.equal((await f.request('/messages',{method:'POST',body:envelope,token:f.alice.token})).status,201);
+ assert.equal((await raw('/parts/0','PUT',f.alice.token,cipher.slice(0,4096))).status,403);
+ const pieces=[];for(let i=0;i<17;i++){const r=await raw('/parts/'+i,'GET',bob.token);assert.equal(r.status,200);assert.equal(r.headers.get('cache-control'),'no-store');pieces.push(new Uint8Array(await r.arrayBuffer()));}
+ assert.deepEqual(Buffer.concat(pieces),Buffer.from(cipher));assert.deepEqual(new Uint8Array(await decryptChunk(key,a,0,envelope.expiresAt,Buffer.concat(pieces))),new Uint8Array(CHUNK_SIZE).fill(31));
+ await f.request('/messages/'+envelope.id,{method:'DELETE',token:bob.token});assert.equal((await raw('/parts/0','GET',bob.token)).status,404);
+ const e2=await seal(f.alice.identity,f.alice.user.id,{id:bob.user.id,keys:bob.identity.keys},{kind:'attachment',attachment:a},60);await f.request('/attachments',{method:'POST',body:{id:a.id,size:a.size,envelope:e2},token:f.alice.token});await raw('/parts/0','PUT',f.alice.token,cipher.slice(0,4096));assert.equal(f.app.store.get('SELECT COUNT(*) AS n FROM attachment_parts').n,1);
+ f.app.store.purge(e2.expiresAt+1);assert.equal(f.app.store.get('SELECT COUNT(*) AS n FROM attachment_parts').n,0);
+});
+test('answered call survives a signaling reconnection and stale disconnect timers are cancelled',{timeout:10000},async t=>{
+ const f=await fixture(false,{}, {disconnectGraceMs:250});t.after(()=>f.app.close());const {bob}=await f.pair();
+ const a=await f.socket(f.alice),b=await f.socket(bob),id=randomUUID(),signal=async(socket,user,peer,kind)=>{
+  const envelope=await seal(user.identity,user.user.id,{id:peer.user.id,keys:peer.identity.keys},{kind,callId:id,description:{type:kind,sdp:'fixture'}},90);socket.send(JSON.stringify({type:'signal',kind,callId:id,envelope}));
+ };
+ let pending=once(b,'message');await signal(a,f.alice,bob,'offer');await pending;pending=once(a,'message');await signal(b,bob,f.alice,'answer');await pending;
+ const expired=[];a.on('message',raw=>{if(JSON.parse(raw).type==='call-expired')expired.push(true);});b.close();await once(b,'close');
+ await new Promise(r=>setTimeout(r,50));const restored=await f.socket(bob);await new Promise(r=>setTimeout(r,280));assert.equal(expired.length,0);
+ pending=once(a,'message');await signal(restored,bob,f.alice,'restart');assert.equal(JSON.parse((await pending)[0]).kind,'restart');a.close();restored.close();
+});

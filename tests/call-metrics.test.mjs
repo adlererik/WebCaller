@@ -35,3 +35,8 @@ test('browsers without transport counters fall back to RTP bytes without repair 
 test('rate units use kbps below 1000 and Mbps above, with no invented first sample',()=>{
  assert.equal(formatRate(null),'');assert.equal(formatRate(undefined),'');assert.equal(formatRate(0),'0.0 kbps');assert.equal(formatRate(52.6),'53 kbps');assert.equal(formatRate(1280),'1.28 Mbps');
 });
+test('voice and video measure separate RTP payload rates even on one bundled transport',()=>{
+ const first=measureCall(stats()),next=stats(2000,4000,7000);next.get('voice').bytesSent+=1500;next.get('video').bytesReceived+=3500;next.get('repair').bytesSent+=4000;
+ const result=measureCall(next,first.samples);assert.equal(result.audioKbps,12);assert.equal(result.videoKbps,28);assert.equal(result.audioUploadKbps,12);assert.equal(result.videoDownloadKbps,28);assert.equal(result.kbps,64);
+ const reset=stats(3000);reset.get('voice').bytesSent=0;assert.equal(measureCall(reset,result.samples).audioKbps,null);
+});

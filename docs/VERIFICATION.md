@@ -1,4 +1,4 @@
-# Verification of v0.5.0
+# Verification of v0.5.1
 
 ## Scope
 
@@ -37,3 +37,7 @@ This update does not change the WebRTC codec/network stack or container/deployme
 Disposable browser fixtures verify the three sheet actions, recent loaded chat photos, preview-before-send using synthetic coordinates/tiles, automatic map cards on both phones, full-screen map viewing, actual two-browser WebRTC using synthetic audio/cameras, speaker-button state against simulated sink selection, audio-to-video upgrade, hidden speaker in video, front/back switching and call minimize/return. A 390 px iframe verifies all five 54 px touch controls fit within the call tray and the sheet fits the screen. A separate browser request confirms real OpenStreetMap tiles can load using a public synthetic test point; it does not query anyone’s real location. Browser fixtures do not certify physical-phone speaker routing, GPS accuracy or audible quality. No real microphones/cameras, user media, contacts or push recipients are used.
 
 No container, TURN, codec or deployment dependencies changed. Existing deployment validation remains relevant; this UI update does not repeat unrelated container/network tests or certify physical Android/iPhone audio routing.
+
+## v0.5.1 routing cancellation
+
+41 Node tests pass. The additional regression ends a video call while output enumeration is pending, starts a voice call, resolves the old result, and verifies the new call keeps its voice route. Pending output-picker results are also checked against the original call generation before routing. This is a source-level concurrency fix; the previously documented UI and media checks remain applicable.

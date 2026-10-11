@@ -36,3 +36,10 @@ test('ending a call cancels a pending output change and resets the media element
   let finish,route='';const element={async setSinkId(id){if(id==='speaker')await new Promise(r=>finish=r);route=id;}};
   const output=new AudioOutput(element,{enumerateDevices:async()=>[]});await output.start();const change=output.route('speaker');await new Promise(r=>setImmediate(r));output.stop();finish();assert.equal(await change,false);await output.tail;assert.equal(route,'');assert.equal(output.isSpeaker,false);
 });
+
+test('late output enumeration from an ended call cannot change the next call’s route',async()=>{
+ let resolveOld,requests=0;const routes=[],devices={enumerateDevices:()=>++requests===1?new Promise(r=>resolveOld=r):Promise.resolve([{kind:'audiooutput',deviceId:'speaker',label:'Speaker'}])};
+ const output=new AudioOutput({setSinkId:async id=>routes.push(id)},devices);
+ const old=output.start(true);output.stop();await output.start(false);resolveOld([{kind:'audiooutput',deviceId:'speaker',label:'Speaker'}]);await old;
+ assert.equal(output.video,false);assert.equal(output.isSpeaker,false);assert.ok(!routes.includes('speaker'));output.stop();
+});

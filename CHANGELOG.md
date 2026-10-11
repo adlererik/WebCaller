@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.5.1 — Cancel stale audio-output work
+
+- Prevent a late speaker enumeration or output-picker result from an ended call affecting the next call.
+- Add a regression check for this cross-call race; 41 automated tests pass.
+
 ## v0.5.0 — Media sheet, location and voice-call layout
 
 - Replace the + menu with a bottom sheet: recent visible chat media and Gallery, File and Location. The phone’s camera roll remains behind its native picker.

@@ -4,6 +4,8 @@ export class AudioOutput {
   get supported(){return typeof this.element.setSinkId==='function'&&typeof this.devices?.enumerateDevices==='function';}
   get speaker(){return this.items.find(d=>d.deviceId!=='default'&&/speaker|högtalare|haut.parleur|altavoz/i.test(d.label));}
   get receiver(){return this.items.find(d=>d.deviceId!=='default'&&/earpiece|receiver|handset|hörlur|écouteur/i.test(d.label))||this.items.find(d=>d.deviceId!=='default'&&/headset|headphone|bluetooth|airpods/i.test(d.label));}
+  get canToggle(){return this.supported&&!!this.speaker&&!!this.receiver;}
+  get knownRoute(){return this.isSpeaker?'speaker':this.receiver&&this.sink===this.receiver.deviceId?'receiver':'system';}
   get isSpeaker(){return !!this.speaker&&this.sink===this.speaker.deviceId;}
   async start(video=false){this.video=false;this.initializing=true;this.desiredVideo=video;this.active=true;const epoch=++this.epoch;this.sink=this.element.sinkId||'';this.voiceSink='';this.devices?.addEventListener?.('devicechange',this.deviceChanged);await this.refresh();if(!this.active||this.epoch!==epoch)return;await this.route(this.receiver?.deviceId||'');if(!this.active||this.epoch!==epoch)return;this.initializing=false;await this.setVideo(this.desiredVideo);}
   async refresh(){if(!this.active||!this.supported)return;const epoch=this.epoch,items=(await this.devices.enumerateDevices()).filter(d=>d.kind==='audiooutput');if(!this.active||epoch!==this.epoch)return;this.items=items;if(this.sink&&!items.some(d=>d.deviceId===this.sink))await this.route('');this.changed(this);}

@@ -261,11 +261,17 @@ export function createApp(options = {}) {
           if(b.heard!==true)fail(400,'Only confirm after hearing the alert');
           store.run('UPDATE push SET confirmed=? WHERE owner=? AND endpoint=?',Date.now(),u.id,test.endpoint);alertTests.delete(b.testId);return json(200,{ok:true});
         }
+        const declineCall=route.match(/^\/calls\/([a-f0-9-]{36})\/decline$/);
+        if(declineCall&&req.method==='POST'){
+          const c=calls.get(declineCall[1]);if(!c)return json(200,{ok:true});
+          if(c.to!==u.id)fail(404,'Call unavailable');if(c.answered)fail(409,'Call already answered');
+          alerts.stop(c.id);calls.delete(c.id);const event={type:'call-ended',callId:c.id,reason:'Call declined'};emit(c.from,event);emit(c.to,event);return json(200,{ok:true});
+        }
         const callStatus=route.match(/^\/calls\/([a-f0-9-]{36})$/);
         if(callStatus&&req.method==='GET'){
           const c=calls.get(callStatus[1]);
           if(c&&![c.to,c.from].includes(u.id))fail(404,'Call unavailable');
-          return json(200,{state:!c||c.expiresAt<=Date.now()?'ended':c.answered?'answered':'ringing',expiresAt:c?.expiresAt||null});
+          return json(200,{state:!c||c.expiresAt<=Date.now()?'ended':c.answered?'answered':'ringing',canAnswer:!!c&&c.to===u.id&&!c.answered&&c.expiresAt>Date.now(),expiresAt:c?.expiresAt||null});
         }
         if (route === '/push' && req.method === 'DELETE') { store.run('DELETE FROM push WHERE owner=?', u.id); return json(200, { ok: true }); }
         if (route === '/device' && req.method === 'DELETE') {
@@ -335,7 +341,7 @@ export function createApp(options = {}) {
           if(!related(ws.user,b.envelope.to))fail(403,'Unknown contact');
           rate(`typing:${ws.user}`,40);emit(b.envelope.to,{type:'typing',envelope:b.envelope});return;
         }
-        if (b.type !== 'signal' || !['offer','answer','ice','hangup','restart','video','receipt'].includes(b.kind)) fail(400, 'Invalid signal');
+        if (b.type !== 'signal' || !['offer','answer','ice','hangup','restart','video','sharing','receipt'].includes(b.kind)) fail(400, 'Invalid signal');
         validateEnvelope(b.envelope, ws.user, true);
         if (!related(ws.user, b.envelope.to)) fail(403, 'Unknown contact');
         if (!/^[a-f0-9-]{36}$/.test(b.callId)) fail(400, 'Invalid call');

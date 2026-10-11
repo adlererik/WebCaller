@@ -8,7 +8,7 @@ function clock(){let now=1000,next=0;const tasks=new Map();return {now:()=>now,s
 test('call alerts are bounded, have short deadlines, and cancellation clears reminders',async()=>{
   const time=clock(),deliveries=[];let waiting=true;
   const alerts=createCallAlerts({...time,send:(...args)=>deliveries.push(args),isWaiting:()=>waiting});
-  alerts.start({id:'call',expiresAt:91000});await flush();assert.equal(deliveries.length,1);assert.equal(deliveries[0][2],9000);
+  alerts.start({id:'call',expiresAt:91000});await flush();assert.equal(deliveries.length,1);assert.equal(deliveries[0][2],21000);
   await time.advance(15000);assert.equal(deliveries[1][1],1);
   await time.advance(20000);assert.equal(deliveries[2][1],2);
   await time.advance(40000);assert.equal(deliveries.length,3);

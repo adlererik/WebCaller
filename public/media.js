@@ -20,7 +20,7 @@ export function chooseProfile(mode, stats, previous='saver', stable=0) {
   if (['critical','weak'].includes(previous) && stable < 5) return previous;
   return mode;
 }
-export function mediaBudget(profile,stats={},cpuLimited=false){
+export function mediaBudget(profile,stats={},cpuLimited=false,sharing=false){
   const p={...PROFILES[profile]};
   if(Number.isFinite(stats.bandwidth)){
     // Reserve voice and headroom before assigning anything to video.
@@ -28,8 +28,10 @@ export function mediaBudget(profile,stats={},cpuLimited=false){
     p.video=Math.min(p.video,Math.max(0,Math.floor(stats.bandwidth*.65-p.audio*1.5-8000)));
     if(p.video<25000)p.video=0;
   }
+  if(sharing){p.video=Math.min(p.video,profile==='wifi'?180000:45000);p.width=Math.min(p.width,320);p.height=Math.min(p.height,180);p.fps=Math.min(p.fps,10);}
   if(p.video>0&&p.video<90000){p.width=240;p.height=135;p.fps=6;}
   else if(p.video>0&&p.video<300000){p.width=320;p.height=180;p.fps=12;}
+  if(sharing)p.fps=Math.min(p.fps,10);
   if(cpuLimited){p.fps=Math.min(p.fps,12);p.width=Math.min(p.width,640);p.height=Math.min(p.height,360);p.video=Math.min(p.video,350000);}
   return p;
 }
@@ -50,7 +52,7 @@ export class Phone {
     Object.assign(this,{signal,update,remote,local,ended,preference});
     this.pc=null; this.stream=null; this.candidates=[]; this.localCandidates=[]; this.videoWanted=false; this.muted=false;
     this.profile=networkMode(preference()); this.stable=0; this.last=null; this.restartAt=0; this.applying=false;
-    this.facingMode='user';this.cameraBusy=false;this.trafficSamples=new Map();this.stats=null;this.codecSummary=[];this.avoidCodecs=new Set();this.restartPending=false;this.restartBusy=false;this.cpuSamples=0;
+    this.facingMode='user';this.cameraBusy=false;this.trafficSamples=new Map();this.stats=null;this.codecSummary=[];this.avoidCodecs=new Set();this.restartPending=false;this.restartBusy=false;this.cpuSamples=0;this.sharing=false;this.remoteSharingUntil=0;
   }
   localMode(){return networkMode(this.preference());}
   mode(){return this.localMode()==='wifi'&&this.remoteMode==='wifi'?'wifi':'saver';}
@@ -58,6 +60,9 @@ export class Phone {
     if(!['wifi','saver'].includes(mode))return;
     this.remoteMode=mode;this.profile=chooseProfile(this.mode(),this.stats||{},this.profile,this.stable);void this.applyProfile();
   }
+  setSharing(active){this.sharing=active===true;return this.applyProfile();}
+  setRemoteSharing(active){this.remoteSharingUntil=active===true?Date.now()+30000:0;return this.applyProfile();}
+  get isSharing(){return this.sharing||this.remoteSharingUntil>Date.now();}
   async prepare(ice, video=false, caller=false) {
     this.caller=caller; this.videoWanted=video;this.profile=this.mode();
     this.videoCodecs=globalThis.RTCRtpSender?.getCapabilities?.('video')?.codecs||[];
@@ -266,19 +271,19 @@ export class Phone {
       try{await sender.setParameters(params);}catch{this.update({warning:'This browser controls its own media bitrate'});}
     }
   }
-  async applyProfile(){
-    this.profileDirty=true;if(this.applying||!this.pc)return;this.applying=true;
-    try{
+  applyProfile(){
+    this.profileDirty=true;if(!this.pc)return Promise.resolve();if(this.profileTask)return this.profileTask;this.applying=true;
+    this.profileTask=Promise.resolve().then(async()=>{
       while(this.profileDirty&&this.pc){
-        this.profileDirty=false;const pc=this.pc,p=mediaBudget(this.profile,this.stats||{},this.cpuSamples>=3);this.budget=p;
-        const signature=JSON.stringify([p.audio,Math.floor(p.video/1000)*1000,p.width,p.height,p.fps,p.label,this.videoWanted,this.stream?.getVideoTracks()[0]?.id,this.audioSender?.getParameters?.().encodings?.length,this.videoSender?.getParameters?.().encodings?.length]);
+        this.profileDirty=false;const pc=this.pc,p=mediaBudget(this.profile,this.stats||{},this.cpuSamples>=3,this.isSharing);this.budget=p;
+        const signature=JSON.stringify([p.audio,Math.floor(p.video/1000)*1000,p.width,p.height,p.fps,p.label,this.isSharing,this.videoWanted,this.stream?.getVideoTracks()[0]?.id,this.audioSender?.getParameters?.().encodings?.length,this.videoSender?.getParameters?.().encodings?.length]);
         if(signature===this.appliedBudget)continue;this.appliedBudget=signature;
         await this.setSender(this.audioSender,false,p);if(this.pc!==pc)return;await this.setSender(this.videoSender,true,p);
         const track=this.stream?.getVideoTracks()[0];
         if(track){track.enabled=p.video>0;await track.applyConstraints({width:{ideal:p.width,max:p.width},height:{ideal:p.height,max:p.height},frameRate:{max:p.fps}}).catch(()=>{});}
-        this.update({profile:this.profile,label:p.label,videoPaused:this.videoWanted&&p.video===0,localVideo:this.videoWanted,cameraFacing:this.facingMode,audioSettings:this.stream?.getAudioTracks()[0]?.getSettings()});
+        this.update({profile:this.profile,label:p.label,sharing:this.isSharing,videoPaused:this.videoWanted&&p.video===0,localVideo:this.videoWanted,cameraFacing:this.facingMode,audioSettings:this.stream?.getAudioTracks()[0]?.getSettings()});
       }
-    }finally{this.applying=false;}
+    }).finally(()=>{this.applying=false;this.profileTask=null;});return this.profileTask;
   }
   async sample(){
     if(!this.pc||this.sampling)return;this.sampling=true;

@@ -2,13 +2,13 @@ export const TRANSFER_PART_SIZE=4096;
 export function transferBudget(call){
   if(!call)return Infinity;
   const {state,profile,mode,stats}=call;
-  if(state!=='connected'||!stats||['weak','critical'].includes(profile)||stats.loss>.03||stats.rtt>.5||stats.jitter>.04)return 0;
-  const cap=mode==='wifi'?128000:32000;
+  if(state!=='connected'||call.preparing||!stats||['weak','critical'].includes(profile)||stats.loss>.03||stats.rtt>.5||stats.jitter>.04)return 0;
+  const cap=mode==='wifi'?768000:64000;
   const capacity=stats.bandwidth;
-  if(!Number.isFinite(capacity))return cap/2;
+  if(!Number.isFinite(capacity))return mode==='wifi'?96000:16000;
   // Leave capacity for voice, video retransmissions and network overhead.
-  const media=(stats.uploadKbps||0)*1000;
-  return Math.max(0,Math.min(cap,capacity*.1,(capacity*.8-media)/2));
+  const media=Math.max(stats.uploadKbps||0,stats.downloadKbps||0)*1000;
+  return Math.max(0,Math.min(cap,capacity*.35,capacity*.7-media-16000));
 }
 export function transferPacer(snapshot,onWaiting=()=>{}){
   let next=0;

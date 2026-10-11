@@ -103,10 +103,18 @@ There is no extra app prompt for precise location. The browser/OS still requires
 
 ## Call information at the top
 
-The small pills beside connection quality show separate **Voice** and **Video** send/receive payload rates in **kbps** or **Mbps**, alongside their actual codecs. These update about every second; the rate appears after two samples. They show measured traffic, not the configured bitrate limit. Hovering each pill on a computer shows send and receive separately. Browser media counters exclude network headers, TURN encapsulation and chat traffic, so this is not a mobile-provider billing meter. The codecs are obtained from active WebRTC streams; different send/receive codecs get arrow labels.
+Two small rows near the top show video above voice, with connection quality on the right. They show separate **Voice** and **Video** send/receive payload rates in **kbps** or **Mbps**, alongside their actual codecs. These update about every second; the rate appears after two samples. They show measured traffic, not the configured bitrate limit. Hovering each row on a computer shows send and receive separately. Browser media counters exclude network headers, TURN encapsulation and chat traffic, so this is not a mobile-provider billing meter. The codecs are obtained from active WebRTC streams; different send/receive codecs get arrow labels.
 
 Sent bubbles and the plus/send buttons use Signal-style blue in both system themes. The two green circled received/viewed checks overlap; each retains its timestamp in message Info. **Edit** is available only for your own text/captions. The other person may react, reply or delete for both, but cannot edit what you wrote.
 
 ## Share while talking
 
 Tap the back arrow at the top of the call to return to chat. Your call continues. Use + for Gallery, File or Location, or use the camera/microphone icons. Tap Return to call to see the picture again. On a weak connection, a file may say Waiting for connection · voice first; it resumes automatically when the call improves or ends. Keep the page visible while sharing. Voice and video each show their actual codec and current combined sending/receiving rate at the top of the call. See [Call networking](CALL_NETWORK.md).
+
+## Call alerts and private audio
+
+If your notification shows **Answer**, press it to open and answer that particular call. You may still need to allow the microphone or tap to hear playback. **Decline** dismisses a waiting call without opening the page. If your phone omits the buttons, tap the alert and use **Answer** on the page. In Android notification settings, enable sound and pop-up/banner alerts if offered. A website cannot force a sound when the phone/browser disallows it; run the locked-phone test on each actual device.
+
+Voice calls start with an exposed earpiece/headset where the browser allows it. If the control says **Audio output: controlled by your phone**, this browser does not expose a built-in earpiece/speaker switch. The website cannot manufacture that control; use a connected headset for private audio or the phone’s output picker if available. Video requests an exposed speaker and restores the previous voice route afterward. On unsupported browsers the OS chooses the actual route.
+
+When you send or fetch media during a call, video temporarily becomes smaller to make room while voice stays prioritized. It returns to the appropriate quality after sharing finishes. Very weak connections pause sharing and may pause video; the file resumes when there is spare capacity. Cached media opens without a new network transfer.

@@ -57,12 +57,12 @@ export function callSetup({api,config,device,save,toast}){
   async function confirm(){
     $('alerts-confirm').disabled=true;
     try{await api('/push/test-result','POST',{testId,heard:true});device().alertsConfirmedAt=Date.now();delete device().alertTest;await save();
-      page('You’re ready to talk','Call alerts are set up on this phone. When one arrives, tap it, then press Answer. Keep notification sounds on.');button('Start talking',()=>dialog.close());toast('Call alert sound confirmed.');
+      page('You’re ready to talk','Call alerts are set up on this phone. When one arrives, press Answer if shown, or tap it and press Answer on this page. Keep notification sounds on.');button('Start talking',()=>dialog.close());toast('Call alert sound confirmed.');
     }catch(e){$('alerts-status').textContent=e.message;button('Send another test',test);}finally{$('alerts-confirm').disabled=false;}
   }
   function help(){
     page('Let’s turn the sound on','Your phone controls notification sounds. The website cannot turn them on for you.');
-    $('alerts-help').classList.remove('hidden');$('alerts-help').innerHTML=platform().ios?'<ol><li>Open <strong>Settings → Notifications</strong> on your phone.</li><li>Choose this phone’s Home Screen app. Turn on <strong>Allow Notifications</strong> and <strong>Sounds</strong>.</li><li>Check that Silent mode and Focus are not silencing it. Return here for another test.</li></ol>':'<ol><li>Open your phone’s <strong>Settings → Notifications</strong>.</li><li>Allow notifications and sound for your browser and this website.</li><li>Check Do Not Disturb and notification volume. Return here for another test.</li></ol>';
+    $('alerts-help').classList.remove('hidden');$('alerts-help').innerHTML=platform().ios?'<ol><li>Open <strong>Settings → Notifications</strong> on your phone.</li><li>Choose this phone’s Home Screen app. Turn on <strong>Allow Notifications</strong> and <strong>Sounds</strong>.</li><li>Check that Silent mode and Focus are not silencing it. Return here for another test.</li></ol>':'<ol><li>Open your phone’s <strong>Settings → Notifications</strong>.</li><li>Allow notifications and sound for your browser and this website. Enable pop-up / banner notifications if offered.</li><li>Check Do Not Disturb and notification volume. Return here for another test.</li></ol>';
     button('Try again',show);
   }
   function resume(id){

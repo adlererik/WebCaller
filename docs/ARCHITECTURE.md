@@ -29,7 +29,8 @@ flowchart LR
 | public/video-codecs.js | Bounded WebRTC encode/decode efficiency probes and mutual codec variant preferences |
 | public/transfer-policy.js | Call-health checks, 4 KB piece size and paced voice-first transfers |
 | public/media.js | Phone class, Opus SDP tuning, capture, sender adaptation, candidate queues, ICE restart and relay test |
-| public/sw.js | Call-state checks, generic notifications, foreground-ring coordination and notification taps; no fetch cache |
+| public/call-intents.js | Atomic one-use notification answer decision store, scoped to device/call with a 30-second validity limit |
+| public/sw.js | Call-state checks, generic notifications, foreground-ring coordination, notification actions and taps; no fetch cache |
 | public/call-setup.js | Phone detection, Home Screen guidance, notification permission and heard-alert verification |
 | public/manifest.webmanifest | Stable web app identity/scope, Home Screen display and icons; document URL is the launch fallback |
 | server/call-alerts.mjs | Bounded cancellable reminder scheduler and declarative push payloads |
@@ -71,6 +72,7 @@ flowchart LR
 | POST /push/status | Current subscription’s registration and user-confirmed test state |
 | POST /push/test | Send a delayed test to the authenticated owner’s selected subscription |
 | POST /push/test-result | Confirm a sent, unexpired test after the user reports hearing it |
+| POST /calls/:id/decline | Recipient-only dismissal of waiting calls from notification actions; origin/auth enforced, cannot end answered calls |
 | GET /calls/:id | Participant-only ringing/answered/ended status for stale-alert suppression |
 | DELETE /device | Delete device-related records, close sockets and notify contacts |
 
@@ -79,3 +81,5 @@ flowchart LR
 The optional `archive-proxy.mjs` bypasses an existing Node site's visitor handler for only /calls and upgrades, strips its cookies and forwards to loopback. `link-archive.mjs` recognizes a specific http.createServer wrapper and backs it up before adding hooks; it is not a universal website installer. Use a normal reverse proxy for unrelated frameworks.
 
 Typing uses authenticated WebSocket `{type:"typing", envelope}` events with signed encrypted payloads `{kind:"typing",active:boolean}` and an eight-second client TTL. It does not enter the call map/mailbox or offline replay. Deletion uses authenticated HTTP and metadata notifications; clients reject delayed envelopes for known deleted IDs.
+
+File activity uses signed encrypted `sharing` signals inside an existing participant-bound call. It is not stored in the mailbox or replayed; the receiving lease expires after 30 seconds. Local transfer completion/abort immediately restores the local current video budget. Notification decisions never come from URLs, socket offers or push arrivals; only worker notification-button clicks create them.

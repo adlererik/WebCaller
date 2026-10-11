@@ -61,3 +61,7 @@ test('video requested during output discovery still switches to speaker after di
  await output.setVideo(true);discover([{kind:'audiooutput',deviceId:'receiver',label:'Earpiece'},{kind:'audiooutput',deviceId:'speaker',label:'Built-in speaker'}]);await starting;
  assert.equal(output.video,true);assert.equal(output.sink,'speaker');await output.setVideo(false);assert.equal(output.sink,'receiver');output.stop();
 });
+test('an unexposed system output is not represented as a known earpiece or speaker toggle',async()=>{
+ const f=audioFixture();f.items([{kind:'audiooutput',deviceId:'default',label:'Default'}]);await f.output.start();assert.equal(f.output.knownRoute,'system');assert.equal(f.output.canToggle,false);f.output.stop();
+ const real=audioFixture();await real.output.start();assert.equal(real.output.canToggle,true);assert.equal(real.output.knownRoute,'receiver');await real.output.toggle();assert.equal(real.output.knownRoute,'speaker');real.output.stop();
+});

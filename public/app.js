@@ -1,4 +1,6 @@
 import {TRANSFER_PART_SIZE,transferPacer} from './transfer-policy.js';
+import {callIntents} from './call-intents.js';
+const notificationIntents=callIntents();let pendingAnswer=null;
 import {contactPress} from './contact-press.js';
 import { newIdentity, fingerprint, safetyNumber, seal, open, vault } from './crypto.js';
 import { Phone, testRelay } from './media.js';
@@ -192,8 +194,14 @@ function beginTransfer(label,automatic=false){
   const state={controller:new AbortController(),label};transfer=state;$('attach').disabled=true;$('attachment-progress').classList.remove('hidden');$('attachment-progress').textContent=label;return state;
 }
 function transferProgress(state,index,total){if(transfer===state)$('attachment-progress').textContent=`${state.label} · ${Math.round(index/total*100)}%`;}
-function endTransfer(state){clearTimeout(state.expiryTimer);if(transfer===state){transfer=null;$('attach').disabled=false;$('attachment-progress').classList.add('hidden');queueMicrotask(pumpMedia);}}
-const paceTransfer=transferPacer(()=>phone?{state:phone.pc?.connectionState,profile:phone.profile,mode:phone.mode(),stats:phone.stats}:call?{state:'connecting'}:null,waiting=>{
+function shareCall(state){
+  if(state.callId===call?.id)return state.sharingReady||Promise.resolve();
+  if(!call||!phone)return Promise.resolve();state.callId=call.id;state.preparing=true;
+  clearInterval(state.sharingTimer);const notify=()=>{if(transfer===state&&call?.id===state.callId&&call.started)void signal('sharing',{active:true}).catch(()=>{});};notify();state.sharingTimer=setInterval(notify,10000);
+  state.sharingReady=phone.setSharing(true).finally(()=>{state.preparing=false;});return state.sharingReady;
+}
+function endTransfer(state){clearTimeout(state.expiryTimer);clearInterval(state.sharingTimer);if(state.callId===call?.id){void phone?.setSharing(false);void signal('sharing',{active:false}).catch(()=>{});}if(transfer===state){transfer=null;$('attach').disabled=false;$('attachment-progress').classList.add('hidden');queueMicrotask(pumpMedia);}}
+const paceTransfer=transferPacer(()=>phone?{state:phone.pc?.connectionState,profile:phone.profile,mode:phone.mode(),stats:phone.stats,preparing:transfer?.preparing}:call?{state:'connecting'}:null,waiting=>{
   if(transfer&&waiting)$('attachment-progress').textContent=transfer.label+' · Waiting for connection · voice first';
 });
 function transferExpiry(state,expires){state.expiryTimer=setTimeout(()=>state.controller.abort(new DOMException('This file has expired.','AbortError')),Math.max(1,expires-Date.now()));}
@@ -212,7 +220,7 @@ async function retryTransfer(state,request){
 }
 async function chunkRequest(path,method,state,data){
   return retryTransfer(state,async()=>{
-    const size=data?.byteLength||TRANSFER_PART_SIZE;await paceTransfer(size,state.controller.signal);
+    await shareCall(state);const size=data?.byteLength||TRANSFER_PART_SIZE;await paceTransfer(size,state.controller.signal);
     const res=await fetch(`${base}/api${path}`,{method,priority:'low',headers:{Authorization:`Bearer ${device.token}`,...(data?{'Content-Type':'application/octet-stream'}:{})},body:data,cache:'no-store',signal:AbortSignal.any([state.controller.signal,AbortSignal.timeout(30000)])});
     if(!res.ok){const body=await res.json().catch(()=>({}));throw Object.assign(new Error(body.error||'File transfer failed'),{status:res.status});}
     // Finish receiving the body before starting another burst.
@@ -428,7 +436,7 @@ function showCall(incoming=false){
   $('call-screen').classList.remove('hidden');$('call-screen').classList.remove('has-video');$('call-name').textContent=call.peer.name;$('call-avatar').textContent=initials(call.peer.name);
   $('call-screen').classList.remove('call-connected','has-remote-video');$('call-peer-top').textContent=call.peer.name;$('switch-camera').classList.add('hidden');
   $('call-status').textContent=incoming?(call.video?'Incoming video call':'Incoming voice call'):'Calling…';$('call-duration').textContent='';for(const id of ['call-rate','call-audio-codec','call-video-codec']){$(id).textContent='';$(id).classList.add('hidden');} $('call-quality').textContent='Voice first';$('call-warning').textContent='';
-  $('incoming-actions').classList.toggle('hidden',!incoming);$('active-actions').classList.toggle('hidden',incoming);$('mute').classList.remove('selected');$('speaker').classList.remove('selected');$('speaker').setAttribute('aria-pressed','false');$('speaker').classList.toggle('hidden',call.video);cameraButton(call.video);$('mute').ariaLabel='Mute microphone';$('play-audio').classList.add('hidden');
+  $('incoming-actions').classList.toggle('hidden',!incoming);$('active-actions').classList.toggle('hidden',incoming);$('mute').classList.remove('selected');$('speaker').classList.remove('selected');$('speaker').setAttribute('aria-pressed','false');$('speaker').classList.toggle('hidden',call.video);cameraButton(call.video);$('mute').ariaLabel='Mute microphone';renderOutput();renderCallMetrics();$('play-audio').classList.add('hidden');
 }
 async function createPhone(video,caller){
   const id=call.id;
@@ -437,14 +445,14 @@ async function createPhone(video,caller){
   if(!ice.turn)$('call-warning').textContent='Relay is not configured. Calls across some networks may fail.';
   phone=new Phone({signal,update:updateCall,remote:$('remote-media'),local:$('local-media'),ended:endCall,preference});phone.refreshIce=()=>api('/ice');
   phone.remoteCodecs=call.codecs;phone.remoteMode=call.mode;await phone.prepare(ice,video,caller);
-  if(call?.id!==id)return;void output.start(video).catch(()=>{});
+  if(call?.id!==id)return;if(transfer?.callId)await shareCall(transfer);void output.start(video).catch(()=>{});
   for(const c of pendingCandidates.get(call.id)||[])await phone.candidate(c);pendingCandidates.delete(call.id);
 }
 function updateCall(update){
   if(!call)return;
   if(update.state)$('call-status').textContent={new:'Connecting…',connecting:'Connecting…',connected:'Connected',disconnected:'Reconnecting…',failed:'Reconnecting…'}[update.state]||update.state;
   if(update.connected&&!call.started){
-    call.started=Date.now();clearInterval(callTicker);callTicker=setInterval(()=>{if(!call)return;const sec=Math.floor((Date.now()-call.started)/1000);$('call-duration').textContent=`${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;},1000);
+    call.started=Date.now();if(transfer?.callId===call.id)void signal('sharing',{active:true}).catch(()=>{});clearInterval(callTicker);callTicker=setInterval(()=>{if(!call)return;const sec=Math.floor((Date.now()-call.started)/1000);$('call-duration').textContent=`${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;},1000);
     navigator.wakeLock?.request('screen').then(lock=>wakeLock=lock).catch(()=>{});
   }
   if(update.state)$('call-screen').classList.toggle('call-connected',update.state==='connected');
@@ -452,8 +460,9 @@ function updateCall(update){
   if(update.remoteVideo!==undefined)call.remoteVideo=update.remoteVideo;
   if(update.localVideo!==undefined||update.remoteVideo!==undefined)videoLayout();
   if(update.cameraFacing){$('local-media').dataset.facing=update.cameraFacing;$('switch-camera').ariaLabel=update.cameraFacing==='environment'?'Switch to front camera':'Switch to back camera';}
-  if(update.label)$('call-quality').textContent=update.label;
-  if(update.videoPaused)$('call-quality').textContent='Connection weak · camera paused';
+  if(update.label){$('call-quality').title=update.label;$('call-quality').textContent={wifi:'Wi-Fi · clear',saver:'Data saver',weak:'Weak · voice first',critical:'Very weak'}[update.profile]||update.label;}
+  if(update.videoPaused)$('call-quality').textContent='Weak · video paused';
+  if(update.sharing&&!update.videoPaused)$('call-quality').textContent='Sharing · voice first';
   if(update.warning!==undefined)$('call-warning').textContent=update.warning;
   if(update.needsPlayback)$('play-audio').classList.remove('hidden');
   if(update.stats){const s=update.stats;call.stats=s;renderCallMetrics();$('call-stats').textContent='Adapts to your connection';if($('settings-dialog').open)$('diagnostic-result').textContent=`${formatRate(s.kbps)||'Measuring…'} media · ${Math.round(s.rtt*1000)} ms · ${Math.round(s.loss*100)}% loss${s.relay?' · relayed':' · direct'}`;}
@@ -463,7 +472,9 @@ function renderCallMetrics(){
   $('call-rate').classList.add('hidden');
   for(const [kind,visible]of [['audio',true],['video',video]]){
     const node=$('call-'+kind+'-codec'),codec=s[kind+'Codec'],rate=formatRate(s[kind+'Kbps']);
-    node.textContent=codec?`${kind==='audio'?'Voice':'Video'} · ${codec}${rate?' · '+rate:''}`:'';node.classList.toggle('hidden',!visible||!codec);
+    node.replaceChildren();
+    node.innerHTML=`<svg aria-hidden="true" viewBox="0 0 24 24">${icons[kind==='audio'?'mic':'video']}</svg>`;
+    const name=document.createElement('span'),speed=document.createElement('span');name.className='codec-name';speed.className='codec-rate';name.textContent=`${kind==='audio'?'Voice':'Video'} · ${codec||'Connecting'}`;speed.textContent=rate||'—';node.append(name,speed);node.setAttribute('aria-label',`${kind==='audio'?'Voice':'Video'} ${codec||'connecting'}, ${rate||'measuring'}`);node.classList.toggle('hidden',!visible);
     node.title=`Send ${formatRate(s[kind+'UploadKbps'])||'—'} · Receive ${formatRate(s[kind+'DownloadKbps'])||'—'}; codec payload including retransmissions, excludes network headers, TURN overhead and file transfers`;
   }
 }
@@ -483,7 +494,7 @@ async function receiveSignal(b){
   if(b.kind==='offer'){
     if(call?.id===b.callId)return;if(call)return;
     call={id:b.callId,peer,video:!!payload.video,caller:false,offer:payload.description,codecs:payload.codecs,mode:payload.mode};showCall(true);ring();
-    call.timeout=setTimeout(()=>{if(call?.id===b.callId&&!call.started)finishCall('Missed call');},Math.max(1,b.envelope.expiresAt-Date.now()));return;
+    call.timeout=setTimeout(()=>{if(call?.id===b.callId&&!call.started)finishCall('Missed call');},Math.max(1,b.envelope.expiresAt-Date.now()));void tryNotificationAnswer();return;
   }
   if(b.kind==='ice'){
     if(phone&&call?.id===b.callId)await phone.candidate(payload.candidate);
@@ -496,15 +507,32 @@ async function receiveSignal(b){
     if(payload.request)await phone?.restart();
     else if(payload.description){phone?.setRemoteMode(payload.mode);phone?.setVideoPreferences(payload.codecs);await phone?.receive(payload.description);if(payload.description.type==='offer')await signal('restart',{description:await phone.description('answer'),codecs:phone.codecSummary,mode:phone.localMode()});await phone?.replayCandidates();}
   }
+  else if(b.kind==='sharing'){await phone?.setRemoteSharing(payload.active===true);}
   else if(b.kind==='video'){phone?.setRemoteMode(payload.mode);call.remoteVideo=!!payload.enabled;videoLayout();}
 }
+async function consumeNotificationAnswer(){
+  if(!device||document.visibilityState!=='visible')return;
+  const intent=await notificationIntents.take(device.user.id);if(intent)pendingAnswer=intent;await tryNotificationAnswer();
+}
+async function tryNotificationAnswer(){
+  if(!pendingAnswer||pendingAnswer.expiresAt<=Date.now()){pendingAnswer=null;return;}
+  if(document.visibilityState!=='visible'||!call?.offer||call.caller||call.answering||call.started||call.id!==pendingAnswer.callId)return;
+  const id=call.id,expiresAt=pendingAnswer.expiresAt;pendingAnswer=null;
+  try{const status=await api(`/calls/${id}`);if(call?.id===id&&!call.answering&&document.visibilityState==='visible'&&expiresAt>Date.now()&&status.state==='ringing'&&status.canAnswer)await answerCall();}catch{ /* The visible Answer button remains available. */ }
+}
+async function declineCall(){
+  if(!call||call.caller||call.started||call.answering)return;
+  const id=call.id;try{await api(`/calls/${id}/decline`,'POST');if(call?.id===id)finishCall('Call declined');}
+  catch{if(call?.id===id){if(wsReady)await endCall('Call declined');else toast('Could not reach the server to decline. Try again when connected.');}}
+}
 async function answerCall(){
-  unlockSound();if(!call||!call.offer)return;stopRing();$('incoming-actions').classList.add('hidden');$('active-actions').classList.remove('hidden');$('call-status').textContent='Connecting…';
+  unlockSound();if(!call||!call.offer||call.answering||call.started)return;call.answering=true;stopRing();$('incoming-actions').classList.add('hidden');$('active-actions').classList.remove('hidden');$('call-status').textContent='Connecting…';
   const id=call.id;
   try{await createPhone(call.video,false);if(call?.id!==id)return;await phone.receive(call.offer);await signal('answer',{description:await phone.description('answer'),codecs:phone.codecSummary,mode:phone.localMode()});navigator.serviceWorker?.controller?.postMessage({type:'call-ended',callId:id});await phone.replayCandidates();clearTimeout(call.timeout);}
   catch(e){if(call?.id===id)await endCall(e.name==='NotAllowedError'?'Allow microphone access to answer.':e.message);}
 }
 function finishCall(reason='Call ended'){
+  pendingAnswer=null;void notificationIntents.clear();
   if(call){clearTimeout(call.timeout);navigator.serviceWorker?.controller?.postMessage({type:'call-ended',callId:call.id});}stopRing();clearInterval(callTicker);phone?.close();phone=null;call=null;pendingCandidates.clear();wakeLock?.release().catch(()=>{});wakeLock=null;
   output.stop();$('audio-output-dialog').close();$('return-call').classList.add('hidden');$('call-screen').classList.add('hidden');queueMicrotask(pumpMedia);if(reason)toast(reason);
 }
@@ -545,7 +573,7 @@ async function boot(){
   }catch(e){toast(e.message);$('connection').textContent='Unable to connect';}
 }
 async function ready(){
-  $('self-name').textContent=device.user.name;$('self-avatar').textContent=initials(device.user.name);renderContacts();await connect();
+  $('self-name').textContent=device.user.name;$('self-avatar').textContent=initials(device.user.name);renderContacts();await consumeNotificationAnswer();await connect();
   if(navigator.serviceWorker&&(!phonePlatform().ios||phonePlatform().standalone))void registerAlerts().catch(()=>{});
 }
 $('welcome-form').onsubmit=async event=>{
@@ -599,20 +627,24 @@ $('messages').addEventListener('scroll',()=>{queueMicrotask(pumpMedia);queueRece
 $('message-input').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();$('composer').requestSubmit();}};
 $('message-timer').onchange=()=>{if(selected){settings.timers[selected.id]=Number($('message-timer').value);saveSettings();}};
 $('peer-details').onclick=async()=>{if(!selected)return;$('safety-number').textContent=await safetyNumber(device.identity.keys,selected.keys);$('safety-dialog').showModal();};
-$('voice').onclick=()=>startCall(false);$('video').onclick=()=>startCall(true);$('answer').onclick=answerCall;$('decline').onclick=()=>endCall('Call declined');$('end-call').onclick=()=>endCall();
+$('voice').onclick=()=>startCall(false);$('video').onclick=()=>startCall(true);$('answer').onclick=answerCall;$('decline').onclick=declineCall;$('end-call').onclick=()=>endCall();
 $('mute').onclick=()=>{if(phone){const muted=phone.mute();$('mute').classList.toggle('selected',muted);$('mute').ariaLabel=muted?'Unmute microphone':'Mute microphone';}};
 function cameraButton(enabled){const button=$('toggle-video');button.classList.toggle('selected',!enabled);button.classList.toggle('camera-off',!enabled);button.ariaLabel=enabled?'Turn camera off':'Turn camera on';button.innerHTML=`<svg aria-hidden="true" viewBox="0 0 24 24">${icons[enabled?'video':'videoOff']}</svg>`;}
 function renderOutput(){
-  $('speaker').classList.toggle('selected',output.isSpeaker);$('speaker').setAttribute('aria-pressed',String(output.isSpeaker));
+  const button=$('speaker'),known=output.knownRoute!=='system';
+  button.classList.toggle('selected',output.isSpeaker);button.classList.toggle('output-system',!output.canToggle);
+  if(known)button.setAttribute('aria-pressed',String(output.isSpeaker));else button.removeAttribute('aria-pressed');
+  button.ariaLabel=output.canToggle?(output.isSpeaker?'Use earpiece or headset':'Use speaker'):'Audio output: controlled by your phone';button.title=button.ariaLabel;
+  button.querySelector('.output-hint')?.remove();if(!output.canToggle){const hint=document.createElement('span');hint.className='output-hint';hint.textContent='↗';hint.setAttribute('aria-hidden','true');button.append(hint);}
   if(!$('audio-output-dialog').open)return;
   const list=$('audio-output-list');list.replaceChildren();
-  $('audio-output-status').textContent=output.supported&&output.items.some(d=>d.deviceId!=='default')?'Choose where you hear this call.':'This browser lets your phone choose the call audio.';
-  const help=phonePlatform().ios?'On iPhone, use the phone’s audio output controls in Control Center to choose an available speaker or headset. Safari may not offer an earpiece/speaker switch.':'Use your phone’s audio output controls to choose an available speaker or headset. If the built-in speaker is not listed, this browser cannot switch it.';
+  $('audio-output-status').textContent=output.supported&&output.items.some(d=>d.deviceId!=='default')?'Choose where you hear this call.':'Your browser does not expose an earpiece / speaker switch.';
+  const help='The phone chooses its default output. This website cannot force its built-in earpiece or speaker unless the browser exposes them. A connected headset is the practical option for private calls. If your phone offers an output picker, you can use it.';
   $('audio-output-help').textContent=help;$('choose-output').classList.toggle('hidden',!output.supported||!navigator.mediaDevices?.selectAudioOutput);
   if(output.supported)for(const d of [{deviceId:'',label:'Phone / system default'},...output.items.filter(d=>d.deviceId!=='default'&&d.deviceId)]){const b=document.createElement('button');b.className='secondary full';b.textContent=d.label||'Audio device';b.setAttribute('aria-pressed',String(output.sink===d.deviceId));b.onclick=async()=>{try{if(await output.route(d.deviceId))$('audio-output-dialog').close();}catch{toast('The browser could not switch audio. Use your phone’s audio controls.');}};list.append(b);}
 }
 const output=new AudioOutput($('remote-media'),navigator.mediaDevices,renderOutput);
-$('speaker').onclick=async()=>{if(!phone)return;try{await output.refresh();if(output.speaker){if(await output.toggle())return;}}catch{}$('audio-output-dialog').showModal();renderOutput();};
+$('speaker').onclick=async()=>{if(!phone)return;try{await output.refresh();if(output.canToggle){if(await output.toggle())return;}else if(await output.choose())return;}catch{}$('audio-output-dialog').showModal();renderOutput();};
 $('choose-output').onclick=async()=>{try{if(await output.choose())$('audio-output-dialog').close();}catch(e){if(e.name!=='NotAllowedError')toast('Could not switch audio. Use your phone’s audio controls.');}};
 function videoLayout(){
   renderCallMetrics();
@@ -629,7 +661,7 @@ $('enable-notifications').onclick=()=>{$('settings-dialog').close();void alerts.
 $('hear-ringing').onclick=()=>{unlockSound();setTimeout(()=>{if(call?.offer&&!call.started)ring();},50);};
 navigator.serviceWorker?.addEventListener('message',event=>{
   if(event.data?.type==='ringing-query')event.ports[0]?.postMessage({ringing:call?.id===event.data.callId&&!call.caller&&!call.started&&!!ringTimer&&soundContext?.state==='running'&&document.visibilityState==='visible'});
-  if(event.data?.type==='alert-opened'){if(event.data.testId)alerts.resume(event.data.testId);if(device&&!wsReady)void connect();}
+  if(event.data?.type==='alert-opened'){if(event.data.testId)alerts.resume(event.data.testId);if(device){void consumeNotificationAnswer();if(!wsReady)void connect();}}
 });
 function openPastedInvitation(value){
   try{const url=new URL(value.trim()),params=new URLSearchParams(url.hash.slice(1)),raw=params.get('invite');
@@ -657,11 +689,11 @@ $('confirm-remove-contact').onclick=async()=>{
   }catch(e){if(contactToRemove?.id===c.id){$('remove-contact-error').textContent=e.message;$('confirm-remove-contact').disabled=false;}else toast(e.message);}
 };
 $('confirm-forget').onclick=async()=>{
-  try{await api('/device','DELETE');if(ws){ws.onclose=null;ws.close();}clearTimeout(reconnectTimer);clearInterval(heartbeat);finishCall('');transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();await cachedMedia.clear();await vault('delete');localStorage.removeItem('webcaller-settings');device=null;location.reload();}catch(e){toast(e.message);}
+  try{await api('/device','DELETE');if(ws){ws.onclose=null;ws.close();}clearTimeout(reconnectTimer);clearInterval(heartbeat);finishCall('');transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();await cachedMedia.clear();await notificationIntents.clear();await vault('delete');localStorage.removeItem('webcaller-settings');device=null;location.reload();}catch(e){toast(e.message);}
 };
 function clearMessage(m){m.reactions=null;m.receipt=null;m.versions=null;m.pinVersion=null;m.replyTo=null;if(viewerMessage?.id===m.id)closeViewer();if(m.blobURL)URL.revokeObjectURL(m.blobURL);m.blobURL=null;m.blob=null;m.location=null;m.text='';m.attachment=null;}
 setInterval(()=>{for(const [id,updates]of pendingMessageEvents)if(!updates.some(e=>e.envelope.expiresAt>Date.now()))pendingMessageEvents.delete(id);queueReceipts();for(const [id,expiry]of deletedMessages)if(expiry<=Date.now())deletedMessages.delete(id);for(const [id,expiry]of typingSeen)if(expiry<=Date.now())typingSeen.delete(id);renderTyping();let changed=false;for(const [id,m]of messages)if(m.expiresAt<=Date.now()){void cachedMedia.remove(device?.user.id,id,m.expiresAt);clearMessage(m);messages.delete(id);receiptWanted.delete(id);visibleSince.delete(id);changed=true;}if(changed&&selected)renderMessages();},1000);
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&device){void cachedMedia.purge();unlockSound();if(!wsReady)connect();else sync().catch(()=>{});if(call?.started)navigator.wakeLock?.request('screen').then(lock=>wakeLock=lock).catch(()=>{});}if(document.visibilityState==='hidden'){actions.reset();clearTimeout(receiptTimer);receiptTimer=null;receiptWanted.clear();visibleSince.clear();pendingMessageEvents.clear();locationShare.close();$('attachment-dialog').close();stopTyping();typingPeers.clear();renderTyping();captures.close();closeViewer();clearDraft();$('draft-dialog').close();$('emoji-dialog').close();transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();$('messages').replaceChildren();$('pinned-message').textContent='';$('pinned-message').onclick=null;$('pinned-message').classList.add('hidden');}});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&device){void consumeNotificationAnswer();void cachedMedia.purge();unlockSound();if(!wsReady)connect();else sync().catch(()=>{});if(call?.started)navigator.wakeLock?.request('screen').then(lock=>wakeLock=lock).catch(()=>{});}if(document.visibilityState==='hidden'){actions.reset();clearTimeout(receiptTimer);receiptTimer=null;receiptWanted.clear();visibleSince.clear();pendingMessageEvents.clear();locationShare.close();$('attachment-dialog').close();stopTyping();typingPeers.clear();renderTyping();captures.close();closeViewer();clearDraft();$('draft-dialog').close();$('emoji-dialog').close();transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();$('messages').replaceChildren();$('pinned-message').textContent='';$('pinned-message').onclick=null;$('pinned-message').classList.add('hidden');}});
 window.addEventListener('online',()=>{if(device&&!wsReady)connect();if(phone)void phone.networkChanged();});
 navigator.connection?.addEventListener('change',()=>{if(phone)void phone.networkChanged();});
 window.addEventListener('pagehide',()=>{actions.reset();clearTimeout(receiptTimer);receiptWanted.clear();visibleSince.clear();pendingMessageEvents.clear();locationShare.close();output.stop();stopTyping();captures.close();closeViewer();clearDraft();phone?.close();transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();});

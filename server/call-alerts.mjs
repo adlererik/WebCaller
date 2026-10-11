@@ -6,7 +6,7 @@ export function createCallAlerts({send,isWaiting,now=Date.now,setTimer=setTimeou
     stop(call.id);const job={timers:[],call};jobs.set(call.id,job);
     const deliver=index=>{
       if(jobs.get(call.id)!==job||!isWaiting(call.id)||call.expiresAt<=now()){stop(call.id);return;}
-      const deliveryExpiresAt=Math.min(call.expiresAt,now()+8000);
+      const deliveryExpiresAt=Math.min(call.expiresAt,now()+20000);
       void Promise.resolve().then(()=>{if(jobs.get(call.id)===job&&isWaiting(call.id)&&call.expiresAt>now())return send(call,index,deliveryExpiresAt);}).catch(()=>{});
     };
     deliver(0);if(jobs.get(call.id)!==job)return;

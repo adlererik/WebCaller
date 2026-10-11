@@ -4,7 +4,7 @@ A browser-only phone for Android, iPhone and desktop: adaptive mono Opus voice, 
 
 **Start here: [Beginner installation guide](docs/INSTALL.md).** Use a Debian 12/13 server, a domain name and the guided installer. Docker supplies Node.js 24; optional Caddy supplies HTTPS and optional coturn supplies your own free relay.
 
-This is the **v0.9.0 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
+This is the **v0.10.0 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
 
 ## What you get
 
@@ -17,10 +17,10 @@ This is the **v0.9.0 preview**. It has passing automated and synthetic-browser t
 - One-person, single-use invitations; recipients choose an optional name and accept.
 - Press-and-hold contact removal with confirmation, shared history/media deletion, active-call cleanup and protection against delayed uploads.
 - Private QR onboarding for the first phone, so nobody has to type a long setup secret.
-- Contact safety numbers, identity change detection, reconnection, relay diagnostics and guided call-alert setup with a locked-phone sound test and bounded reminders.
+- Contact safety numbers, identity change detection, reconnection, relay diagnostics and guided call-alert setup with a locked-phone sound test, bounded high-urgency reminders and Answer/Decline notification actions where supported.
 - Local SQLite ciphertext storage, authenticated WebSocket signaling and temporary TURN credentials.
-- Files/media during calls, paced in small encrypted pieces that wait when voice needs the link.
-- Separate live voice/video codec and data-rate indicators, cellular budgets for both endpoints and automatic Wi-Fi/cellular recovery. See [Call networking](docs/CALL_NETWORK.md).
+- Files/media during calls; both video encoders temporarily yield bandwidth, with small encrypted transfers that wait when voice needs the link.
+- Aligned video/voice codec and rate rows, transparent video controls, cellular budgets for both endpoints and automatic Wi-Fi/cellular recovery. See [Call networking](docs/CALL_NETWORK.md).
 
 ## Know the limits before installing
 

@@ -30,12 +30,20 @@ An existing Safari/browser identity does not automatically move into the Home Sc
 
 ## When a call arrives
 
-An initial alert and up to two reminders request your phone’s normal notification sound. Tap an alert, then press **Answer** on the page. While open, the page repeats a recognisable two-burst ringtone. If sound is blocked, tap **Tap to hear ringing**. **Decline** stops the call.
+An initial alert and up to two reminders request your phone’s normal notification sound. Where the browser supports notification actions, press **Answer** to open the phone and accept that waiting call. The page may still need microphone permission or a playback tap. Press **Decline** to dismiss the waiting call without opening the page. If buttons are absent, tap the alert, then press the large **Answer** button on the page. While open, the page repeats a recognisable two-burst ringtone. If sound is blocked, tap **Tap to hear ringing**. **Decline** stops the call.
 
-Reminder attempts happen at the start, 15 seconds and 35 seconds. They expire quickly in the push provider queue and stop when the call is answered, declined, cancelled or timed out. The phone does not flood the device with unlimited pushes. Older notifications are closed when the worker runs, and ended calls are shown silently if their delayed push arrives. An already queued or displayed alert cannot always be recalled.
+Reminder attempts happen at the start, 15 seconds and 35 seconds. Each attempt has at most 20 seconds of push-provider queue life (bounded by the original call deadline). They expire quickly in the push provider queue and stop when the call is answered, declined, cancelled or timed out. The phone does not flood the device with unlimited pushes. Older notifications are closed when the worker runs, and ended calls are shown silently if their delayed push arrives. An already queued or displayed alert cannot always be recalled.
+
+The server already requests `Urgency: high`, which asks the push provider for prompt delivery of a time-sensitive call; it does not select an OS notification channel or override its sound rules. The worker requests sound, vibration and a notification that remains available until acted on where supported. Heads-up banners, action buttons, lock-screen visibility and sound are chosen by the browser/OS and user settings. [Web Push urgency](https://www.rfc-editor.org/rfc/rfc8030.html#section-5.3), [Notification preferences](https://notifications.spec.whatwg.org/), [Apple sound and Focus controls](https://developer.apple.com/videos/play/wwdc2023/10120/).
 
 The website cannot select a custom background ringtone, force notification volume, override Silent mode/Focus, or guarantee delivery or continuous ringing while closed. Repeated alerts may be quieted by the OS. The practical check is the sound test on each actual locked phone, followed by a real call from another device/network. Notification/history traces may remain.
 
 ## Check it again
 
 Open **Settings → Set up call alerts → Send test alert**. If notifications were denied, enable them in the phone/browser settings, then return and try again. Check notification volume, Silent mode, Focus/Do Not Disturb and internet connectivity. On iPhone, open from the saved icon. A push registration alone does not prove the sound works.
+
+## How the Answer button stays safe
+
+A push arrival or a URL never grants permission to answer or starts the microphone. Only a notification-button click records a one-use answer decision for the current local identity and call ID. The decision expires in at most 30 seconds. The page consumes it atomically, waits for the signed encrypted offer, verifies the current server state and answers only that incoming call while visible. Stale, answered, foreign-device and duplicate decisions do not answer calls. Storage/network failure leaves the normal Answer button available. Expired decision metadata is removed the next time the app consumes/clears this store; a suspended browser cannot physically purge it on a deadline. No message text, caller name, credentials or media enters this decision store.
+
+A notification decline uses an authenticated, origin-checked request restricted to the intended recipient of a waiting call. It cannot end an already answered call. If the request fails, a silent notice offers to open the page and decline there. Remaining reminder jobs stop on successful decline; already delivered/in-flight notifications cannot always be recalled.

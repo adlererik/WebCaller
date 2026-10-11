@@ -80,3 +80,13 @@ test('unchanged relay settings are retained; incompatible browsers recover with 
  phone.refreshIce=async()=>({iceServers:[{urls:'turn:new.test'}]});await phone.refreshConfiguration();assert.equal(sets,1);assert.equal(phone.relayRefreshDeferred,true);
  phone.iceExpiresAt=Date.now()-1;await assert.rejects(phone.refreshConfiguration(),/Unsupported/);phone.close();
 });
+test('sharing yields video immediately, keeps the voice budget and restores after completion or peer lease expiry',async()=>{
+ const {mediaBudget}=await import('../public/media.js');
+ for(const profile of ['wifi','saver','weak','critical']){const normal=mediaBudget(profile,{bandwidth:2000000}),sharing=mediaBudget(profile,{bandwidth:2000000},false,true);assert.equal(sharing.audio,normal.audio);assert.ok(sharing.video<=normal.video);assert.ok(sharing.width<=normal.width);assert.ok(sharing.fps<=normal.fps);}
+ const updates=[],phone=new Phone({signal:async()=>{},update:u=>updates.push(u),local:{},remote:{},preference:()=> 'wifi'});phone.pc={close(){}};phone.profile='wifi';phone.videoWanted=true;
+ const sent=[];let finish;phone.setSender=async(sender,video,p)=>{if(video){sent.push({...p});if(finish===undefined){await new Promise(r=>finish=r);}}};
+ const changing=phone.applyProfile();await new Promise(r=>setImmediate(r));const sharing=phone.setSharing(true);let ready=false;void sharing.then(()=>ready=true);assert.equal(ready,false);finish();await changing;await sharing;
+ assert.equal(sent.at(-1).video,180000);assert.equal(sent.at(-1).fps,10);assert.equal(sent.at(-1).audio,48000);assert.equal(phone.isSharing,true);assert.equal(updates.at(-1).sharing,true);
+ await phone.setSharing(false);assert.equal(sent.at(-1).video,900000);
+ await phone.setRemoteSharing(true);assert.equal(sent.at(-1).video,180000);phone.remoteSharingUntil=Date.now()-1;await phone.applyProfile();assert.equal(sent.at(-1).video,900000);phone.close();
+});

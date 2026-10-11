@@ -284,7 +284,7 @@ test('answered and cancelled calls stop real server reminders; call status is pa
   const id=randomUUID(),incoming=once(b,'message');await signal(a,f.alice,bob,'offer',id);await incoming;
   assert.equal((await f.request('/calls/'+id,{token:bob.token})).body.state,'ringing');assert.equal((await f.request('/calls/'+id,{token:outsider.token})).status,404);
   const answered=once(a,'message');await signal(b,bob,f.alice,'answer',id);await answered;await new Promise(r=>setTimeout(r,200));
-  assert.equal(deliveries.length,1);assert.ok(deliveries[0].options.TTL<=8);assert.equal(deliveries[0].options.urgency,'high');assert.equal(deliveries[0].payload.mutable,true);assert.equal((await f.request('/calls/'+id,{token:bob.token})).body.state,'answered');
+  assert.equal(deliveries.length,1);assert.ok(deliveries[0].options.TTL<=20);assert.equal(deliveries[0].options.urgency,'high');assert.equal(deliveries[0].payload.mutable,true);assert.equal((await f.request('/calls/'+id,{token:bob.token})).body.state,'answered');
   const ended=once(b,'message');await signal(a,f.alice,bob,'hangup',id);await ended;
   assert.equal((await f.request('/calls/'+id,{token:bob.token})).body.state,'ended');
   const next=randomUUID(),again=once(b,'message');await signal(a,f.alice,bob,'offer',next);await again;const cancel=once(b,'message');await signal(a,f.alice,bob,'hangup',next);await cancel;await new Promise(r=>setTimeout(r,200));
@@ -390,4 +390,20 @@ test('answered call survives a signaling reconnection and stale disconnect timer
  const expired=[];a.on('message',raw=>{if(JSON.parse(raw).type==='call-expired')expired.push(true);});b.close();await once(b,'close');
  await new Promise(r=>setTimeout(r,50));const restored=await f.socket(bob);await new Promise(r=>setTimeout(r,280));assert.equal(expired.length,0);
  pending=once(a,'message');await signal(restored,bob,f.alice,'restart');assert.equal(JSON.parse((await pending)[0]).kind,'restart');a.close();restored.close();
+});
+test('background notification decline is recipient-only, origin checked, idempotent and cannot end an answered call',async t=>{
+ const f=await fixture();t.after(()=>f.app.close());const {bob}=await f.pair(),{bob:other}=await f.pair(),a=await f.socket(f.alice),b=await f.socket(bob);t.after(()=>{a.close();b.close();});
+ const peer={id:bob.user.id,keys:bob.identity.keys},reverse={id:f.alice.user.id,keys:f.alice.identity.keys};
+ async function offer(){const id=randomUUID(),incoming=once(b,'message');a.send(JSON.stringify({type:'signal',kind:'offer',callId:id,envelope:await seal(f.alice.identity,f.alice.user.id,peer,{kind:'offer',callId:id},90)}));await incoming;return id;}
+ const id=await offer(),path='/calls/'+id+'/decline';
+ assert.equal((await f.request('/calls/'+id,{token:bob.token})).body.canAnswer,true);assert.equal((await f.request('/calls/'+id,{token:f.alice.token})).body.canAnswer,false);
+ assert.equal((await f.request(path,{method:'POST'})).status,401);assert.equal((await f.request(path,{method:'POST',token:bob.token,requestOrigin:'https://evil.test'})).status,403);
+ for(const token of [f.alice.token,other.token])assert.equal((await f.request(path,{method:'POST',token})).status,404);
+ const endedA=once(a,'message'),endedB=once(b,'message');assert.equal((await f.request(path,{method:'POST',token:bob.token})).status,200);
+ for(const pending of [endedA,endedB]){const event=JSON.parse((await pending)[0]);assert.equal(event.type,'call-ended');assert.equal(event.callId,id);}
+ assert.equal((await f.request('/calls/'+id,{token:bob.token})).body.state,'ended');assert.equal((await f.request(path,{method:'POST',token:bob.token})).status,200);
+ const next=await offer(),answer=once(a,'message');b.send(JSON.stringify({type:'signal',kind:'answer',callId:next,envelope:await seal(bob.identity,bob.user.id,reverse,{kind:'answer',callId:next},90)}));await answer;
+ assert.equal((await f.request('/calls/'+next+'/decline',{method:'POST',token:bob.token})).status,409);assert.equal((await f.request('/calls/'+next,{token:bob.token})).body.state,'answered');
+ const sharing=once(b,'message');a.send(JSON.stringify({type:'signal',kind:'sharing',callId:next,envelope:await seal(f.alice.identity,f.alice.user.id,peer,{kind:'sharing',callId:next,active:true},120)}));const routed=JSON.parse((await sharing)[0]);assert.equal(routed.kind,'sharing');assert.equal((await open(bob.identity,bob.user.id,reverse,routed.envelope)).active,true);
+ const error=once(a,'message');a.send(JSON.stringify({type:'signal',kind:'sharing',callId:randomUUID(),envelope:await seal(f.alice.identity,f.alice.user.id,peer,{kind:'sharing'},120)}));assert.equal(JSON.parse((await error)[0]).error,'Unknown call');
 });

@@ -23,7 +23,7 @@ test('expired calls do not send alerts; failed deliveries do not stop later atte
 });
 test('Apple declarative fallback is visible, mutable, generic and contains no call secrets',()=>{
   const p=notificationPayload({type:'call',callId:'example',revision:1,url:'https://phone.example/calls/',expiresAt:9000,callExpiresAt:91000});
-  assert.equal(p.web_push,8030);assert.equal(p.mutable,true);assert.equal(p.notification.silent,false);assert.equal(p.notification.navigate,'https://phone.example/calls/');assert.equal(p.notification.tag,'call-example-1');
+  assert.equal(p.web_push,8030);assert.equal(p.mutable,true);assert.equal(p.notification.silent,false);assert.equal(p.notification.navigate,'https://phone.example/calls/');assert.equal(p.notification.tag,'call-example-1');assert.notEqual(notificationPayload({type:'call',callId:'example',revision:2,url:'https://phone.example/calls/',expiresAt:9000,callExpiresAt:91000}).notification.tag,p.notification.tag);
   assert.equal(notificationPayload({type:'test',testId:'test',url:'https://phone.example/calls/',expiresAt:99}).notification.navigate,'https://phone.example/calls/#alert-test=test');
 });
 test('iPhone and touch-enabled iPad need Home Screen; Android proceeds directly',()=>{

@@ -101,3 +101,10 @@ Generic **New message** push payloads contain only opaque message, sender and re
 Countdown spans use original message expiry and update separately from keyed message/media rows. Short timers tick each second; long timers use compact day/hour/minute units. File/media upload placeholders show a spinner and byte-based percentage on both connected participants. Progress envelopes are signed/encrypted, bound to a reserved upload and its original deadline, rate limited, never stored/replayed by the server and expire within 20 seconds. Completed/deleted messages reject late progress. Cancellation emits a participant-only cleanup event; placeholders cannot be selected, edited, replied to or treated as delivered/read messages. Reduced-motion devices retain percentage without spinner animation.
 
 Privacy remains bounded by browser/OS capabilities, durable identity/media storage, notifications and provider metadata. See [Browser privacy](BROWSER_PRIVACY.md).
+
+### v0.12.0 call header and background alert repair
+
+- Voice/video numeric speeds and units align across stacked rows; quality stays centered beside the caller name and timer.
+- Every live call push requests sound independently of a page's reported audio state. Three bounded attempts request a fresh alert: supporting browsers replace one notification with renotify; other browsers receive fresh reminder tags with cleanup after display.
+- Device storage and server lookup have a total deadline so a sleeping worker can still show the notification. Ended/answered and expired calls remain silent; the original call deadline determines whether a delayed wake-up is still timely.
+- Worker updates bypass the import cache. Locked-phone sound remains a physical-device check subject to the phone's notification settings.

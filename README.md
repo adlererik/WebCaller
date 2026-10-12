@@ -4,7 +4,7 @@ A browser-only phone for Android, iPhone and desktop: adaptive mono Opus voice, 
 
 **Start here: [Beginner installation guide](docs/INSTALL.md).** Use a Debian 12/13 server, a domain name and the guided installer. Docker supplies Node.js 24; optional Caddy supplies HTTPS and optional coturn supplies your own free relay.
 
-This is the **v0.11.0 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
+This is the **v0.12.0 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
 
 ## What you get
 
@@ -72,3 +72,7 @@ Open `http://localhost:8080/calls`. Loopback HTTP is suitable for local tests; p
 
 
 New in v0.7.0: Signal-style blue sent bubbles, overlapping green delivery/viewed checks, compact measured kbps/Mbps and actual voice/video codec indicators at the top of calls, and encrypted local media retention across chat closure/backgrounding/reload. The existing message menu includes reactions, Reply, sender-only Edit, Forward, Copy, Select, Info, Pin and Delete for both. See the [user guide](docs/USER_GUIDE.md) for plain-language instructions and storage/browser limitations.
+
+## v0.12.0 call header and background alerts
+
+Voice/video rates now share aligned numeric and kbps/Mbps columns. Quality stays centered in the caller-name row, with the timer to the right. Live call reminders request sound independently of a sleeping page, use `renotify` or fresh reminder tags where it is unsupported, and cannot be blocked indefinitely by a device-storage/server lookup. Answered/ended and originally expired calls remain silent. Reload the receiving phone once, then use **Settings → Call alerts → Send test alert** with the phone locked. Actual notification sound remains controlled by the phone. See [Call alerts](docs/CALL_ALERTS.md).

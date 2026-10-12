@@ -75,3 +75,7 @@ Primary references: [WebRTC’s required H.264/VP8 codecs](https://www.rfc-edito
 ## Sharing status
 
 Uploads display a spinning chat placeholder and percentage at both connected ends. Percentage follows uploaded payload bytes, including partial 4 KB call bursts; it is distinct from media bitrate and server delivery/read marks. Announcements are at most one per three seconds, with a ten-second renewal while stalled, and expire within 20 seconds. They contain no file key or plaintext outside the encrypted envelope. The completed, verified attachment replaces the placeholder; a local download shows separate loading progress. Tiny status updates still consume some signaling bandwidth, and the transfer budget remains conservative when media capacity is uncertain.
+
+## Fixed call header
+
+Voice and video rows share columns for the codec, numeric speed and unit. Numbers are right-aligned, and kbps/Mbps start at the same column in both rows. The quality badge has a fixed-size slot at the horizontal screen center in the caller-name row; changes to the quality text or measured bitrate do not move it. The call timer occupies the right side of that row, before the settings cog. Long names/codecs truncate visually while their accessible text remains available. Speeds still show measured codec payload upload plus download, excluding network headers, TURN overhead and chat/file traffic.

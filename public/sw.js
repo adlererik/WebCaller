@@ -4,44 +4,54 @@ import {messageIntents} from './message-intents.js';
 const intents=callIntents(),chatIntents=messageIntents();
 // No asset cache or message history. Push contains only generic alert text.
 const home=()=>new URL('./',self.registration.scope).href;
-async function closeCall(callId){
-  for(const n of await self.registration.getNotifications())if(n.data?.callId===callId)n.close();
+// Background storage/network checks must not hold a sound alert indefinitely.
+async function bounded(task,ms,fallback=null){
+  let timer;
+  try{return await Promise.race([Promise.resolve().then(task),new Promise(resolve=>{timer=setTimeout(()=>resolve(fallback),ms);})]);}
+  catch{return fallback;}finally{clearTimeout(timer);}
+}
+const readDevice=()=>bounded(()=>vault('get'),1500);
+async function closeCall(callId,keepTag=null){
+  await bounded(async()=>{
+    for(const n of await self.registration.getNotifications())if(n.data?.callId===callId&&n.tag!==keepTag)n.close();
+  },600);
 }
 async function callDetails(callId){
-  try{
-    const device=await vault('get');if(!device?.token)return null;
-    const result=await fetch(new URL(`api/calls/${callId}`,home()),{headers:{Authorization:'Bearer '+device.token},cache:'no-store',signal:AbortSignal.timeout(1800)});
+  const controller=new AbortController();
+  try{return await bounded(async()=>{
+    const device=await vault('get');if(!device?.token||controller.signal.aborted)return null;
+    const result=await fetch(new URL(`api/calls/${callId}`,home()),{headers:{Authorization:'Bearer '+device.token},cache:'no-store',signal:controller.signal});
     return result.ok?await result.json():null;
-  }catch{return null;}
-}
-async function alreadyRinging(callId){
-  const clients=await self.clients.matchAll({type:'window',includeUncontrolled:true});
-  const visible=clients.filter(c=>c.url.startsWith(home())&&c.visibilityState==='visible');
-  const replies=await Promise.all(visible.map(c=>new Promise(resolve=>{
-    const channel=new MessageChannel(),timer=setTimeout(()=>{channel.port1.close();resolve(false);},250);
-    channel.port1.onmessage=e=>{clearTimeout(timer);channel.port1.close();resolve(e.data?.ringing===true);};
-    c.postMessage({type:'ringing-query',callId},[channel.port2]);
-  })));
-  return replies.some(Boolean);
+  },1500);}finally{controller.abort();}
 }
 export async function handlePush(data){
   if(!data||!['call','test','message'].includes(data.type)||!Number.isSafeInteger(data.expiresAt))return;
   const call=data.type==='call',test=data.type==='test';
   if((call&&!/^[a-f0-9-]{36}$/.test(data.callId||''))||(test&&!/^[a-f0-9-]{36}$/.test(data.testId||'')))return;
-  let stale=data.expiresAt<=Date.now(),state=null;
-  if(call){state=(await callDetails(data.callId))?.state;stale ||= state==='ended'||state==='answered';await closeCall(data.callId);}
-  const silent=stale||(call&&await alreadyRinging(data.callId));
+  // The provider queue deadline is shorter than the original waiting call.
+  // A worker waking late can still ring until that call's original deadline.
+  const deadline=call&&Number.isSafeInteger(data.callExpiresAt)?Math.min(data.callExpiresAt,data.expiresAt+90000):data.expiresAt;
+  const details=call&&deadline>Date.now()?await callDetails(data.callId):null;
+  const stale=deadline<=Date.now()||details?.state==='ended'||details?.state==='answered';
+  // Page visibility and AudioContext flags cannot prove a locked phone is audible.
+  // Every live reminder requests its notification sound independently of the page.
+  const silent=stale;
+  const canRenotify=!!globalThis.Notification?.prototype&&'renotify'in Notification.prototype;
+  const tag=call?`call-${data.callId}${canRenotify?'':'-'+(Number(data.revision)||0)}`:test?`test-${data.testId}`:'message-alert';
+  if(call&&stale)await closeCall(data.callId);
   const actions=call&&!stale?[{action:'answer',title:'Answer'},{action:'decline',title:'Decline'}].slice(0,globalThis.Notification?.maxActions??2):[];
   const url=new URL(home());if(test)url.hash='alert-test='+data.testId;
   // A visible, silent result for stale pushes respects Apple's userVisibleOnly rule.
   const title=stale?(call?'Call ended':test?'Alert test expired':'Message expired'):call?'Incoming call':test?'Call alert test':'New message';
   await self.registration.showNotification(title,{
     body:stale?'Open your phone to check.':call?(actions.length?'Answer this call or tap to open your phone.':'Tap to open your phone and answer.'):test?'Tap here if you heard this alert.':'Open your phone to read it.',
-    tag:call?`call-${data.callId}-${Number(data.revision)||0}`:test?`test-${data.testId}`:'message-alert',
+    tag,
     actions,requireInteraction:call&&!stale,renotify:call&&!silent,silent,...(!silent?{vibrate:call?[400,180,400]:[300]}:{}),
-    data:{url:url.href,type:data.type,messageId:data.messageId,peerId:data.peerId,recipientId:data.recipientId,callId:data.callId,testId:data.testId,expiresAt:data.callExpiresAt||data.expiresAt},
+    data:{url:url.href,type:data.type,messageId:data.messageId,peerId:data.peerId,recipientId:data.recipientId,callId:data.callId,testId:data.testId,expiresAt:deadline},
     icon:new URL('./icon-192.png',home()).href,badge:new URL('./icon-192.png',home()).href
   });
+  // Engines without renotify need a fresh tag. Cleanup follows display, never blocks it.
+  if(call&&!stale&&!canRenotify)await closeCall(data.callId,tag);
 }
 self.addEventListener('push',event=>event.waitUntil((async()=>{let data;try{data=event.data?.json();}catch{return;}await handlePush(data);})()));
 export async function handleNotificationClick(notification,action=''){
@@ -51,7 +61,7 @@ export async function handleNotificationClick(notification,action=''){
   const validCall=/^[a-f0-9-]{36}$/.test(data.callId||'')&&Number.isSafeInteger(data.expiresAt)&&data.expiresAt>Date.now();
   if(validCall&&action==='decline'){
     try{
-      const device=await vault('get');if(!device?.token)throw new Error('Device unavailable');
+      const device=await readDevice();if(!device?.token)throw new Error('Device unavailable');
       const response=await fetch(new URL(`api/calls/${data.callId}/decline`,home()),{method:'POST',headers:{Authorization:'Bearer '+device.token},cache:'no-store',signal:AbortSignal.timeout(5000)});
       if(!response.ok)throw new Error('Call could not be declined');await intents.clear();await closeCall(data.callId);return;
     }catch{
@@ -60,11 +70,11 @@ export async function handleNotificationClick(notification,action=''){
     }
   }
   if(validCall&&action==='answer'){
-    const details=await callDetails(data.callId),device=await vault('get').catch(()=>null);
+    const details=await callDetails(data.callId),device=await readDevice();
     if(details?.state==='ringing'&&details.canAnswer===true&&device?.user?.id)await intents.put(device.user.id,data.callId,Math.min(data.expiresAt,details.expiresAt));
   }
   if(data.type==='message'&&/^[a-f0-9-]{36}$/.test(data.messageId||'')&&/^[a-f0-9-]{36}$/.test(data.peerId||'')){
-    const device=await vault('get').catch(()=>null);
+    const device=await readDevice();
     if(device?.user?.id===data.recipientId)await chatIntents.put(device.user.id,data.messageId,data.peerId,Date.now()+120000);
   }
   const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});

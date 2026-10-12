@@ -500,7 +500,7 @@ function renderCallMetrics(){
     const node=$('call-'+kind+'-codec'),codec=s[kind+'Codec'],rate=formatRate(s[kind+'Kbps']);
     node.replaceChildren();
     node.innerHTML=`<svg aria-hidden="true" viewBox="0 0 24 24">${icons[kind==='audio'?'mic':'video']}</svg>`;
-    const name=document.createElement('span'),speed=document.createElement('span');name.className='codec-name';speed.className='codec-rate';name.textContent=`${kind==='audio'?'Voice':'Video'} · ${codec||'Connecting'}`;speed.textContent=rate||'—';node.append(name,speed);node.setAttribute('aria-label',`${kind==='audio'?'Voice':'Video'} ${codec||'connecting'}, ${rate||'measuring'}`);node.classList.toggle('hidden',!visible);
+    const name=document.createElement('span'),speed=document.createElement('span'),unit=document.createElement('span');name.className='codec-name';speed.className='codec-rate';unit.className='codec-unit';name.textContent=`${kind==='audio'?'Voice':'Video'} · ${codec||'Connecting'}`;const parts=rate.split(' ');speed.textContent=parts[0]||'—';unit.textContent=parts[1]||'';node.append(name,speed,unit);node.setAttribute('aria-label',`${kind==='audio'?'Voice':'Video'} ${codec||'connecting'}, ${rate||'measuring'}`);node.classList.toggle('hidden',!visible);
     node.title=`Send ${formatRate(s[kind+'UploadKbps'])||'—'} · Receive ${formatRate(s[kind+'DownloadKbps'])||'—'}; codec payload including retransmissions, excludes network headers, TURN overhead and file transfers`;
   }
 }
@@ -696,7 +696,6 @@ document.addEventListener('pointerdown',unlockSound,{capture:true,passive:true})
 $('enable-notifications').onclick=()=>{$('settings-dialog').close();void alerts.show();};
 $('hear-ringing').onclick=()=>{unlockSound();setTimeout(()=>{if(call?.offer&&!call.started)ring();},50);};
 navigator.serviceWorker?.addEventListener('message',event=>{
-  if(event.data?.type==='ringing-query')event.ports[0]?.postMessage({ringing:call?.id===event.data.callId&&!call.caller&&!call.started&&!!ringTimer&&soundContext?.state==='running'&&document.visibilityState==='visible'});
   if(event.data?.type==='alert-opened'){if(event.data.testId)alerts.resume(event.data.testId);if(device){void consumeMessageNotice();void consumeNotificationAnswer();if(!wsReady)void connect();}}
 });
 function openPastedInvitation(value){

@@ -74,5 +74,5 @@ export function callSetup({api,config,device,save,toast}){
 }
 
 export function registerAlerts(){
-  return navigator.serviceWorker.register(new URL('./sw.js',location.href).pathname,{scope:new URL('./',location.href).pathname,type:'module'});
+  return navigator.serviceWorker.register(new URL('./sw.js',location.href).pathname,{scope:new URL('./',location.href).pathname,type:'module',updateViaCache:'none'});
 }

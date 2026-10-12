@@ -365,7 +365,7 @@ export function createApp(options = {}) {
           if(!related(ws.user,b.envelope.to))fail(403,'Unknown contact');
           rate(`typing:${ws.user}`,40);emit(b.envelope.to,{type:'typing',envelope:b.envelope});return;
         }
-        if (b.type !== 'signal' || !['offer','answer','ice','hangup','restart','video','sharing','receipt'].includes(b.kind)) fail(400, 'Invalid signal');
+        if (b.type !== 'signal' || !['offer','answer','ice','hangup','restart','video','sharing','receipt','sas'].includes(b.kind)) fail(400, 'Invalid signal');
         validateEnvelope(b.envelope, ws.user, true);
         if (!related(ws.user, b.envelope.to)) fail(403, 'Unknown contact');
         if (!/^[a-f0-9-]{36}$/.test(b.callId)) fail(400, 'Invalid call');
@@ -382,6 +382,7 @@ export function createApp(options = {}) {
           return;
         }
         if (b.kind !== 'receipt' && (!active || ![active.from,active.to].includes(ws.user) || ![active.from,active.to].includes(target) || ws.user === target)) fail(403, 'Unknown call');
+        if(b.kind==='sas'){if(!active.answered)fail(403,'Call not answered');rate(`sas:${ws.user}`,50);}
         if (b.kind === 'answer') { if(active.to!==ws.user)fail(403,'Only the recipient can answer');active.answered = true; active.expiresAt = Date.now()+14400000;alerts.stop(b.callId); }
         if (b.kind === 'hangup') { alerts.stop(b.callId);calls.delete(b.callId); emit(ws.user, b); }
         emit(target, b);

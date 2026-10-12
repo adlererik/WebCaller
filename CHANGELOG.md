@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.14.0 — Optional four-word call comparison
+
+- Display four fresh call words beside the contact name in the codec font. Stack codec/rate rows with call quality aligned underneath.
+- Bind the optional check to the active call, pinned public identities and accepted DTLS fingerprints using a committed ephemeral X25519 exchange and the existing Vodozemac SAS primitive. Use four 11-bit word indices (44 bits) and role-specific key confirmations. No new package or change to existing Olm encryption/pins.
+- Keep SAS state in memory, exclude its plaintext frames from readable history, and clear its display/accessibility labels at hang-up. ICE and codec changes retain the words when media identity is unchanged; changed fingerprints start a fresh round.
+- Handle retries, duplicates, unsupported peers, invalid keys/proofs and timeouts without gating or terminating the call. A matching human comparison is optional and is never recorded as verified.
+- Add protocol and privacy documentation. The application-specific integration remains unaudited. Reopen the page on both phones after upgrading.
+
 ## v0.5.1 — Cancel stale audio-output work
 
 - Prevent a late speaker enumeration or output-picker result from an ended call affecting the next call.

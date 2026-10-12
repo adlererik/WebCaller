@@ -13,7 +13,9 @@ const laneFor=p=>p.kind==='attachment'?'files':p.kind==='text'?'chat':p.kind==='
 const scopeFor=(p,e)=>p.kind==='attachment'?e.id:p.kind==='transfer'?p.target:p.callId||laneFor(p);
 // Short-lived signaling also needs a sealed local copy: a notification/reload
 // can reopen the same offer after its transport key has already been discarded.
-const persistent=()=>true;
+// The optional call check has no saved transcript or verification record.
+// Ratchet state still advances atomically; normal signaling keeps its reload copy.
+const persistent=payload=>payload.kind!=='sas';
 function pack(value){const key=crypto.getRandomValues(new Uint8Array(32));try{return {pickle:value.pickle(key),key:b64(key)};}finally{key.fill(0);}}
 function unpack(Type,data){const key=unb64(data.key);try{return Type.from_pickle(data.pickle,key);}finally{key.fill(0);}}
 function validate(e,self,peer,now){
@@ -133,7 +135,7 @@ export function secureMessaging({api,store=secureStore(),now=Date.now,olm=loadOl
         try{e.ratchet={protocol:'olm-v2',lane,scope,sessionId:session.session_id,identity:account.curve25519_key,recipientIdentity:state.identity,type:message.message_type,data:b64(message.ciphertext),prekeyId:state.prekeyId};}finally{message.free();}
         e.signature=await sign(signed(e));
         const puts=lane==='files'?[]:[await db.record('session/'+session.session_id,{...state,...pack(session)},{kind:'session',peer:peer.id,expiresAt:now()+604800000}),await db.record('preferred/'+stream,{id:session.session_id},{kind:'preferred',peer:peer.id,expiresAt:now()+604800000})];
-        if(peerRecord)puts.push(peerRecord);if(persistent(e))puts.push(await archive(db,e,payload));
+        if(peerRecord)puts.push(peerRecord);if(persistent(payload))puts.push(await archive(db,e,payload));
         await db.commit(puts);return e;
       }finally{session?.free();account?.free();}
       });
@@ -175,7 +177,7 @@ export function secureMessaging({api,store=secureStore(),now=Date.now,olm=loadOl
         const stream=peer.id+'/'+r.lane+'/'+r.scope,preferred=await db.read('preferred/'+stream);
         // Simultaneous first sends converge on one shared, bidirectional session.
         if(r.lane!=='files'&&(!preferred||!await db.read('session/'+preferred.id)||r.sessionId<=preferred.id))puts.push(await db.record('preferred/'+stream,{id:r.sessionId},{kind:'preferred',peer:peer.id,expiresAt:now()+604800000}));
-        if(persistent(e))puts.push(await archive(db,e,decoded.payload));await db.commit(puts);
+        if(persistent(decoded.payload))puts.push(await archive(db,e,decoded.payload));await db.commit(puts);
         return decoded.payload;
       }finally{session?.free();result?.free();message?.free();account?.free();}
     });

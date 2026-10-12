@@ -9,6 +9,7 @@ import {checkContactTrust} from '../public/contact-trust.js';
 import {loadOlm} from '../public/vendor/vodozemac/load.js';
 import {orderedEnvelopes,olmFraming} from '../public/olm-wire.js';
 import {newAttachment,attachmentKey,encryptChunk,decryptChunk} from '../public/attachments.js';
+import {callSas} from '../public/call-sas.js';
 import {WebSocket} from 'ws';
 import {once} from 'node:events';
 import {readFile} from 'node:fs/promises';
@@ -120,6 +121,32 @@ test('a delayed file key request cannot hold up an established call signaling st
   let block=false,release,started;const gate=new Promise(r=>{release=r;}),entered=new Promise(r=>{started=r;}),slow=secureMessaging({...f.optionsA,api:async(p,m,b)=>{if(block&&p.startsWith('/ratchet/claim/')){started();await gate;}return f.apiA(p,m,b);}});await slow.initialize(f.alice);block=true;
   const file=new File(['Synthetic delayed file'],'slow.txt'),pending=slow.seal(f.alice.identity,f.alice.user.id,f.bob.user,{kind:'attachment',attachment:newAttachment(file)},3600);await entered;
   try{const ice=await Promise.race([f.a.seal(f.alice.identity,f.alice.user.id,f.bob.user,{kind:'ice',callId,candidate:{}},120),new Promise((_,reject)=>setTimeout(()=>reject(new Error('Call signaling blocked by file request')),750))]);assert.equal((await f.openB(ice)).kind,'ice');}finally{release();await pending;}
+});
+test('optional SAS crosses authenticated call signaling without archiving its transcript or affecting messages',async t=>{
+  const f=await fixture(t),a=await f.socket(f.alice,f.apiA),b=await f.socket(f.bob,f.apiB),callId=crypto.randomUUID();
+  t.after(()=>{a.close();b.close();});
+  async function signal(sender,socket,receiver,kind,payload){
+    const me=sender===f.a?f.alice:f.bob,peer=sender===f.a?f.bob:f.alice;
+    const e=await sender.seal(me.identity,me.user.id,peer.user,{kind,callId,...payload},120);
+    const arrived=once(receiver,'message');socket.send(JSON.stringify({type:'signal',kind,callId,envelope:e}));const event=JSON.parse((await arrived)[0]);
+    assert.equal(event.kind,kind);return {e,payload:await (sender===f.a?f.openB:f.openA)(event.envelope)};
+  }
+  await signal(f.a,a,b,'offer',{description:{type:'offer',sdp:'synthetic'},sasVersion:1});
+  const premature=await f.a.seal(f.alice.identity,f.alice.user.id,f.bob.user,{kind:'sas',callId,sas:{}},120),rejected=once(a,'message');a.send(JSON.stringify({type:'signal',kind:'sas',callId,envelope:premature}));assert.equal(JSON.parse((await rejected)[0]).error,'Call not answered');
+  await signal(f.b,b,a,'answer',{description:{type:'answer',sdp:'synthetic'},sasVersion:1});
+  const pending=[],states={},envelopes=[];
+  const checkA=callSas({context:'synthetic authenticated media context',initiator:true,send:async sas=>pending.push({from:'a',sas}),update:s=>states.a=s});
+  const checkB=callSas({context:'synthetic authenticated media context',initiator:false,send:async sas=>pending.push({from:'b',sas}),update:s=>states.b=s});t.after(()=>{checkA.close();checkB.close();});
+  await checkB.start();await checkA.start();
+  for(let i=0;pending.length&&i<12;i++){
+    const item=pending.shift(),fromA=item.from==='a',packet=await signal(fromA?f.a:f.b,fromA?a:b,fromA?b:a,'sas',{sas:item.sas});envelopes.push(packet.e);assert.equal(packet.payload.kind,'sas');await (fromA?checkB:checkA).receive(packet.payload.sas);
+  }
+  assert.equal(states.a.state,'ready');assert.equal(states.b.state,'ready');assert.equal(states.a.words,states.b.words);
+  for(const [messenger,user]of [[f.a,f.alice],[f.b,f.bob]]){
+    await messenger.store.lock(user.user.id,async db=>{for(const e of envelopes)assert.equal(await db.read('history/'+e.id),null);});
+  }
+  assert.equal((await f.openB(await f.sendA('Ordinary chat after SAS'))).text,'Ordinary chat after SAS');
+  const ice=await signal(f.a,a,b,'ice',{candidate:{candidate:'synthetic network handover'}});assert.equal(ice.payload.candidate.candidate,'synthetic network handover');
 });
 test('an expired lease is fenced off, and replacement state stays intact',async()=>{
   let timestamp=Date.now();const store=secureStore({indexedDB:new IDBFactory(),name:'lease-recovery',now:()=>timestamp});

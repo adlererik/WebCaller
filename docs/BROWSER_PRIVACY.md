@@ -24,3 +24,7 @@ Keep the phone locked with a passcode and use the phone’s notification privacy
 Private/Incognito windows reduce retained browsing state, but can discard this phone’s identity when closed and restrict background notifications. They are not a substitute for a persistent web phone that must receive calls while closed. [Chromium Incognito design](https://www.chromium.org/user-experience/incognito/), [WebKit storage isolation](https://webkit.org/tracking-prevention/), [iPhone Home Screen push requirements](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/).
 
 Disappearing messages remove what this app controls. They do not guarantee zero forensic traces, undo a recipient’s copy or erase browser/OS history.
+
+## Ratcheted storage (v0.13)
+
+The secure IndexedDB database separately seals message/event/call-setup history and ratchet state. This permits reopening chats after transport keys are discarded. Deletion/expiry clears history, while a minimal contact verification fingerprint intentionally survives removal to prevent a server-induced key reset. Forget this device clears the secure account and trust records too. Same-origin scripts can use the wrapping key; local retention is not protection against origin/profile compromise. Do not clear this database during an upgrade. See SECURITY.md for migration and forensic limitations.

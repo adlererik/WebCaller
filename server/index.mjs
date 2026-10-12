@@ -5,12 +5,14 @@ import { fileURLToPath } from 'node:url';
 import { randomBytes, randomUUID, createHash, createHmac, timingSafeEqual, createPublicKey } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import webpush from 'web-push';
+import {gzipSync} from 'node:zlib';
 import { createStore } from './store.mjs';
 import {messageEventRoutes} from './message-events.mjs';
 import {attachmentRoutes} from './attachments.mjs';
 import {CHUNK_SIZE} from '../public/attachments.js';
 import {validAttribution,defaultAttribution} from '../public/location.js';
 import {createCallAlerts,notificationPayload} from './call-alerts.mjs';
+import {ratchetRoutes} from './ratchet.mjs';
 
 const root = fileURLToPath(new URL('../public/', import.meta.url));
 const hash = (v) => createHash('sha256').update(v).digest('hex');
@@ -56,6 +58,7 @@ export function createApp(options = {}) {
   const handleAttachment=attachmentRoutes({store,related,validateEnvelope,fail,body,env,cancelled:a=>{emit(a.sender,{type:'transfer-ended',id:a.message_id});emit(a.recipient,{type:'transfer-ended',id:a.message_id});}});
   const emit = (id, event) => { for (const ws of sockets.get(id) || []) if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(event)); };
   const handleMessageEvents=messageEventRoutes({store,body,fail,validateEnvelope,emit});
+  const handleRatchet=ratchetRoutes({store,related,body,fail,emit});
   const auth = (req) => {
     const token = req.headers.authorization?.match(/^Bearer ([\w-]{43})$/)?.[1];
     const u = token && store.get('SELECT * FROM users WHERE token_hash=?', hash(token));
@@ -97,7 +100,7 @@ export function createApp(options = {}) {
     return { iceServers, turn: iceServers.length > 1, expiresAt: Date.now() + 7200000 };
   }
   const securityHeaders = {
-    'Content-Security-Policy': `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: ${mapImageSource}; connect-src 'self'; media-src 'self' blob:; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`,
+    'Content-Security-Policy': `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob: ${mapImageSource}; connect-src 'self'; media-src 'self' blob:; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`,
     'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff',
     'Permissions-Policy': 'camera=(self), microphone=(self), geolocation=(self), speaker-selection=(self)',
     'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY'
@@ -154,6 +157,7 @@ export function createApp(options = {}) {
           return json(201, result);
         }
         const u = auth(req); rate(route.startsWith('/attachments')?'attachment:'+u.id:u.id,route.startsWith('/attachments')?600:120);
+        if(await handleRatchet(req,res,route,u,json))return;
         if(await handleAttachment(req,res,route,u,json))return;
         if(await handleMessageEvents(req,res,route,u,json))return;
         if (route === '/me' && req.method === 'GET') return json(200, { user: userView(u), contacts: contacts(u.id) });
@@ -298,15 +302,27 @@ export function createApp(options = {}) {
       const relative = decodeURIComponent(path.slice(base.length + 1)) || 'index.html';
       const file = resolve(root, relative);
       if (!file.startsWith(root) || !(await stat(file)).isFile()) fail(404, 'Not found');
-      const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png' };
+      const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.wasm':'application/wasm' };
       const data = await readFile(file);
+      if(extname(file)==='.wasm'&&/\bgzip\b/.test(req.headers['accept-encoding']||'')){
+        const compressed=gzipSync(data);res.writeHead(200,{'Content-Type':'application/wasm','Content-Encoding':'gzip','Vary':'Accept-Encoding','Content-Length':compressed.length});return res.end(req.method==='HEAD'?undefined:compressed);
+      }
       res.writeHead(200, { 'Content-Type': mime[extname(file)] || 'application/octet-stream', 'Content-Length': data.length });
       res.end(req.method === 'HEAD' ? undefined : data);
     } catch (e) { json(e.status || (e.code === 'ENOENT' ? 404 : 500), { error: e.status ? e.message : e.code === 'ENOENT' ? 'Not found' : 'Something went wrong. Try again.' }); }
   });
   function validateEnvelope(b, sender, signaling = false, reservedUpload = false) {
     const now = Date.now();
-    if (b?.v !== 1 || b.from !== sender || typeof b.to !== 'string' || typeof b.id !== 'string' || !/^[a-f0-9-]{36}$/.test(b.id) || !Number.isSafeInteger(b.createdAt) || !Number.isSafeInteger(b.expiresAt) || b.createdAt > now + 30000 || (!reservedUpload && b.createdAt < now - 300000) || b.expiresAt <= now || b.expiresAt - b.createdAt > (signaling ? 120000 : 604800000) || b.expiresAt <= b.createdAt || typeof b.ciphertext !== 'string' || b.ciphertext.length > 24000 || typeof b.selfCiphertext !== 'string' || b.selfCiphertext.length > 24000 || typeof b.signature !== 'string' || b.signature.length > 128 || typeof b.iv !== 'string' || b.iv.length !== 16 || !b.ephemeral?.x || !b.ephemeral?.y || b.ephemeral.d) fail(400, 'Invalid encrypted message');
+    if (![1,2].includes(b?.v) || b.from !== sender || typeof b.to !== 'string' || typeof b.id !== 'string' || !/^[a-f0-9-]{36}$/.test(b.id) || !Number.isSafeInteger(b.createdAt) || !Number.isSafeInteger(b.expiresAt) || b.createdAt > now + 30000 || (!reservedUpload && b.createdAt < now - 300000) || b.expiresAt <= now || b.expiresAt - b.createdAt > (signaling ? 120000 : 604800000) || b.expiresAt <= b.createdAt || typeof b.signature !== 'string' || !/^[A-Za-z0-9_-]{86}$/.test(b.signature)) fail(400, 'Invalid encrypted message');
+    if(b.v===1){
+      if(typeof b.ciphertext!=='string'||b.ciphertext.length>24000||typeof b.selfCiphertext!=='string'||b.selfCiphertext.length>24000||typeof b.iv!=='string'||b.iv.length!==16||!b.ephemeral?.x||!b.ephemeral?.y||b.ephemeral.d)fail(400,'Invalid encrypted message');
+      if(store.get('SELECT owner FROM ratchet_accounts WHERE owner IN (?,?)',sender,b.to)&&!reservedUpload)fail(426,'Reopen WebCaller on both phones to update secure messaging.');
+    }else{
+      const r=b.ratchet,key=s=>typeof s==='string'&&/^[A-Za-z0-9+/]{43}$/.test(s);
+      if(b.selfCiphertext!==undefined||b.ephemeral!==undefined||r?.protocol!=='olm-v2'||!['chat','events','signal','files','typing','transfer'].includes(r.lane)||typeof r.scope!=='string'||r.scope.length>100||![0,1].includes(r.type)||!key(r.sessionId)||!key(r.identity)||!key(r.recipientIdentity)||typeof r.data!=='string'||!/^[A-Za-z0-9_-]+$/.test(r.data)||r.data.length>24000||typeof r.prekeyId!=='string'||r.prekeyId.length>24)fail(400,'Invalid ratchet message');
+      const from=store.get('SELECT identity FROM ratchet_accounts WHERE owner=?',sender),to=store.get('SELECT identity FROM ratchet_accounts WHERE owner=?',b.to);
+      if(!from||!to||from.identity!==r.identity||to.identity!==r.recipientIdentity)fail(400,'Secure device identity does not match');
+    }
   }
   const wss = new WebSocketServer({ noServer: true, maxPayload: 65536, perMessageDeflate: false });
   server.on('upgrade', (req, socket, head) => {

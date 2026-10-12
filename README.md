@@ -4,7 +4,7 @@ A browser-only phone for Android, iPhone and desktop: adaptive mono Opus voice, 
 
 **Start here: [Beginner installation guide](docs/INSTALL.md).** Use a Debian 12/13 server, a domain name and the guided installer. Docker supplies Node.js 24; optional Caddy supplies HTTPS and optional coturn supplies your own free relay.
 
-This is the **v0.12.0 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
+This is the **v0.13.0 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
 
 ## What you get
 
@@ -28,7 +28,7 @@ Call invitations detect the phone and guide the recipient through enabling alert
 
 Audio cannot survive zero usable bandwidth or complete outages. Bitrate figures are codec payload ceilings; network overhead uses extra data. Browser support determines actual microphone processing, FEC, PLC and sender controls. A normal website cannot erase global or synced browser history or hide its service-worker/storage usage; see [Browser privacy](docs/BROWSER_PRIVACY.md).
 
-Disappearing messages are not a guarantee of zero forensic traces. Screenshots, recipient copies, browser/OS history, provider metadata and external backups may remain. The custom encryption is **not Signal Protocol or Double Ratchet**, has no forward secrecy against compromise of a recipient's long-term private key, and is unaudited. See [security and privacy](docs/SECURITY.md).
+Disappearing messages cannot guarantee zero forensic traces: recipient copies, browser/OS records, provider metadata and backups may remain. New transport uses the Olm Double Ratchet; retained readable history is separately encrypted on the device. Historical v1 messages retain their old security limitations. The application and its integration remain unaudited. See [security and privacy](docs/SECURITY.md).
 
 ## Install
 
@@ -76,3 +76,7 @@ New in v0.7.0: Signal-style blue sent bubbles, overlapping green delivery/viewed
 ## v0.12.0 call header and background alerts
 
 Voice/video rates now share aligned numeric and kbps/Mbps columns. Quality stays centered in the caller-name row, with the timer to the right. Live call reminders request sound independently of a sleeping page, use `renotify` or fresh reminder tags where it is unsupported, and cannot be blocked indefinitely by a device-storage/server lookup. Answered/ended and originally expired calls remain silent. Reload the receiving phone once, then use **Settings → Call alerts → Send test alert** with the phone locked. Actual notification sound remains controlled by the phone. See [Call alerts](docs/CALL_ALERTS.md).
+
+## v0.13.0 security upgrade
+
+New chat, media manifests and call signaling use the Olm Double Ratchet. Contact/history removal keeps a separate verification fingerprint, preventing a server roster change from silently resetting trust. Reopen the page on both phones once after upgrading; accounts, invitations and authorized old history are preserved. Keep browser site storage intact: the server cannot reconstruct discarded transport keys or your local readable history. Key claims/publication yield to call signaling, files have separate one-use sessions, and per-call streams isolate new calls from old typing/progress traffic. See [Security and upgrade details](docs/SECURITY.md).

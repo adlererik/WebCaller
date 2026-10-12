@@ -20,7 +20,10 @@ flowchart LR
 | public/chat-ui.js | Keyed message rendering, media bubbles and searchable Unicode emoji picker |
 | public/chat-capture.js | Separate camera/voice capture, cleanup and voice-note codec selection |
 | public/app.js | Enrollment, contact pins, encrypted chat/signaling, call state, ringing, notifications, timers and reconnect |
-| public/crypto.js | Key generation, non-exportable vault, fingerprint/safety number, signed encryption and verification |
+| public/crypto.js | Existing identity/vault, safety numbers and legacy envelope verification |
+| public/secure-messaging.js, secure-store.js, contact-trust.js, olm-wire.js | Signed Olm Double Ratchet integration, encrypted history, atomic cross-tab state, persistent identity verification and ordered hydration |
+| public/vendor/vodozemac | Pinned WASM ratchet core/bindings, provenance and license notices |
+| server/ratchet.mjs | Signed public prekey publication/one-use claims and legacy migration snapshot |
 | public/attachments.js | Per-file keys, validated manifests, indexed chunk encryption/decryption and size limits |
 | server/attachments.mjs | Authenticated chunk upload/download, pending transfer cleanup and storage quotas |
 | public/onboarding.js | Parse invite/setup fragments, invitation precedence and removing secrets from the address |

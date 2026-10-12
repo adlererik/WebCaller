@@ -1,0 +1,18 @@
+{
+  "package": "@towns-protocol/vodozemac",
+  "version": "0.1.0",
+  "core": "vodozemac 0.9.0",
+  "source": "https://github.com/towns-protocol/vodozemac-bindings",
+  "coreSource": "https://github.com/matrix-org/vodozemac",
+  "license": "Apache-2.0",
+  "npmIntegrity": "sha512-v7zcd0xDrHiAIfeY8XRDAGjNcXinCNBs46DO6b9YDIVKdHy94nHwqX8JPGA4nSjej8BSsGrEPVQEMBpiB+P2gg==",
+  "files": {
+    "pkg/vodozemac_bg.js": "e061366aee4f476031d7225f755b35cfdac66a6339057f98d6baa1435f8c3411",
+    "pkg/vodozemac_bg.wasm": "5b3a606864bbcfe31f4e91f12e73b659c494f6d13c36cb6e1ec94dce992410fd",
+    "pkg/vodozemac.d.ts": "9201b1a5c6f94e3387ae6183a1ff1a5d067244fa0badec5449ba0662635ae4a0",
+    "LICENSE-APACHE.txt": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+    "THIRD-PARTY-NOTICES.txt": "6623b3fbd0b83fa78dccaf7aedfcab0a4ccea9a487fd0ab131e973cbc0378536",
+    "UPSTREAM-Cargo.lock": "44ac041c0d09644e26ddbf5980e5ecfaf43ed95f73572c2e41ce45039652314a"
+  },
+  "bindingReview": "The third-party binding and this application integration have not been independently audited."
+}

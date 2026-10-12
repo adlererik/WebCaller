@@ -21,6 +21,8 @@ export function createStore(dir) {
     CREATE INDEX IF NOT EXISTS attachments_expiry ON attachments(expires);
     CREATE TABLE IF NOT EXISTS message_deletions (id TEXT PRIMARY KEY, sender TEXT NOT NULL REFERENCES users(id), recipient TEXT NOT NULL REFERENCES users(id), expires INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS message_deletions_expiry ON message_deletions(expires);
+    CREATE TABLE IF NOT EXISTS ratchet_accounts (owner TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, identity TEXT NOT NULL, signature TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS ratchet_prekeys (owner TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, id TEXT NOT NULL, key TEXT NOT NULL, signature TEXT NOT NULL, claimed INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(owner,id));
   `);
   // Additive migrations preserve existing accounts and single-use invitations.
   if(!db.prepare('PRAGMA table_info(invites)').all().some(c=>c.name==='name'))db.exec("ALTER TABLE invites ADD COLUMN name TEXT NOT NULL DEFAULT ''");

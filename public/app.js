@@ -6,7 +6,12 @@ const chatNotificationIntents=messageIntents();let pendingMessageNotice=null;con
 import {callIntents} from './call-intents.js';
 const notificationIntents=callIntents();let pendingAnswer=null;
 import {contactPress} from './contact-press.js';
-import { newIdentity, fingerprint, safetyNumber, seal, open, vault } from './crypto.js';
+import { newIdentity, fingerprint, safetyNumber, vault } from './crypto.js';
+import {secureMessaging} from './secure-messaging.js';
+import {checkContactTrust} from './contact-trust.js';
+import {orderedEnvelopes} from './olm-wire.js';
+const messenger=secureMessaging({api});
+const seal=(...args)=>messenger.seal(...args),open=(...args)=>messenger.open(...args);
 import { Phone, testRelay } from './media.js';
 import {formatRate} from './call-metrics.js';
 import {mediaCache} from './media-cache.js';
@@ -20,7 +25,7 @@ import {drawMessages,emojiPicker} from './chat-ui.js';
 import {chatCapture} from './chat-capture.js';
 import {callSetup,phonePlatform,registerAlerts} from './call-setup.js';
 const cachedMedia=mediaCache();let cacheWarning=false;
-void cachedMedia.purge();setInterval(()=>void cachedMedia.purge(),60000);
+void cachedMedia.purge();setInterval(()=>{void cachedMedia.purge();if(device)void messenger.purge().catch(()=>{});},60000);
 async function keepMedia(owner,m,a,chunks){
   if(!await cachedMedia.put(owner,m,a,chunks)&&cachedMedia.lastError&&!cacheWarning){cacheWarning=true;toast('Your browser could not keep this file. Reopening may download it again.');}
 }
@@ -72,11 +77,11 @@ const alerts=callSetup({api,config:()=>config,device:()=>device,save:()=>vault('
 function connected(ready){wsReady=ready;$('connection').textContent=ready?'Ready for conversations':'Reconnecting…';$('connection').classList.toggle('online',ready);}
 async function pinContacts(contacts){
   const removed=(device.contacts||[]).filter(c=>!contacts.some(next=>next.id===c.id));
-  for(const c of removed)clearContactHistory(c.id);
+  for(const c of removed){await checkContactTrust(messenger.store,device.user.id,c,device.pins?.[c.id]);await clearContactHistory(c.id);}
   device.pins ||= {};const safe=[];
   for(const contact of contacts){
-    const next=await fingerprint(contact.keys),prior=device.pins[contact.id];
-    if(prior&&await fingerprint(prior.keys)!==next){toast(`Device keys changed for ${contact.name}. Contact them through a trusted channel.`);continue;}
+    try{await checkContactTrust(messenger.store,device.user.id,contact,device.pins[contact.id]);}
+    catch(error){toast(error.message);continue;}
     device.pins[contact.id]=contact;safe.push(contact);
   }
   device.contacts=safe;await vault('put',device);renderContacts();
@@ -102,7 +107,7 @@ function showContactOptions(c){
   contactToRemove=c;$('remove-contact-title').textContent=`Remove ${c.name}?`;$('remove-contact-error').textContent='';
   $('confirm-remove-contact').disabled=false;if(!$('remove-contact-dialog').open)$('remove-contact-dialog').showModal();
 }
-function clearContactHistory(id){
+async function clearContactHistory(id){
   for(const [key,m]of pendingTransfers)if([m.from,m.to].includes(id))pendingTransfers.delete(key);if(pendingMessageNotice?.peerId===id)pendingMessageNotice=null;
   if(transfer?.peerId===id)transfer.controller.abort();
   if(selected?.id===id){
@@ -114,6 +119,7 @@ function clearContactHistory(id){
   for(const m of [...messages.values()])if([m.from,m.to].includes(id))rememberDeletion(m.id,m.expiresAt);
   unread.delete(id);typingPeers.delete(id);delete settings.timers[id];delete device.pins?.[id];saveSettings();
   if(contactToRemove?.id===id){contactToRemove=null;$('remove-contact-dialog').close();}
+  await messenger.forgetPeer(id); // The separate identity fingerprint survives history deletion.
 }
 function selectContact(c){
   actions.reset();stopTyping();locationShare.close();$('attachment-dialog').close();closeViewer();captures.close();$('draft-dialog').close();$('message-input').value='';updateComposer();selected=c;unread.delete(c.id);renderContacts();$('empty').classList.add('hidden');$('conversation').classList.remove('hidden');document.querySelector('.app').classList.add('chat-open');
@@ -131,6 +137,7 @@ function messageOptions(m){actions.show(m);}
 function jumpMessage(id){const row=[...$('messages').children].find(e=>e.dataset.key===id);if(row){row.scrollIntoView({block:'center',behavior:'smooth'});row.querySelector('.message')?.focus({preventScroll:true});}else toast('The original message has expired or was deleted.');}
 function rememberDeletion(id,expires){
   if(typeof id!=='string'||!Number.isSafeInteger(expires))return;
+  if(device)void messenger.remove(id,expires).catch(error=>toast(error.message));
   pendingTransfers.delete(id);void cachedMedia.remove(device?.user.id,id,expires);deletedMessages.set(id,expires);receiptWanted.delete(id);visibleSince.delete(id);pendingMessageEvents.delete(id);const m=messages.get(id);
   if(transfer?.messageId===id)transfer.controller.abort();if(viewerMessage?.id===id)closeViewer();
   if(m){clearMessage(m);messages.delete(id);if(selected)renderMessages();}
@@ -177,7 +184,7 @@ function pumpMedia(){
   if(m)void loadAttachment(m,true);
 }
 async function acceptMessage(envelope,hydrating=false){
-  if(document.visibilityState==='hidden')return; // Resync ciphertext when visible; do not rebuild hidden plaintext.
+  // Advance and seal transport state while hidden, without rebuilding the UI's plaintext.
   if(messages.has(envelope.id)||deletedMessages.has(envelope.id)||envelope.expiresAt<=Date.now())return;
   const peerId=envelope.from===device.user.id?envelope.to:envelope.from;
   let peer=device.contacts.find(c=>c.id===peerId);
@@ -355,6 +362,10 @@ const chooseEmoji=emojiPicker({input:$('message-input'),changed:inputTyping,toas
 const actions=messageActions({messages:()=>messages,self:()=>device?.user.id,contacts:()=>device?.contacts||[],peer:()=>selected,render:renderMessages,event:sendMessageEvent,sendText:sendTextTo,sendFile,load:loadAttachment,remove:async m=>{await api(`/messages/${m.id}`,'DELETE');rememberDeletion(m.id,m.expiresAt);},toast,emoji:chooseEmoji});
 let eventChain=Promise.resolve(),receiptWanted=new Map(),visibleSince=new Map(),pendingMessageEvents=new Map(),receiptTimer,receiptsBusy=false,hydratingMessages=false;
 async function acceptMessageEvent(update){
+  if(document.visibilityState!=='visible'&&update?.envelope){
+    const e=update.envelope,peerId=e.from===device.user.id?e.to:e.from,peer=device.contacts.find(c=>c.id===peerId);
+    if(peer)await open(device.identity,device.user.id,peer,e);return;
+  }
   if(document.visibilityState!=='visible'||!update?.envelope||!validMessageId(update.target))return;
   const m=messages.get(update.target);if(!m){if(!deletedMessages.has(update.target)&&update.envelope.expiresAt>Date.now()&&pendingMessageEvents.size<500){const pending=pendingMessageEvents.get(update.target)||[];if(pending.length<8)pending.push(update);pendingMessageEvents.set(update.target,pending);}return;}
   const e=update.envelope,peerId=e.from===device.user.id?e.to:e.from,peer=device.contacts.find(c=>c.id===peerId);if(!peer)return;
@@ -396,8 +407,9 @@ async function sync(){
   for(const d of await api('/message-deletions'))rememberDeletion(d.id,d.expires);
   hydratingMessages=true;
   try{const saved=await api('/messages');
-  for(const e of saved)try{await acceptMessage(e,true);}catch{toast('An encrypted message could not be verified.');}
-  for(const update of await api('/message-events'))try{await acceptMessageEvent(update);}catch{toast('A message update could not be verified.');}
+  for(const e of orderedEnvelopes(saved))try{await acceptMessage(e,true);}catch{toast('An encrypted message could not be verified.');}
+  const updates=await api('/message-events'),byId=new Map(updates.map(u=>[u.envelope.id,u]));
+  for(const e of orderedEnvelopes(updates.map(u=>u.envelope)))try{await acceptMessageEvent(byId.get(e.id));}catch{toast('A message update could not be verified.');}
   }finally{hydratingMessages=false;}
   if(selected)renderMessages();openMessageNotice();queueReceipts();
 }
@@ -417,6 +429,7 @@ async function connect(){
       else if(b.type==='message-deleted')rememberDeletion(b.id,b.expires);
       else if(b.type==='typing')await receiveTyping(b.envelope);
       else if(b.type==='contacts')await sync();
+      else if(b.type==='secure-keys-needed')await messenger.publish();
       else if(b.type==='signal')await receiveSignal(b);
       else if(b.type==='busy'&&b.callId===call?.id)finishCall('They’re on another call. Try again later.');
       else if(b.type==='call-ended'&&b.callId===call?.id)finishCall(b.reason||'Call ended');
@@ -609,6 +622,7 @@ async function boot(){
   }catch(e){toast(e.message);$('connection').textContent='Unable to connect';}
 }
 async function ready(){
+  await messenger.initialize(device);
   $('self-name').textContent=device.user.name;$('self-avatar').textContent=initials(device.user.name);renderContacts();await consumeNotificationAnswer();await consumeMessageNotice();await connect();
   if(navigator.serviceWorker&&(!phonePlatform().ios||phonePlatform().standalone))void registerAlerts().catch(()=>{});
 }
@@ -720,11 +734,11 @@ $('confirm-remove-contact').onclick=async()=>{
   try{
     const result=await api(`/contacts/${c.id}`,'DELETE');
     for(const m of result.deleted)rememberDeletion(m.id,m.expires);
-    clearContactHistory(c.id);await pinContacts(result.contacts);$('remove-contact-dialog').close();toast('Contact and shared history deleted.');
+    await clearContactHistory(c.id);await pinContacts(result.contacts);$('remove-contact-dialog').close();toast('Contact and shared history deleted.');
   }catch(e){if(contactToRemove?.id===c.id){$('remove-contact-error').textContent=e.message;$('confirm-remove-contact').disabled=false;}else toast(e.message);}
 };
 $('confirm-forget').onclick=async()=>{
-  try{await api('/device','DELETE');if(ws){ws.onclose=null;ws.close();}clearTimeout(reconnectTimer);clearInterval(heartbeat);finishCall('');transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();await cachedMedia.clear();await notificationIntents.clear();await chatNotificationIntents.clear();await vault('delete');localStorage.removeItem('webcaller-settings');device=null;location.reload();}catch(e){toast(e.message);}
+  try{await api('/device','DELETE');if(ws){ws.onclose=null;ws.close();}clearTimeout(reconnectTimer);clearInterval(heartbeat);finishCall('');transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();await cachedMedia.clear();await notificationIntents.clear();await chatNotificationIntents.clear();await messenger.forget();await vault('delete');localStorage.removeItem('webcaller-settings');device=null;location.reload();}catch(e){toast(e.message);}
 };
 function clearMessage(m){m.reactions=null;m.receipt=null;m.versions=null;m.pinVersion=null;m.replyTo=null;if(viewerMessage?.id===m.id)closeViewer();if(m.blobURL)URL.revokeObjectURL(m.blobURL);m.blobURL=null;m.blob=null;m.location=null;m.text='';m.attachment=null;}
 setInterval(()=>{if(purgeTransfers(pendingTransfers)&&selected)renderMessages();if(selected&&document.visibilityState==='visible')updateCountdowns($('messages'));for(const [id,updates]of pendingMessageEvents)if(!updates.some(e=>e.envelope.expiresAt>Date.now()))pendingMessageEvents.delete(id);queueReceipts();for(const [id,expiry]of deletedMessages)if(expiry<=Date.now())deletedMessages.delete(id);for(const [id,expiry]of typingSeen)if(expiry<=Date.now())typingSeen.delete(id);renderTyping();let changed=false;for(const [id,m]of messages)if(m.expiresAt<=Date.now()){void cachedMedia.remove(device?.user.id,id,m.expiresAt);clearMessage(m);messages.delete(id);receiptWanted.delete(id);visibleSince.delete(id);changed=true;}if(changed&&selected)renderMessages();},1000);

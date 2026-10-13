@@ -103,7 +103,7 @@ There is no extra app prompt for precise location. The browser/OS still requires
 
 ## Call information at the top
 
-Two small rows near the top show video above voice, with connection quality on the right. They show separate **Voice** and **Video** send/receive payload rates in **kbps** or **Mbps**, alongside their actual codecs. These update about every second; the rate appears after two samples. They show measured traffic, not the configured bitrate limit. Hovering each row on a computer shows send and receive separately. Browser media counters exclude network headers, TURN encapsulation and chat traffic, so this is not a mobile-provider billing meter. The codecs are obtained from active WebRTC streams; different send/receive codecs get arrow labels.
+Two small rows near the top show video above voice, with connection quality underneath. They show separate **Voice** and **Video** send/receive payload rates in **kbps** or **Mbps**, alongside their actual codecs. These update about every second; the rate appears after two samples. They show measured traffic, not the configured bitrate limit. Hovering each row on a computer shows send and receive separately. Browser media counters exclude network headers, TURN encapsulation and chat traffic, so this is not a mobile-provider billing meter. The codecs are obtained from active WebRTC streams; different send/receive codecs get arrow labels.
 
 Sent bubbles and the plus/send buttons use Signal-style blue in both system themes. The two green circled received/viewed checks overlap; each retains its timestamp in message Info. **Edit** is available only for your own text/captions. The other person may react, reply or delete for both, but cannot edit what you wrote.
 
@@ -127,6 +127,14 @@ Every message has a small disappearing countdown beside its timestamp and delive
 
 During a file/media upload, connected phones show a spinner and **Sending / Receiving · percentage** placeholder in chat. It becomes the normal file or media bubble after the completed encrypted upload is verified. Opening an uncached attachment shows its own loading progress. Progress is temporary, encrypted and does not create message-history entries or a push alert for every update. A disconnected recipient sees progress after reconnecting if the sender is still announcing it; otherwise it sees the completed message when available. Cancelling, expiry or contact removal clears the placeholder; a lost connection lets an unrenewed placeholder expire within 20 seconds.
 
-The call settings icon is a cog. Voice/video rates sit directly beside their codec names, with connection quality to their right. Sharing retains the current voice-first bandwidth policy.
+The call settings icon is a cog. Voice/video rates sit directly beside their codec names, with connection quality underneath. Sharing retains the current voice-first bandwidth policy.
 
 For browser-history limitations and keeping this phone private, see [Browser privacy](BROWSER_PRIVACY.md). A website cannot erase browser history or hide that it has been used from someone inspecting the device.
+
+## Compare the call words
+
+During a connected voice/video call, four small words appear at the top. In video, the other person’s name is upper left and the words are centered in the same row; codec speeds and quality sit underneath. Read all four words in order and ask the other person to compare each to their own display. Repeat or spell an unclear word. If any differ, end the call and verify through a trusted route. “Preparing” or “unavailable” is not a successful comparison.
+
+Reading the words is optional: the call works without confirmation, including a child’s call. Skipping them gives no additional human verification. Matching words check this call’s connection under trusted software; they do not defeat malicious website code or prove the security of all earlier messages. They are not a password/recovery phrase and are cleared on hang-up/page exit. [How it works](CALL_VERIFICATION.md).
+
+Messages and files are end-to-end encrypted, but local readable history, metadata and browser/device traces have separate risks. Deleting a contact preserves minimal verification pins to resist identity replacement. Clearing site storage loses keys/history and those pins. See [security](SECURITY.md), [review](SECURITY_REVIEW.md) and [Signal comparison](../README.md#webcaller-beside-signal).

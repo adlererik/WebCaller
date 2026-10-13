@@ -4,7 +4,7 @@ import {IDBFactory} from 'fake-indexeddb';
 import {createApp} from '../server/index.mjs';
 import {newIdentity,seal as legacySeal,unb64} from '../public/crypto.js';
 import {secureStore} from '../public/secure-store.js';
-import {secureMessaging} from '../public/secure-messaging.js';
+import {secureMessaging,identityStatement,prekeyStatement} from '../public/secure-messaging.js';
 import {checkContactTrust} from '../public/contact-trust.js';
 import {loadOlm} from '../public/vendor/vodozemac/load.js';
 import {orderedEnvelopes,olmFraming} from '../public/olm-wire.js';
@@ -89,6 +89,22 @@ test('attachments, edits, receipts and short-lived call offers reopen through th
   const edit=await f.a.seal(f.alice.identity,f.alice.user.id,f.bob.user,{kind:'message-edit',target:e.id,text:'New caption'},3600);assert.equal((await f.openB(edit)).text,'New caption');assert.equal((await f.openA(edit)).text,'New caption');
   const receipt=await f.b.seal(f.bob.identity,f.bob.user.id,f.alice.user,{kind:'message-read',target:e.id,at:Date.now()},3600);assert.equal((await f.openA(receipt)).kind,'message-read');
   const offer=await f.a.seal(f.alice.identity,f.alice.user.id,f.bob.user,{kind:'offer',callId:crypto.randomUUID(),description:{type:'offer',sdp:'synthetic SDP'}},90);assert.equal((await f.openB(offer)).description.sdp,'synthetic SDP');assert.equal((await f.openB(offer)).description.sdp,'synthetic SDP');
+});
+test('a hostile key directory cannot substitute a prekey or the pinned Olm identity',async t=>{
+  const f=await fixture(t),O=await loadOlm(),attacker=new O.Account();attacker.generate_one_time_keys(1);t.after(()=>attacker.free());
+  await f.openB(await f.sendA('Establish the trusted Olm identity'));
+  const valid=await f.apiA('/ratchet/claim/'+f.bob.user.id,'POST',{}),[id,key]=[...attacker.one_time_keys][0];
+  let bundle={...valid,prekey:{...valid.prekey,key}};
+  const client=secureMessaging({...f.optionsA,api:(p,m,b)=>p.startsWith('/ratchet/claim/')?Promise.resolve(structuredClone(bundle)):f.apiA(p,m,b)});
+  await client.initialize(f.alice);
+  const send=()=>client.seal(f.alice.identity,f.alice.user.id,f.bob.user,{kind:'offer',callId:crypto.randomUUID()},60);
+  await assert.rejects(send(),/Invalid signature/);
+  // Even a correctly signed replacement Olm account cannot reset an existing
+  // Olm pin. Signing with the fixture key models account rotation, not forgery.
+  const sign=async text=>Buffer.from(await crypto.subtle.sign({name:'ECDSA',hash:'SHA-256'},f.bob.identity.sign,new TextEncoder().encode(text))).toString('base64url');
+  bundle={v:2,identity:attacker.curve25519_key,signature:await sign(identityStatement(f.bob.user.id,attacker.curve25519_key)),prekey:{id,key,signature:await sign(prekeyStatement(f.bob.user.id,attacker.curve25519_key,id,key))}};
+  await assert.rejects(send(),/Secure identity changed/);
+  assert.equal((await f.openB(await f.sendA('Original session remains usable'))).text,'Original session remains usable');
 });
 test('discarded transport message keys cannot decrypt earlier packets from current Olm state',async()=>{
   const O=await loadOlm(),a=new O.Account(),b=new O.Account();b.generate_one_time_keys(1);const key=[...b.one_time_keys.values()][0],s=a.create_outbound_session(b.curve25519_key,key,O.SessionConfigVersion.V2),first=s.encrypt('Old transport message'),result=b.create_inbound_session(a.curve25519_key,first),r=result.session;

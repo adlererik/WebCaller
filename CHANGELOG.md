@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.14.1 — 2026-10-13
+
+- Align the video-call name with the left codec icons and center call words in the same row. Quality remains below the aligned codec/rate rows.
+- Clear optional call-word state and accessibility metadata on page exit as well as hang-up; preserve existing ciphers, identities and stored history.
+- Add hostile-key-directory signature/Olm identity continuity regression coverage.
+- Publish a scoped source security review, exact cipher inventory, SAS instructions, forward-secrecy/recovery limitations and a dated Signal comparison. Correct local status-retention and contact-pin deletion descriptions.
+- Validate 124 private / 128 public tests and synthetic real-browser calls at 390/320 px. No independent integration audit or physical-phone certification is claimed.
+
 ## v0.14.0 — Optional four-word call comparison
 
 - Display four fresh call words beside the contact name in the codec font. Stack codec/rate rows with call quality aligned underneath.

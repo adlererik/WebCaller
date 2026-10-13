@@ -20,7 +20,7 @@ Browser UI checks on a disposable loopback origin used generated camera/audio, n
 
 ## Unsupported guarantees
 
-Guaranteed closed-browser/locked-phone ringing with no install, usable speech through arbitrary outages/zero bandwidth, and zero forensic traces are not possible promises. No Signal Double Ratchet or audited security claim is made.
+Guaranteed closed-browser/locked-phone ringing with no install, usable speech through arbitrary outages/zero bandwidth, and zero forensic traces are not possible promises. The v2 app uses the Olm Double Ratchet, not Signal’s wire protocol; no independently audited integration claim is made.
 
 ## v0.4.0 call-alert checks
 
@@ -96,3 +96,11 @@ Phone-width browser QA uses synthetic accounts, microphone/video streams and a l
 ## v0.13 security upgrade
 
 110 private-project / 114 public-release Node tests pass, including ratchet replies, signed framing/tamper rejection, encrypted history and reload, atomic concurrent tab sends, simultaneous first-session convergence, exact legacy migration/no downgrade, deletion/expiry/tombstones, persistent pins after contact removal, one-use signed prekeys, attachment manifests/edits/receipts/reopened offers, discarded consumed transport keys, slow attachments after 55 later messages, ordered hydration, full-tag enforcement, authenticated WebSocket offer/answer/ICE, delayed file-key requests yielding to established-call signaling, and expired-lease fencing. Existing 95 tests continue to pass. Disposable real-browser checks verify invitation activation, text/replies, delivery/read indicators, edits, inline images and history/media after both pages reload, with no browser crypto errors. This is not a physical-phone battery/routing/background-ring test or an independent security audit.
+
+## v0.14.1 call header and source security review
+
+124 private-project / 128 public-release Node tests pass, with syntax checks. The added key-directory regression rejects a substituted one-time prekey signature and a correctly signed replacement Olm account after pinning, then confirms the established conversation still decrypts. Existing framing, tamper, legacy-downgrade, one-use prekey, cross-tab fencing, discarded message-key, deletion/expiry and SAS proof/context/cancellation checks pass.
+
+Disposable browser sessions with generated audio/video verify matching four-word SAS through actual WebRTC. At 390 pixels, the name and codec icons share the same left edge, words are centered at 195 pixels, and quality aligns with codec text underneath. At 320 pixels the words remain centered without overlapping the truncated name. A synthetic `pagehide` event clears the SAS text, aria label, title and state; browser error logs are empty. No real user accounts, microphones/cameras, locations or push recipients are used.
+
+Documentation now distinguishes end-to-end content encryption from origin-delivered code trust, classical transport forward secrecy from retained history, per-stream recovery, first-contact trust, metadata, and short-lived sealed local status copies. The [review](SECURITY_REVIEW.md) records evidence, the cleanup fix and remaining limits. It is not an independent audit or proof that all MITM/post-compromise cases are secure. Physical-phone audio/ringing and other unchanged networking components retain their prior verification limits.

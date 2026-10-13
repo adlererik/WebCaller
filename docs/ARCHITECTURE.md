@@ -22,6 +22,7 @@ flowchart LR
 | public/app.js | Enrollment, contact pins, encrypted chat/signaling, call state, ringing, notifications, timers and reconnect |
 | public/crypto.js | Existing identity/vault, safety numbers and legacy envelope verification |
 | public/secure-messaging.js, secure-store.js, contact-trust.js, olm-wire.js | Signed Olm Double Ratchet integration, encrypted history, atomic cross-tab state, persistent identity verification and ordered hydration |
+| public/call-sas.js, sas-words.js | Ephemeral media-bound X25519 commit/reveal SAS, local 44-bit word display, retry/cleanup |
 | public/vendor/vodozemac | Pinned WASM ratchet core/bindings, provenance and license notices |
 | server/ratchet.mjs | Signed public prekey publication/one-use claims and legacy migration snapshot |
 | public/attachments.js | Per-file keys, validated manifests, indexed chunk encryption/decryption and size limits |
@@ -86,8 +87,12 @@ flowchart LR
 
 The optional `archive-proxy.mjs` bypasses an existing Node site's visitor handler for only /calls and upgrades, strips its cookies and forwards to loopback. `link-archive.mjs` recognizes a specific http.createServer wrapper and backs it up before adding hooks; it is not a universal website installer. Use a normal reverse proxy for unrelated frameworks.
 
-Typing uses authenticated WebSocket `{type:"typing", envelope}` events with signed encrypted payloads `{kind:"typing",active:boolean}` and an eight-second client TTL. It does not enter the call map/mailbox or offline replay. Deletion uses authenticated HTTP and metadata notifications; clients reject delayed envelopes for known deleted IDs.
+Typing uses authenticated WebSocket `{type:"typing", envelope}` events with signed encrypted payloads `{kind:"typing",active:boolean}` and an eight-second client TTL. It does not enter the server call map/mailbox or offline replay. v2 local cryptographic reload copies are sealed until the envelope TTL (10 seconds); displayed typing state is temporary. Deletion uses authenticated HTTP and metadata notifications; clients reject delayed envelopes for known deleted IDs.
 
 File activity uses signed encrypted `sharing` signals inside an existing participant-bound call. It is not stored in the mailbox or replayed; the receiving lease expires after 30 seconds. Local transfer completion/abort immediately restores the local current video budget. Notification decisions never come from URLs, socket offers or push arrivals; only worker notification-button clicks create them.
 
-Upload progress uses authenticated WebSocket `{type:"transfer", messageId, envelope}` events. Only the sender of a live, uncommitted reservation can publish to its exact recipient, with an envelope lifetime of at most 20 seconds bounded by the attachment deadline. The encrypted payload binds its target ID, metadata, percent and original timestamps; clients enforce immutable identity/deadline fields, monotonic progress, lease expiry and committed/deleted-message guards. It does not enter SQLite or offline replay. Discarding a reservation emits `{type:"transfer-ended",id}` to its two participants.
+Upload progress uses authenticated WebSocket `{type:"transfer", messageId, envelope}` events. Only the sender of a live, uncommitted reservation can publish to its exact recipient, with an envelope lifetime of at most 20 seconds bounded by the attachment deadline. The encrypted payload binds its target ID, metadata, percent and original timestamps; clients enforce immutable identity/deadline fields, monotonic progress, lease expiry and committed/deleted-message guards. It does not enter SQLite or server offline replay. The v2 client seals its cryptographic reload copy until envelope expiry; visible progress is temporary. Discarding a reservation emits `{type:"transfer-ended",id}` to its two participants.
+
+## Security boundaries
+
+The Olm ratchet encrypts signaling, while the browser’s separate DTLS-SRTP connection encrypts audio/video. The call SAS binds accepted certificate fingerprints to fresh contributions and authenticated contact identities. Retained browser history is independently wrapped under a same-origin AES-256-GCM key; it remains readable after transport keys are discarded. Ratchet lanes/call scopes are independent, so post-compromise healing must occur in the affected stream. A path is not origin isolation. See [security review](SECURITY_REVIEW.md).

@@ -4,13 +4,68 @@ A browser-only phone for Android, iPhone and desktop: adaptive mono Opus voice, 
 
 **Start here: [Beginner installation guide](docs/INSTALL.md).** Use a Debian 12/13 server, a domain name and the guided installer. Docker supplies Node.js 24; optional Caddy supplies HTTPS and optional coturn supplies your own free relay.
 
-This is the **v0.14.0 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
+This is the **v0.14.1 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
+
+## Security: what is protected
+
+**Messages, attachments and one-to-one calls are end-to-end encrypted when both browsers run trusted WebCaller code and the intended contact keys are authenticated.** The server stores message/file ciphertext rather than plaintext or their decryption keys. A Wi-Fi observer, ISP or TURN relay cannot normally read that content. The website operator still controls the JavaScript delivered to the phones; this is the most important limitation of a browser-only messenger.
+
+New messages, edits, receipts, file-key manifests and call signaling use the **Olm Double Ratchet**. Signed one-time prekeys establish sessions, message keys advance and consumed keys are discarded. Contact identity pins survive deleting a contact/history, so a server roster reset cannot silently authorize replacement keys for the same contact ID. Signed encrypted signaling binds the call's accepted media fingerprints. Four optional per-call security words let you compare that connection aloud. These are useful protections, not an independent audit or a guarantee against every attack. See the [source review and its limits](docs/SECURITY_REVIEW.md).
+
+### Encryption inventory
+
+| Component | Algorithms actually used | Meaning and limits |
+|---|---|---|
+| New message/signaling transport | Olm Double Ratchet; **Curve25519/X25519**, **AES-256-CBC**, **HMAC-SHA-256**, **HKDF-SHA-256** | Vodozemac 0.9.0 through a locally bundled binding. Olm SessionConfig V2 requires a full 32-byte MAC. This is not Signal's wire protocol. |
+| Signed identity/prekey/envelope authentication | **ECDSA P-256 with SHA-256** | Signs published Olm identities/prekeys and complete envelope routing/expiry/ciphertext. Pins detect changes; signatures alone do not establish who a new contact is. |
+| Files, images, video and voice-note attachments | Fresh per-file **AES-256-GCM**, 128-bit authentication tags | Indexed 96-bit nonces and authenticated chunk context; the file key/name/type travel inside a ratcheted manifest. |
+| Browser account/session/history records | Separate non-exportable **AES-256-GCM** wrapping key | Stored in the same browser origin. Protects record ciphertext, not an attacker able to use that origin/profile and its key. |
+| Live voice/video | **WebRTC DTLS-SRTP** | The browser negotiates the DTLS/SRTP cipher suite. Do not assume AES-256 or a Double Ratchet for individual media frames. TURN relays encrypted media. |
+| Four-word call SAS | Fresh ephemeral **X25519**, **SHA-256** commitment, **HKDF-SHA-256 / HMAC-SHA-256** | Binds call ID, roles, identity fingerprints, accepted DTLS fingerprints and fresh contributions. Four 2048-word indices encode a **44-bit comparison**, not a 256-bit password. |
+| Authorized historical v1 messages | Ephemeral **ECDH P-256**, **HKDF-SHA-256**, **AES-256-GCM**, **ECDSA P-256** | Only exact pre-upgrade envelopes remain readable. Recipient static-key compromise can expose this old traffic; upgrading cannot add forward secrecy retroactively. |
+
+X25519 and P-256 provide roughly **128-bit classical security**; a 256-bit AES key does not make the whole protocol 256-bit secure. WebCaller does not implement ChaCha20-Poly1305 for its message/file format, PQXDH, ML-KEM, a post-quantum ratchet, key transparency or Sealed Sender. HTTPS/WSS, temporary TURN authentication and Web Push are additional delivery mechanisms, not substitutes for content encryption. [Detailed inventory](docs/SECURITY.md#encryption).
+
+### WebCaller beside Signal
+
+Comparison reviewed **13 October 2026**. Features depend on client/session version; Signal's modern design includes more than the original Double Ratchet.
+
+| Security property | WebCaller | Signal |
+|---|---|---|
+| End-to-end content protection | Olm v2 messages/manifests/signaling; AES-GCM attachments; DTLS-SRTP calls, subject to trusted clients and verified contact keys. | End-to-end messages and calls using Signal's supported clients/protocol. [Calling](https://support.signal.org/hc/en-us/articles/360007060492-Voice-or-Video-Calling). |
+| Session agreement and ratcheting | Classical X25519 one-time-prekey Olm and Double Ratchet; no post-quantum agreement/ratchet. | PQXDH plus classical Double Ratchet and SPQR combined as the **Triple Ratchet** for supporting sessions. [Specifications](https://signal.org/docs/), [SPQR](https://signal.org/blog/spqr/). |
+| Message ciphers | AES-256-CBC + full-length HMAC-SHA-256; HKDF-SHA-256. | AES-256-CBC + HMAC-SHA-256 and HKDF-SHA-256 in the reviewed one-to-one libsignal implementation, with hybrid ratchet-derived message keys. Different call/attachment formats have their own ciphers. [Encryption source](https://github.com/signalapp/libsignal/blob/4beb029d8a941f81e7d9c6d8af1ed25a677569a8/rust/protocol/src/triple_ratchet.rs), [MAC source](https://github.com/signalapp/libsignal/blob/4beb029d8a941f81e7d9c6d8af1ed25a677569a8/rust/protocol/src/protocol.rs). |
+| Forward secrecy | Discarded v2 transport keys protect past traffic from later ratchet-state exposure. Retained local history/file keys and old v1 traffic are separate exposures. | Ratcheting protects discarded transport secrets, including hybrid protection in supporting sessions. Retained endpoint history still needs protection. [Ratchet specification](https://signal.org/docs/specifications/doubleratchet/). |
+| Recovery after a temporary compromise | Requires loss of attacker access and fresh uncompromised DH exchanges **in the affected stream**. One-way traffic alone does not heal a compromised chain. | Classical and post-quantum recovery mechanisms in supporting modern sessions; recovery still requires fresh exchanges and the attacker losing access. [SPQR](https://signal.org/blog/spqr/). |
+| MITM / new-contact authentication | Invitation fingerprint for the inviter, safety-number comparison, persistent P-256 and Olm pins, optional per-call SAS. No human comparison means no additional human assurance. | Safety numbers and change detection; **automatic key verification through key transparency**, where available. [Safety numbers](https://support.signal.org/hc/en-us/articles/360007060632-What-is-a-safety-number-and-why-do-I-see-that-it-changed), [automatic verification](https://support.signal.org/hc/en-us/articles/10223569377562-Automatic-Key-Verification). |
+| Client delivery trust | Fresh website code is controlled by the origin/TLS/CDN/operator. Malicious code can use non-exportable keys and read plaintext. `/calls` is not isolated from other same-origin code. | Installed clients separate routine messaging-server responses from executable application updates. Device/software updates remain part of the trust model. This is an architectural comparison, not immunity to compromise. |
+| Metadata / deniability | Server sees the contact graph, participant IDs, times, sizes and public keys. Public envelope signatures provide transferable ciphertext authentication, reducing deniability. | Sealed Sender reduces sender exposure to the delivery service; the one-to-one ratchet uses symmetric message authentication. Neither guarantees anonymity or removes network metadata. [Sealed Sender](https://signal.org/blog/sealed-sender/), [ratchet design](https://signal.org/docs/specifications/doubleratchet/). |
+| Assurance | Open source, established cryptographic core, regression tests and this source review. Custom integration/SAS has **no independent audit or formal security proof**. | Published specifications, maintained production implementations and substantially more external scrutiny and operational experience. That does not imply bug-free software. [Signal specifications](https://signal.org/docs/). |
+| Operator control / setup | Self-hosted, no SIM or phone-number registration; easy web invitations. Operator control adds responsibility for secure hosting and updates. | Maintained service and installed apps; different registration and operational tradeoffs. Self-hosting is not itself stronger cryptography. |
+
+For security-sensitive conversations, **Signal offers the stronger overall assurance**. WebCaller provides useful classical end-to-end encryption but should not be advertised as Signal-equivalent, post-quantum secure, forensic-proof or interception-proof.
+
+### How to use the four call words
+
+1. Start a voice/video call and wait for four words. In video calls, the name is at the upper left and the words are centered in that same row; codecs/rates and quality sit underneath.
+2. Read **all four words in order**, and have the other person compare every word to their display. Repeat/spell an unclear word. They are a public check, not a secret password or recovery phrase.
+3. If they differ, end the call and verify the contact through a trusted route. If they are unavailable or you skip comparing, the call still works, but you did not gain SAS assurance.
+
+Under trusted clients and an accurate comparison, matching words provide probabilistic protection against a MITM on **that call's authenticated connection**. The nominal 44-bit false-match probability is about 1 in 17.6 trillion per independent attempt; that is not an audited bound for this entire application, and mistakes or compromised code defeat the check. Fresh call contributions are generated each time, although sequences can statistically repeat. The words do not authenticate every earlier/offline message. They are never painted into outgoing video, saved as history or used to gate a child's call, and are cleared on hang-up/page exit. [Protocol and limitations](docs/CALL_VERIFICATION.md).
+
+### The strongest protections and the main weaknesses
+
+**Strong points:** ciphertext-only server content storage; signed and pinned key exchanges; full-tag Olm ratcheting; authenticated encrypted call signaling; media-bound fresh SAS; authenticated AES-GCM attachment chunks; authorization, replay/deletion barriers and expiry checks; atomic cross-tab crypto state. You control hosting and do not need phone-number registration.
+
+**Weak points:** server-controlled browser code and the shared origin; first-contact trust without key transparency; optional checks that people may skip; classical-only key agreement; readable retained browser history with its key in the same profile; metadata; legacy history without modern forward secrecy; no independent integration audit. Continued device/origin compromise defeats ratchet recovery. Disappearing messages cannot erase screenshots, backups, notification/browser records or recipients' saved copies.
+
+Deleting a contact keeps a minimal verification record to resist identity replacement. Clearing all site storage removes that protection and the local keys/history. Reopen both phones once after upgrading, and preserve browser storage for continuity. Full details: [security model](docs/SECURITY.md), [review findings](docs/SECURITY_REVIEW.md), [browser privacy](docs/BROWSER_PRIVACY.md).
 
 ## What you get
 
 - Voice calls in both directions at once, with mono Opus, requested echo cancellation, noise suppression, gain control, FEC and DTX.
 - Voice-first adaptation: video steps down and pauses as loss, delay or bandwidth deteriorate. Data saver is the default when the network type is unknown.
-- Optional four-word call comparison beside the caller name, bound to fresh per-call keys and the accepted media fingerprints. Calls work without confirmation. See [Call verification](docs/CALL_VERIFICATION.md).
+- Optional four-word call comparison centered in the video header beside the caller name, bound to fresh per-call keys and the accepted media fingerprints. Calls work without confirmation. See [Call verification](docs/CALL_VERIFICATION.md).
 - Optional video, microphone mute, front/back camera switch and upgrading an audio call to video. Codec preferences use shared encoding/decoding efficiency reports with compatible fallbacks. Timer and quality stay at the top while central details fade.
 - Signal-style Gallery/File/Location sheet, recent chat media, map cards, emoji, camera capture, voice notes, typing dots and delete-for-both.
 - Plain dark voice-call screen with top timer/quality and a five-button tray. Speaker/output switching where the browser exposes devices; phone-specific help elsewhere.
@@ -62,6 +117,8 @@ Open `http://localhost:8080/calls`. Loopback HTTP is suitable for local tests; p
 | [Networking](docs/NETWORKING.md) | TURN, public IP, CGNAT, router ports, Cloudflare Tunnel and TLS |
 | [Configuration](docs/CONFIGURATION.md) | Every environment setting and generated secret |
 | [Security](docs/SECURITY.md) | Encryption, expiry, trace limits and safe publishing |
+| [Source security review](docs/SECURITY_REVIEW.md) | Threat model, findings, forward secrecy and Signal comparison |
+| [Call verification](docs/CALL_VERIFICATION.md) | Using the four words and the SAS protocol |
 | [Architecture](docs/ARCHITECTURE.md) | Components, APIs, message formats and source files |
 | [Operations](docs/OPERATIONS.md) | Updates, backups, restart, logs, migration and removal |
 | [Development](docs/DEVELOPMENT.md) | Tests, contributors and release packaging |
@@ -69,15 +126,4 @@ Open `http://localhost:8080/calls`. Loopback HTTP is suitable for local tests; p
 
 ## Release and license
 
-[Release notes](CHANGELOG.md) describe the initial preview. Code is available under the [MIT license](LICENSE). Dependency notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Please report vulnerabilities privately using [SECURITY.md](SECURITY.md).
-
-
-New in v0.7.0: Signal-style blue sent bubbles, overlapping green delivery/viewed checks, compact measured kbps/Mbps and actual voice/video codec indicators at the top of calls, and encrypted local media retention across chat closure/backgrounding/reload. The existing message menu includes reactions, Reply, sender-only Edit, Forward, Copy, Select, Info, Pin and Delete for both. See the [user guide](docs/USER_GUIDE.md) for plain-language instructions and storage/browser limitations.
-
-## v0.12.0 call header and background alerts
-
-Voice/video rates now share aligned numeric and kbps/Mbps columns. Quality stays centered in the caller-name row, with the timer to the right. Live call reminders request sound independently of a sleeping page, use `renotify` or fresh reminder tags where it is unsupported, and cannot be blocked indefinitely by a device-storage/server lookup. Answered/ended and originally expired calls remain silent. Reload the receiving phone once, then use **Settings → Call alerts → Send test alert** with the phone locked. Actual notification sound remains controlled by the phone. See [Call alerts](docs/CALL_ALERTS.md).
-
-## v0.13.0 security upgrade
-
-New chat, media manifests and call signaling use the Olm Double Ratchet. Contact/history removal keeps a separate verification fingerprint, preventing a server roster change from silently resetting trust. Reopen the page on both phones once after upgrading; accounts, invitations and authorized old history are preserved. Keep browser site storage intact: the server cannot reconstruct discarded transport keys or your local readable history. Key claims/publication yield to call signaling, files have separate one-use sessions, and per-call streams isolate new calls from old typing/progress traffic. See [Security and upgrade details](docs/SECURITY.md).
+[Release notes](CHANGELOG.md) describe each preview. Code is available under the [MIT license](LICENSE). Dependency notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Please report vulnerabilities privately using [SECURITY.md](SECURITY.md).

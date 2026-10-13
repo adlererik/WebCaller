@@ -515,6 +515,10 @@ function renderCallSas(state,words=''){
   node.setAttribute('aria-label',state==='ready'?`Compare these four call words aloud: ${words}`:node.textContent);
   node.title=state==='ready'?'Read all four words to each other. Matching words check this call’s connection. No confirmation is required.':'Optional call comparison; the call works without it.';
 }
+function clearCallSas(){
+  call?.sas?.close();if(call){call.sas=null;call.sasInbox=[];}
+  $('call-sas').textContent='';$('call-sas').removeAttribute('aria-label');$('call-sas').title='';delete $('call-sas').dataset.state;
+}
 async function prepareCallSas(){
   const current=call,pc=phone?.pc;
   if(!current||!pc||pc.connectionState!=='connected')return;
@@ -616,7 +620,7 @@ async function answerCall(){
 }
 function finishCall(reason='Call ended'){
   pendingAnswer=null;void notificationIntents.clear();
-  if(call){call.sas?.close();call.sas=null;call.sasInbox=[];clearTimeout(call.timeout);navigator.serviceWorker?.controller?.postMessage({type:'call-ended',callId:call.id});}$('call-sas').textContent='';$('call-sas').removeAttribute('aria-label');$('call-sas').title='';delete $('call-sas').dataset.state;stopRing();clearInterval(callTicker);phone?.close();phone=null;call=null;pendingCandidates.clear();wakeLock?.release().catch(()=>{});wakeLock=null;
+  clearCallSas();if(call){clearTimeout(call.timeout);navigator.serviceWorker?.controller?.postMessage({type:'call-ended',callId:call.id});}stopRing();clearInterval(callTicker);phone?.close();phone=null;call=null;pendingCandidates.clear();wakeLock?.release().catch(()=>{});wakeLock=null;
   output.stop();$('audio-output-dialog').close();$('return-call').classList.add('hidden');$('call-screen').classList.add('hidden');queueMicrotask(pumpMedia);if(reason)toast(reason);
 }
 async function endCall(reason='Call ended'){try{await signal('hangup',{reason});}catch{}finishCall(reason);}
@@ -779,7 +783,7 @@ setInterval(()=>{if(purgeTransfers(pendingTransfers)&&selected)renderMessages();
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&device){void consumeMessageNotice();void consumeNotificationAnswer();void cachedMedia.purge();unlockSound();if(!wsReady)connect();else sync().catch(()=>{});if(call?.started)navigator.wakeLock?.request('screen').then(lock=>wakeLock=lock).catch(()=>{});}if(document.visibilityState==='hidden'){pendingTransfers.clear();actions.reset();clearTimeout(receiptTimer);receiptTimer=null;receiptWanted.clear();visibleSince.clear();pendingMessageEvents.clear();locationShare.close();$('attachment-dialog').close();stopTyping();typingPeers.clear();renderTyping();captures.close();closeViewer();clearDraft();$('draft-dialog').close();$('emoji-dialog').close();transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();$('messages').replaceChildren();$('pinned-message').textContent='';$('pinned-message').onclick=null;$('pinned-message').classList.add('hidden');}});
 window.addEventListener('online',()=>{if(device&&!wsReady)connect();if(phone)void phone.networkChanged();});
 navigator.connection?.addEventListener('change',()=>{if(phone)void phone.networkChanged();});
-window.addEventListener('pagehide',()=>{pendingTransfers.clear();actions.reset();clearTimeout(receiptTimer);receiptWanted.clear();visibleSince.clear();pendingMessageEvents.clear();locationShare.close();output.stop();stopTyping();captures.close();closeViewer();clearDraft();phone?.close();transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();});
+window.addEventListener('pagehide',()=>{clearCallSas();pendingTransfers.clear();actions.reset();clearTimeout(receiptTimer);receiptWanted.clear();visibleSince.clear();pendingMessageEvents.clear();locationShare.close();output.stop();stopTyping();captures.close();closeViewer();clearDraft();phone?.close();transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();});
 unlockSound();
 void boot();
 

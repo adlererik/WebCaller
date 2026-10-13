@@ -39,7 +39,7 @@ Rounded blue/gray bubbles, media captions, searchable self-hosted Unicode emoji 
 
 ## Deliberately absent
 
-No native mobile app, SIM/phone-number registration, group calls/chats, federation, Double Ratchet, audited security claim or guaranteed background ringing. This version is one-to-one calling, text and attachments. See [Verification](VERIFICATION.md).
+No native mobile app, SIM/phone-number registration, group calls/chats, federation, Signal wire compatibility, post-quantum encryption, audited security claim or guaranteed background ringing. This version is one-to-one calling, text and attachments. See [Verification](VERIFICATION.md).
 
 ## Call alerts and invitations
 
@@ -71,7 +71,7 @@ System appearance uses prefers-color-scheme CSS and matching browser theme-color
 
 Sent and verified received media is retained as complete encrypted chunk sets in IndexedDB, scoped to the local identity and message/attachment ID and bound to the original size/expiry. No attachment keys, filenames, MIME types or plaintext are added to that cache. Reopening uses authenticated local decryption instead of another media transfer. Deletion transactions remove bytes and store an expiring ID-only tombstone so a late transfer cannot restore them. Corrupt cached chunks are discarded and fetched again once. Expiry is enforced on every read/write and purge runs on startup, return to foreground and every minute while the page executes; closed browsers cannot physically purge until they run again. Forget this device clears the cache. Storage failure leaves messaging/calling usable and reports that reopening may download again. Browser storage remains subject to quota/eviction.
 
-Negotiated video and voice codecs and their separate measured rates appear in two aligned rows near the top, with connection quality on the right and the timer above. The video controls use a transparent tray. The rate samples cumulative bytes using statistics timestamps, counts bundled transports once, falls back to RTP counters, and skips invalid/reset baselines. Codec IDs are resolved from active stream reports; repair codecs are not presented as the picture codec. [WebRTC statistics specification](https://www.w3.org/TR/webrtc-stats/).
+Negotiated video and voice codecs and their separate measured rates appear in two aligned rows near the top, with connection quality and the timer underneath. The video controls use a transparent tray. The rate samples cumulative bytes using statistics timestamps, counts bundled transports once, falls back to RTP counters, and skips invalid/reset baselines. Codec IDs are resolved from active stream reports; repair codecs are not presented as the picture codec. [WebRTC statistics specification](https://www.w3.org/TR/webrtc-stats/).
 
 ## Call sharing, codec efficiency and handovers (v0.8.0)
 
@@ -86,7 +86,7 @@ The header shows separate Voice/Video codec and combined send-plus-receive paylo
 
 Press and hold a contact, right-click, or use Shift+F10 / Context Menu to open a confirmation dialog. Movement, scrolling, cancellation and removed rows cancel a pending hold. Confirmation removes the mutual connection and this pair’s entire shared mailbox, including unfinished uploads and all message updates. Other contacts, histories and identities are preserved. Ringing or answered calls between this pair end, and outstanding reminders stop. Closed browsers learn the change on resync. Deletion markers protect against late commits and replay until original expiry, even after a new invitation.
 
-The browser clears this contact’s drafts, open media, decrypted messages, cached ciphertext, trust pin, unread/typing state and conversation timer. Browser tests also caught and corrected whole-chunk downloads arriving in the wrong buffer form for ciphertext caching; both whole chunks and paced parts now retain downloaded media until deletion or expiry, subject to browser storage limits.
+The browser clears this contact’s drafts, open media, decrypted messages, cached ciphertext, full contact entry, unread/typing state and conversation timer. Browser tests also caught and corrected whole-chunk downloads arriving in the wrong buffer form for ciphertext caching; both whole chunks and paced parts now retain downloaded media until deletion or expiry, subject to browser storage limits.
 
 ## Actionable background call alerts
 
@@ -108,3 +108,5 @@ Privacy remains bounded by browser/OS capabilities, durable identity/media stora
 - Every live call push requests sound independently of a page's reported audio state. Three bounded attempts request a fresh alert: supporting browsers replace one notification with renotify; other browsers receive fresh reminder tags with cleanup after display.
 - Device storage and server lookup have a total deadline so a sleeping worker can still show the notification. Ended/answered and expired calls remain silent; the original call deadline determines whether a delayed wake-up is still timely.
 - Worker updates bypass the import cache. Locked-phone sound remains a physical-device check subject to the phone's notification settings.
+
+Current v2 transport uses the Olm Double Ratchet. Minimal identity verification records survive contact/history removal. Four per-call words provide an optional human comparison bound to the media connection; the video name is upper left, the words centered in that row, and quality below the aligned codecs. See [call verification](CALL_VERIFICATION.md) and [security review](SECURITY_REVIEW.md).

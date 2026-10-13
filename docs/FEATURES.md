@@ -104,7 +104,7 @@ Privacy remains bounded by browser/OS capabilities, durable identity/media stora
 
 ### v0.12.0 call header and background alert repair
 
-- Voice/video numeric speeds and units align across stacked rows; quality stays centered beside the caller name and timer.
+- Voice/video numeric speeds and units align across stacked rows. The current header places quality/timer underneath, the video name at the left, and call words at screen center.
 - Every live call push requests sound independently of a page's reported audio state. Three bounded attempts request a fresh alert: supporting browsers replace one notification with renotify; other browsers receive fresh reminder tags with cleanup after display.
 - Device storage and server lookup have a total deadline so a sleeping worker can still show the notification. Ended/answered and expired calls remain silent; the original call deadline determines whether a delayed wake-up is still timely.
 - Worker updates bypass the import cache. Locked-phone sound remains a physical-device check subject to the phone's notification settings.

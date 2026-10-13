@@ -1,10 +1,22 @@
 # WebCaller
 
-A browser-only phone for Android, iPhone and desktop: adaptive mono Opus voice, optional video, encrypted disappearing text, and simple invitations. No SIM, phone number or native app is required. iPhone background call alerts need this website saved to the Home Screen.
+A **Signal-like WebRTC phone** that runs in the browser on Android, iPhone and desktop: adaptive mono Opus voice, optional video, encrypted disappearing text, and simple invitations. No SIM, phone number or native app is required. iPhone background call alerts need this website saved to the Home Screen. WebCaller is an independent project; “Signal-like” describes its interface and conversation workflow.
 
 **Start here: [Beginner installation guide](docs/INSTALL.md).** Use a Debian 12/13 server, a domain name and the guided installer. Docker supplies Node.js 24; optional Caddy supplies HTTPS and optional coturn supplies your own free relay.
 
 This is the **v0.14.1 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
+
+## Why I made these choices
+
+I’m keeping **Olm Double Ratchet** for now. My priority is practical calls on weak connections and forward secrecy for message transport against classical computers. For this project, I don’t currently consider the extra bandwidth, state and browser-porting/migration work of Signal’s new post-quantum **Triple Ratchet** worth the additional protection against a future cryptographically relevant quantum computer, sometimes called **Q-Day**. That is my threat-model choice, not a benchmark showing that Signal’s design is inefficient: its SPQR deliberately spreads the overhead across messages. WebCaller does not claim post-quantum security, and traffic recorded today may become readable later. Forward secrecy here concerns discarded transport keys; retained history and live WebRTC media have the separate limits described below. [Signal’s Triple Ratchet design](https://signal.org/blog/spqr/).
+
+I chose a visible, four-word **Short Authentication String (SAS)** for each call and invitation-based setup without requiring identifiable registration information such as a phone number. Fresh contributions generate the words for every call; the words appear over the video as a local interface overlay and are never added to the transmitted camera image. Read all four words to each other to check the current connection. The call still works if you skip this, but skipping gives no human SAS verification. Fresh words can statistically repeat; global uniqueness is not promised. Existing identity pins remain part of the protection. [How to use the words](docs/CALL_VERIFICATION.md).
+
+I’m not adding an Automatic Key Verification/key-transparency directory at this stage. Signal’s current Automatic Key Verification is available when it knows your contact’s phone number. **Key transparency itself does not inherently require phone numbers**; it can use other identifiers, and SAS does not provide its global directory-consistency checks. My preference for this project is phone-number-free invitations and a simple human check during the call. [Signal’s availability rules](https://support.signal.org/hc/en-us/articles/10223569377562-Automatic-Key-Verification), [key-transparency explanation](https://signal.org/blog/automatic-key-verification/).
+
+For a serious nation-state threat, I would worry more about the phone being compromised than someone breaking well-designed encryption. Pegasus and zero-click exploit chains are documented examples of endpoint attacks: compromising a phone can expose plaintext or microphones without breaking the communication cipher. Signal’s engineering deserves respect, but even excellent encryption cannot make a compromised phone safe. My guiding principle is: **don’t assume anything on a phone is safe just because an app encrypts it.** This is a threat-model warning, not a claim that every phone is easily exploitable; device, patch level and attacker capability matter. [Citizen Lab’s documented Pegasus exploit](https://citizenlab.ca/blastpass-nso-group-iphone-zero-click-zero-day-exploit-captured-in-the-wild/).
+
+**Stay tuned… I’m working on an embedded device for encrypted calls, much like a Trezor hardware wallet—but for calls ;)** It’s a separate project still in development.
 
 ## Security: what is protected
 

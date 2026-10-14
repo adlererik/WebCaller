@@ -1,6 +1,6 @@
 # WebCaller
 
-A **Signal-like WebRTC phone** that runs in the browser on Android, iPhone and desktop: adaptive mono Opus voice, optional video, encrypted disappearing text, and simple invitations. No SIM, phone number or native app is required. iPhone background call alerts need this website saved to the Home Screen. WebCaller is an independent project; “Signal-like” describes its interface and conversation workflow.
+A **Signal-like WebRTC phone** that runs in the browser on Android, iPhone and desktop: adaptive Opus voice, optional video, encrypted disappearing text, and simple invitations. No SIM, phone number or native app is required. iPhone background call alerts need this website saved to the Home Screen. WebCaller is an independent project; “Signal-like” describes its interface and conversation workflow.
 
 **Start here: [Beginner installation guide](docs/INSTALL.md).** Use a Debian 12/13 server, a domain name and the guided installer. Docker supplies Node.js 24; optional Caddy supplies HTTPS and optional coturn supplies your own free relay.
 
@@ -75,7 +75,7 @@ Deleting a contact keeps a minimal verification record to resist identity replac
 
 ## What you get
 
-- Voice calls in both directions at once, with mono Opus, requested echo cancellation, noise suppression, gain control, FEC and DTX.
+- Voice calls in both directions at once, with Opus, requested echo cancellation, noise suppression, gain control, FEC and DTX.
 - Voice-first adaptation: video steps down and pauses as loss, delay or bandwidth deteriorate. Data saver is the default when the network type is unknown.
 - Optional four-word call comparison centered in the video header beside the caller name, bound to fresh per-call keys and the accepted media fingerprints. Calls work without confirmation. See [Call verification](docs/CALL_VERIFICATION.md).
 - Optional video, microphone mute, front/back camera switch and upgrading an audio call to video. Codec preferences use shared encoding/decoding efficiency reports with compatible fallbacks. Timer and quality stay at the top while central details fade.
@@ -89,6 +89,58 @@ Deleting a contact keeps a minimal verification record to resist identity replac
 - Local SQLite ciphertext storage, authenticated WebSocket signaling and temporary TURN credentials.
 - Files/media during calls with encrypted spinner/percentage placeholders on both phones; both video encoders temporarily yield bandwidth, with small encrypted transfers that wait when voice needs the link.
 - Aligned video/voice codec and rate rows, transparent video controls, cellular budgets for both endpoints and automatic Wi-Fi/cellular recovery. See [Call networking](docs/CALL_NETWORK.md).
+
+## Audio and video quality
+
+WebCaller aims for clear, natural-sounding conversation and a detailed, smooth picture while using the bandwidth and processing power the two devices can afford. **Audio always gets priority.** Codec choice, capture resolution, frame rate and sender bitrate are adjusted automatically; users do not need to choose a codec.
+
+### Video codecs and preference order
+
+The app can negotiate these codecs **when both browsers expose compatible WebRTC support**. Among variants that both ends report as supported, smooth and power-efficient for **both encoding and decoding**, its preference is:
+
+| Preference | Video codec | Quality and practical role |
+|---|---|---|
+| 1 | **AV1** | Modern compression designed to preserve high-quality detail with efficient use of data. First preference when both phones have an efficient send/receive path. |
+| 2 | **H.265 / HEVC** | High-efficiency compression for a detailed picture within a limited bitrate, using compatible profiles exposed by both browsers. Often useful on phones with efficient HEVC implementations. |
+| 3 | **VP9** | A strong quality/compression option, generally more efficient than VP8, when both browsers can encode and decode it efficiently. |
+| 4 | **H.264 / AVC** | High-quality video with broad interoperability and commonly available hardware paths. A practical preferred fallback when efficiency reports for newer codecs are unavailable or inconclusive. |
+| 5 | **VP8** | A widely supported WebRTC fallback that can still produce a good picture with sufficient bitrate. Useful when other compatible efficient paths are unavailable. |
+
+This is the app’s **conditional compression/efficiency preference**, rather than a universal ranking of visible quality. All five can produce high-quality video; encoder implementation, codec profile, bitrate, resolution, lighting, motion and packet loss affect the result. A phone reporting efficient H.264 and inefficient AV1 will favor H.264. The actual mutually negotiated codec is displayed during the call. [AV1 design](https://aomedia.org/specifications/av1/), [HEVC standard](https://www.itu.int/rec/T-REC-H.265), [VP9 overview](https://www.webmproject.org/vp9/), [WebRTC video interoperability requirements](https://www.rfc-editor.org/info/rfc7742/).
+
+### How the app tries to use device hardware
+
+The browser supplies the encoders and decoders, including hardware-accelerated paths it makes available. WebCaller first reads its WebRTC codec capabilities, then queries **Media Capabilities encoding and decoding efficiency** for each exposed codec/profile at the normal Wi-Fi target. Both phones exchange these results inside encrypted call signaling. A codec gets the strongest preference only when both ends report efficient encoding **and** decoding; having an AV1 hardware decoder alone does not establish an efficient AV1 encoder.
+
+Hardware acceleration can reduce CPU load, heat and battery use. The browser controls whether it is actually used: `powerEfficient` is an estimate, not proof that every stage runs in hardware, and WebCaller cannot force access to a chip’s unexposed codec. Missing, rejected or timed-out probes preserve compatible fallbacks, favoring H.264 then VP8 before other unconfirmed choices. During sustained CPU pressure the app lowers capture load and can renegotiate a mutually efficient alternative. [Media Capabilities](https://www.w3.org/TR/media-capabilities/), [WebRTC codec controls](https://www.w3.org/TR/webrtc/).
+
+### Audio codecs and sound quality
+
+**Opus is the preferred live-call codec.** It is designed for low-delay, high-quality speech and adapts efficiently to different bitrates. The app requests 48 kHz microphone input and allows up to 48 kbps of voice payload on healthy, confirmed Wi-Fi. Cellular/data-saver and weaker profiles reduce that budget to preserve conversation. Echo cancellation, noise suppression, automatic gain control, in-band forward error correction and discontinuous transmission are requested; packet-loss concealment, jitter buffering and the actual codec modes are managed by the browser. Both people can speak at once. [Opus](https://opus-codec.org/), [Opus RTP specification](https://www.rfc-editor.org/rfc/rfc7587.html).
+
+| Audio use | Available codec/format and selection |
+|---|---|
+| **Live voice and video calls** | **Opus**, explicitly preferred when the browser exposes codec-preference controls. The browser negotiates its defaults when those controls are unavailable; the call header shows what is actually active. |
+| **Recorded voice messages** | Browser-supported **MP4/M4A** recording, commonly AAC, is checked first for playback compatibility, followed by **WebM/Opus** and **Ogg/Opus**, then a supported WebM/default recording path. Recording requests 32 kbps. The browser chooses the actual MP4 codec. |
+
+There is no separate live-call audio quality ladder: the app prefers Opus and adapts its budget. Voice-note format preference is about compatibility, not a claim that AAC always sounds better than Opus. Actual sound also depends on the microphone, browser processing and the connection.
+
+### How quality follows bandwidth
+
+These are the current **per-sender payload ceilings and capture targets**; available capacity can reduce them further:
+
+| Connection profile | Opus voice ceiling | Video ceiling | Video capture target |
+|---|---:|---:|---|
+| Both ends on healthy, confirmed Wi-Fi | 48 kbps | 900 kbps | 960×540, 24 fps |
+| Either end on cellular, data saver or an unknown network | 20 kbps | 120 kbps | 320×180, 12 fps |
+| Weak connection | 12 kbps | 45 kbps | 240×135, 6 fps |
+| Very weak connection | 8 kbps | Paused | Voice continues if the link permits |
+
+The app samples available outgoing capacity, audio loss, round-trip delay and jitter each second. It reserves capacity for voice and transport headroom before allocating video. The browser’s congestion control and the app’s bitrate/resolution/frame-rate budgets work together. Weak links reduce the picture first; severe congestion pauses outgoing video and file transfers. Healthy recovery waits for five good samples before restoring quality to avoid rapid oscillation.
+
+Most bandwidth changes are handled **within the current codec**. A Wi-Fi/cellular transition adjusts the budgets and uses ICE recovery when needed, while keeping the call session where recovery succeeds. During file/media sharing, both video senders temporarily yield bandwidth while retaining the current voice budget. The app also reduces video load under CPU pressure. Complete outages and physical radio handovers can still interrupt sound; no codec can deliver speech without a usable path.
+
+At the top of the call, separate video/voice rows show the actual codec and measured **send plus receive** payload rate in kbps/Mbps. Those readings and the ceilings above exclude some network/TURN overhead and chat/file traffic, so they are not a mobile-provider billing meter. See [Call networking](docs/CALL_NETWORK.md) for the full policy and verification limits.
 
 ## Know the limits before installing
 

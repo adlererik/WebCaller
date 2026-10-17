@@ -1,7 +1,7 @@
 // Three short-lived alerts, never an unbounded stream of notifications.
-export function createCallAlerts({send,isWaiting,now=Date.now,setTimer=setTimeout,clearTimer=clearTimeout,delays=[15000,35000]}) {
+export function createCallAlerts({send,isWaiting,now=Date.now,setTimer=setTimeout,clearTimer=clearTimeout,onStop=()=>{},delays=[15000,35000]}) {
   const jobs=new Map();
-  function stop(id){const job=jobs.get(id);if(!job)return;job.timers.forEach(clearTimer);jobs.delete(id);}
+  function stop(id){const job=jobs.get(id);if(!job)return;job.timers.forEach(clearTimer);jobs.delete(id);onStop(id);}
   function start(call){
     stop(call.id);const job={timers:[],call};jobs.set(call.id,job);
     const deliver=index=>{

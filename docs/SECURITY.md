@@ -102,3 +102,7 @@ Handshake timeout, bounded retries, unsupported old clients and validation failu
 ## Comparison and review
 
 See the [13 October 2026 source review](SECURITY_REVIEW.md) and the [side-by-side Signal comparison](../README.md#webcaller-beside-signal). This app does not implement Signal’s PQXDH/SPQR/Triple Ratchet, key transparency or Sealed Sender. Its core library provenance and passing tests do not constitute an independent audit of this integration or custom SAS. HTTPS and pinning cannot protect a browser running malicious origin-delivered code.
+
+## Optional ntfy alert transport
+
+The ntfy integration sends generic alerts and opaque opening references only; it never transports conversation keys, signed SDP, chat or media. The native read address is a separate random 256-bit capability, while a write-only publishing token stays server-side. An alert cannot authenticate or automatically answer a call. Existing Olm, pins, SAS and DTLS-SRTP checks still apply. The additional service runs isolated from WebCaller files; compromised alert delivery can still cause spam/missed alerts. Read the full [boundary, retention and iPhone relay limitations](EXTRA_RINGING.md#security-and-privacy-boundary).

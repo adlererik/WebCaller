@@ -92,3 +92,7 @@ Primary references checked for this review:
 ## Remaining work for stronger assurance
 
 An independent integration audit/fuzzing and a deliberate hostile-code/first-contact assessment are the most valuable next steps. Improve origin isolation through a planned migration, maintain dependencies/hosting, verify contacts, and protect browser profiles/devices. Do not bolt on post-quantum or transparency primitives without a reviewed protocol and safe migration plan. See [verification limits](VERIFICATION.md), [browser privacy](BROWSER_PRIVACY.md) and [expiry/storage details](SECURITY.md).
+
+## Subsequent notification-only change (0.15.0)
+
+The optional ntfy integration preserves the reviewed cryptographic source files and adds another generic incoming-call alert transport. Its separate origin/process, read-capability subscription, write-only server credential, untrusted opening links and iPhone upstream/retention limitations are described in [Extra ringing](EXTRA_RINGING.md). The historical v0.14.1 review above is not an independent audit of this new service or integration.

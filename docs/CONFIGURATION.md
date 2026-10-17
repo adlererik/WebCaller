@@ -35,3 +35,7 @@ Compose profiles: default starts only the app; `--profile https` adds Caddy; `--
 Each file is limited to 10 MB. Quota values must be integers from 10 to 65536 MB; ciphertext tags and SQLite overhead consume additional storage.
 
 Map configuration is public through `/api/config`; never put secret keys in these values. Select a provider whose terms permit browser tile previews, anonymous CORS canvas rendering and expected traffic. Set its required attribution text/URL together with the template. The default requests only displayed tiles with normal cache behavior and an origin referrer; no offline/bulk downloads. OpenStreetMap’s community tile service has no availability guarantee or paid subscription in this project. For larger deployments choose a suitable provider or self-host. See the [tile usage policy](https://operations.osmfoundation.org/policies/tiles/).
+
+## Optional extra ringing
+
+A self-hosted ntfy server can send additional generic incoming-call alerts to the optional Android/iPhone ntfy app. Web Push and encrypted calling continue independently. Setup offers Android one-tap subscription, guided iPhone copy buttons, and a locked-phone sound/opening-link test. See [Extra ringing](EXTRA_RINGING.md) for installation, credentials, retention and the iPhone upstream wake-up limitation.

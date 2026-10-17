@@ -12,7 +12,7 @@ export function problems(path, data) {
   if (/-----BEGIN (?:[A-Z ]*PRIVATE KEY)-----/.test(text)) issues.push('private key');
   if (/\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|AKIA[0-9A-Z]{16})\b/.test(text)) issues.push('credential pattern');
   if (/(?:[#&]setup=)[A-Za-z0-9_-]{20,}/.test(text)) issues.push('embedded owner setup link');
-  if (/^(?:BOOTSTRAP_TOKEN|VAPID_PRIVATE_KEY|CF_TURN_API_TOKEN|TURN_SECRET)=[^\r\n]+/m.test(text)) issues.push('populated secret assignment');
+  if (/^(?:BOOTSTRAP_TOKEN|VAPID_PRIVATE_KEY|CF_TURN_API_TOKEN|TURN_SECRET|NTFY_PUBLISH_TOKEN)=[^\r\n]+/m.test(text)) issues.push('populated secret assignment');
   return issues;
 }
 

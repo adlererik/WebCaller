@@ -110,3 +110,7 @@ Privacy remains bounded by browser/OS capabilities, durable identity/media stora
 - Worker updates bypass the import cache. Locked-phone sound remains a physical-device check subject to the phone's notification settings.
 
 Current v2 transport uses the Olm Double Ratchet. Minimal identity verification records survive contact/history removal. Four per-call words provide an optional human comparison bound to the media connection; the video name is upper left, the words centered in that row, and quality below the aligned codecs. See [call verification](CALL_VERIFICATION.md) and [security review](SECURITY_REVIEW.md).
+
+## Optional extra ringing
+
+A self-hosted ntfy server can send additional generic incoming-call alerts to the optional Android/iPhone ntfy app. Web Push and encrypted calling continue independently. Setup offers Android one-tap subscription, guided iPhone copy buttons, and a locked-phone sound/opening-link test. See [Extra ringing](EXTRA_RINGING.md) for installation, credentials, retention and the iPhone upstream wake-up limitation.

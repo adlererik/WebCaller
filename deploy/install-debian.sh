@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 if test "${1:-}" = --check;then
- python3 -m py_compile deploy/configure.py deploy/turn-container.py scripts/phone-setup-qr.py
+ python3 -m py_compile deploy/configure.py deploy/turn-container.py deploy/install-ntfy.py scripts/phone-setup-qr.py
  test -f Dockerfile;test -f compose.yaml;test -f .env.example
  echo 'Installer files and Python syntax verified. No system change made.';exit 0
 fi

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.15.0 — 2026-10-17
+
+- Add optional self-hosted ntfy incoming-call alerts alongside existing Web Push; keep Olm, identity pins, SAS, media encryption and call signaling unchanged.
+- Guide Android one-tap subscription and iPhone manual subscription with copy buttons. Require a locked-phone sound test and check the opening link, with an explicit phone-icon fallback; detect different browser identities without transferring keys.
+- Use independent random 256-bit read addresses, a server-only write-only publishing token, generic payloads, bounded reminders and cancellation. Notification links never auto-answer.
+- Add a checksum-pinned Debian systemd installer with a separate restricted DynamicUser, deny-all defaults, read-only native subscriptions and two-minute in-memory alert retention. Document the iPhone upstream wake-up relay, native history, stale-alert and routing limits.
+- Add security and integration regressions, and test ACL/payload behavior against real ntfy 2.31.1. Physical-phone delivery remains to be tested.
+
 ## 0.14.1 — 2026-10-13
 
 - Align the video-call name with the left codec icons and center call words in the same row. Quality remains below the aligned codec/rate rows.

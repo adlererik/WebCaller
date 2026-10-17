@@ -7,5 +7,5 @@ test('publishing guard excludes runtime, certificates, databases and private env
   assert.deepEqual(problems('server/index.mjs',Buffer.from('const secret=env.TURN_SECRET;')),[]);
 });
 test('publishing guard catches embedded credentials without echoing them',()=>{
-  for (const text of ['BOOTSTRAP_TOKEN=fixture-private-value','-----BEGIN '+'PRIVATE KEY-----','https://example.com/calls#setup='+'x'.repeat(32),'ghp_'+'x'.repeat(40)]) assert.ok(problems('source.txt',Buffer.from(text)).length);
+  for (const text of ['BOOTSTRAP_TOKEN=fixture-private-value','NTFY_PUBLISH_TOKEN=fixture-notification-value','-----BEGIN '+'PRIVATE KEY-----','https://example.com/calls#setup='+'x'.repeat(32),'ghp_'+'x'.repeat(40)]) assert.ok(problems('source.txt',Buffer.from(text)).length);
 });

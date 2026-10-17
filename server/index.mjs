@@ -13,6 +13,7 @@ import {CHUNK_SIZE} from '../public/attachments.js';
 import {validAttribution,defaultAttribution} from '../public/location.js';
 import {createCallAlerts,notificationPayload} from './call-alerts.mjs';
 import {ratchetRoutes} from './ratchet.mjs';
+import {ntfyAlerts} from './ntfy.mjs';
 
 const root = fileURLToPath(new URL('../public/', import.meta.url));
 const hash = (v) => createHash('sha256').update(v).digest('hex');
@@ -78,10 +79,13 @@ export function createApp(options = {}) {
       catch (e) { if (e.statusCode === 404 || e.statusCode === 410) store.run('DELETE FROM push WHERE endpoint=?', row.endpoint); }
     }));
   }
+  const extraAlerts=ntfyAlerts({env,publicURL:publicURL.href,store,body,fail,rate,fetcher:options.ntfyFetch||fetch,testDelay:options.testAlertDelay??8000});
   const alerts=createCallAlerts({isWaiting:id=>{const c=calls.get(id);return !!c&&!c.answered&&c.expiresAt>Date.now();},
-    ...(options.alertTiming||{}),send:(c,revision,expiresAt)=>push(c.to,notificationPayload({type:'call',callId:c.id,revision,
-      url:publicURL.href.replace(/\/$/,'')+'/',expiresAt,callExpiresAt:c.expiresAt}),
-      Math.max(0,Math.floor((expiresAt-Date.now())/1000)),hash(c.id).slice(0,32))});
+    ...(options.alertTiming||{}),onStop:id=>extraAlerts.stop(id),send:(c,revision,expiresAt)=>Promise.allSettled([
+      push(c.to,notificationPayload({type:'call',callId:c.id,revision,url:publicURL.href.replace(/\/$/,'')+'/',expiresAt,callExpiresAt:c.expiresAt}),
+        Math.max(0,Math.floor((expiresAt-Date.now())/1000)),hash(c.id).slice(0,32)),
+      extraAlerts.call(c,revision,expiresAt)
+    ])});
   async function ice(id) {
     if (env.CF_TURN_KEY_ID && env.CF_TURN_API_TOKEN) {
       const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(env.CF_TURN_KEY_ID)}/credentials/generate-ice-servers`, {
@@ -115,7 +119,7 @@ export function createApp(options = {}) {
       if (path.startsWith(`${base}/api/`)) {
         if (req.method !== 'GET' && req.headers.origin !== origin) fail(403, 'Unrecognized origin');
         const route = path.slice((base + '/api').length);
-        if (route === '/config' && req.method === 'GET') return json(200, { base, mapTileURL, mapAttribution, publicURL: publicURL.href.replace(/\/$/, ''), vapidPublicKey: env.VAPID_PUBLIC_KEY || null, bootstrap: !store.get('SELECT id FROM users LIMIT 1'), turnConfigured: Boolean((env.TURN_SECRET && env.TURN_URLS) || (env.CF_TURN_KEY_ID && env.CF_TURN_API_TOKEN)) });
+        if (route === '/config' && req.method === 'GET') return json(200, { base, mapTileURL, mapAttribution, ntfyAvailable:extraAlerts.available, publicURL: publicURL.href.replace(/\/$/, ''), vapidPublicKey: env.VAPID_PUBLIC_KEY || null, bootstrap: !store.get('SELECT id FROM users LIMIT 1'), turnConfigured: Boolean((env.TURN_SECRET && env.TURN_URLS) || (env.CF_TURN_KEY_ID && env.CF_TURN_API_TOKEN)) });
         if(route==='/invite-info'&&req.method==='POST'){
           rate(`invite-info:${req.socket.remoteAddress}`,30);const b=await body(req);
           if(typeof b.invite!=='string'||b.invite.length>100)fail(400,'Open the full invitation link');
@@ -157,6 +161,7 @@ export function createApp(options = {}) {
           return json(201, result);
         }
         const u = auth(req); rate(route.startsWith('/attachments')?'attachment:'+u.id:u.id,route.startsWith('/attachments')?600:120);
+        if(await extraAlerts.routes(req,route,u,json))return;
         if(await handleRatchet(req,res,route,u,json))return;
         if(await handleAttachment(req,res,route,u,json))return;
         if(await handleMessageEvents(req,res,route,u,json))return;
@@ -280,6 +285,7 @@ export function createApp(options = {}) {
         if (route === '/push' && req.method === 'DELETE') { store.run('DELETE FROM push WHERE owner=?', u.id); return json(200, { ok: true }); }
         if (route === '/device' && req.method === 'DELETE') {
           const peers = contacts(u.id);
+          extraAlerts.revoke(u.id);
           for(const [id,c] of calls)if(c.to===u.id||c.from===u.id){alerts.stop(id);calls.delete(id);emit(c.to===u.id?c.from:c.to,{type:'call-ended',callId:id,reason:'Device removed'});}
           for(const [id,test] of alertTests)if(test.owner===u.id)alertTests.delete(id);
           store.transaction(() => {
@@ -417,7 +423,7 @@ export function createApp(options = {}) {
   const heartbeat = setInterval(() => {
     for (const ws of wss.clients) { if (!ws.isAlive) { ws.terminate(); continue; } ws.isAlive = false; ws.ping(); }
   }, 30000); heartbeat.unref();
-  return { server, store, base, close: async () => { alerts.close();testTimers.forEach(clearTimeout);disconnectTimers.forEach(clearTimeout);clearInterval(cleanup); clearInterval(heartbeat); for (const ws of wss.clients) ws.terminate(); wss.close(); await new Promise(r => server.close(r));disconnectTimers.forEach(clearTimeout); store.close(); } };
+  return { server, store, base, close: async () => { alerts.close();extraAlerts.close();testTimers.forEach(clearTimeout);disconnectTimers.forEach(clearTimeout);clearInterval(cleanup); clearInterval(heartbeat); for (const ws of wss.clients) ws.terminate(); wss.close(); await new Promise(r => server.close(r));disconnectTimers.forEach(clearTimeout); store.close(); } };
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const app = createApp();

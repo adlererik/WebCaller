@@ -8,7 +8,7 @@ export function readEntryFragment(hash) {
 }
 export function clearEntryFragment(location,history,preserveInvitation=false) {
   const params=new URLSearchParams(location.hash.replace(/^#/,''));
-  if(params.has('invite')||params.has('setup')||params.has('alert-test')){
+  if(params.has('invite')||params.has('setup')||params.has('alert-test')||params.has('ntfy-test')||params.has('incoming-call')||params.has('receiver')){
     const fragment=preserveInvitation&&params.has('invite')?'#invite='+encodeURIComponent(params.get('invite')):'';
     history.replaceState(null,'',location.pathname+location.search+fragment);
   }

@@ -425,3 +425,25 @@ test('message push opens the correct sender conversation without plaintext names
  const e=await seal(f.alice.identity,f.alice.user.id,{id:bob.user.id,keys:bob.identity.keys},{kind:'text',text:'Synthetic secret text'},60);await f.request('/messages',{method:'POST',token:f.alice.token,body:e});await new Promise(r=>setImmediate(r));
  const p=deliveries[0];assert.equal(p.messageId,e.id);assert.equal(p.peerId,f.alice.user.id);assert.equal(p.recipientId,bob.user.id);assert.equal(p.notification.title,'New message');assert.equal(p.notification.navigate,'https://example.com/calls/');assert.ok(!JSON.stringify(p).includes('Synthetic secret text'));assert.ok(!JSON.stringify(p).includes('Alice'));assert.ok(!JSON.stringify(p).includes('Private'));
 });
+
+test('optional ntfy runs alongside web push, ignores client destinations, and stops both reminders on decline',async t=>{
+  const native=[],pushes=[];
+  const f=await fixture(true,{NTFY_PUBLIC_URL:'https://notify.example.com',NTFY_PUBLISH_URL:'http://127.0.0.1:8094',NTFY_PUBLISH_TOKEN:'tk_synthetic_publisher_token',NTFY_IOS_UPSTREAM:'true'},
+    {ntfyFetch:async(url,opts)=>{native.push({url,...JSON.parse(opts.body)});return new Response('{}');},sendPush:async(...a)=>pushes.push(a),alertTiming:{delays:[120,240]}});
+  t.after(()=>f.app.close());const {bob}=await f.pair();
+  assert.equal((await f.request('/config')).body.ntfyAvailable,true);
+  assert.equal((await f.request('/ntfy')).status,401);
+  assert.equal((await f.request('/ntfy',{method:'POST',token:bob.token,requestOrigin:'https://evil.test',body:{}})).status,403);
+  const linked=(await f.request('/ntfy',{method:'POST',token:bob.token,body:{topic:'hijack',url:'http://127.0.0.1:22',token:f.alice.token}})).body;
+  assert.notEqual(linked.topic,'hijack');assert.equal(linked.server,'https://notify.example.com');
+  assert.equal((await f.request('/ntfy',{token:f.alice.token})).body.connected,false);
+  f.app.store.run('UPDATE ntfy_devices SET confirmed=1 WHERE owner=?',bob.user.id);
+  f.app.store.run('INSERT INTO push(owner,endpoint,subscription,confirmed) VALUES(?,?,?,1)',bob.user.id,'https://fcm.googleapis.com/extra-test',JSON.stringify({endpoint:'https://fcm.googleapis.com/extra-test',keys:{auth:'synthetic',p256dh:'synthetic'}}));
+  const a=await f.socket(f.alice),callId=randomUUID(),envelope=await seal(f.alice.identity,f.alice.user.id,{id:bob.user.id,keys:bob.identity.keys},{kind:'offer',callId,description:{sdp:'Never send SDP to ntfy'}},90);
+  a.send(JSON.stringify({type:'signal',kind:'offer',callId,envelope}));
+  for(let n=0;n<50&&native.length<1;n++)await new Promise(r=>setTimeout(r,2));
+  assert.equal(native.length,1);assert.equal(native[0].topic,linked.topic);assert.equal(pushes.length,1);assert.ok(!JSON.stringify(native).includes('Never send SDP'));
+  assert.equal((await f.request('/calls/'+callId+'/decline',{method:'POST',token:bob.token,body:{}})).status,200);
+  await new Promise(r=>setTimeout(r,280));assert.equal(native.length,1);assert.equal(pushes.length,1);
+  assert.equal((await f.request('/ntfy',{method:'DELETE',token:bob.token})).status,200);assert.equal(f.app.store.get('SELECT COUNT(*) n FROM push').n,1);a.close();
+});

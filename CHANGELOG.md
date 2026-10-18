@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.16.0 — 2026-10-18
+## 0.16.1 — 2026-10-18
 
 - Add a complete prebuilt Docker distribution alongside native and source-built installations, with native amd64/arm64 image builds, ready-made image publishing and small digest-pinned setup bundles.
 - Containerize the setup wizard, private first-phone QR, ntfy initialization and optional Cloudflare connector; retain optional Caddy and coturn. Generate credentials privately at installation time and preserve existing configuration/volumes on restart.

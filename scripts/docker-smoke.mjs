@@ -9,8 +9,9 @@ import {WebSocket} from 'ws';
 const dir=mkdtempSync(join(tmpdir(),'webcaller-container-'));
 for(const file of ['compose.yaml','images.env','webcaller','README.md','VERSION'])copyFileSync('docker/'+file,join(dir,file));copyFileSync('LICENSE',join(dir,'LICENSE'));
 let images=readFileSync(join(dir,'images.env'),'utf8');for(const [key,value]of Object.entries({WEBCALLER_IMAGE:'webcaller-ci:app',SETUP_IMAGE:'webcaller-ci:setup',TURN_IMAGE:'webcaller-ci:turn'}))images=images.replace(new RegExp('^'+key+'=.*$','m'),key+'='+value);writeFileSync(join(dir,'images.env'),images);
+const project='webcaller-ci-'+randomBytes(6).toString('hex');
 const docker=(...args)=>execFileSync('docker',args,{cwd:dir,encoding:'utf8',maxBuffer:8*1024*1024,timeout:240000});
-const compose=(...args)=>docker('compose','--project-directory',dir,'--env-file','images.env','--env-file','.env','-f','compose.yaml',...args);
+const compose=(...args)=>docker('compose','--project-name',project,'--project-directory',dir,'--env-file','images.env','--env-file','.env','-f','compose.yaml',...args);
 const settings={host:'calls.example.test',mode:'proxy',relay:'self',publicIP:'1.1.1.1',appPort:18180,ntfyPort:18194,ntfy:true,ntfyHost:'notify.example.test',ios:false};
 try{
  execFileSync('docker',['run','--rm','-i','--user',`${process.getuid()}:${process.getgid()}`,'--mount',`type=bind,src=${dir},dst=/bundle`,'webcaller-ci:setup','init','--settings','/dev/stdin'],{input:JSON.stringify(settings),encoding:'utf8',stdio:['pipe','pipe','pipe']});

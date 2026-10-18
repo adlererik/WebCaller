@@ -4,7 +4,7 @@ A **Signal-like WebRTC phone** that runs in the browser on Android, iPhone and d
 
 **Start here: [Prebuilt Docker installation](docker/README.md).** Download the small setup bundle for a Linux Intel/AMD or ARM64 server. Docker supplies the phone, optional ntfy, HTTPS/Tunnel and TURN services. A short wizard creates your private configuration and first-phone QR. [Source-built Docker](docs/INSTALL.md) and [native Node.js/systemd](docs/INSTALL_NATIVE.md) installations remain available.
 
-This is the **v0.16.0 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
+This is the **v0.16.1 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
 
 ## Why I made these choices
 

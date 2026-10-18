@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {problems} from '../scripts/audit-source.mjs';
 test('publishing guard excludes runtime, certificates, databases and private env',()=>{
-  for (const path of ['.env','.env.production','data/messages.db','.runtime/file','certs/privkey.pem','deploy/backups/server.mjs','docker/config/app.env','docker/.updates/v1/file','app.env']) assert.ok(problems(path,Buffer.from('')).length,path);
+  for (const path of ['.env','.env.production','data/messages.db','.runtime/file','certs/privkey.pem','deploy/backups/server.mjs','docker/config/app.env','docker/.updates/v1/file','app.env','docker/.setup-fixture/tunnel-token','tunnel-token']) assert.ok(problems(path,Buffer.from('')).length,path);
   assert.deepEqual(problems('.env.example',Buffer.from('TURN_SECRET=\nBOOTSTRAP_TOKEN=\n')),[]);
   assert.deepEqual(problems('server/index.mjs',Buffer.from('const secret=env.TURN_SECRET;')),[]);
 });

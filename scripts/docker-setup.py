@@ -142,6 +142,8 @@ def main():
  elif a.action=='apply-update':apply_update(a.bundle,a.version or '')
 if __name__=='__main__':
  try:main()
+ except (EOFError,KeyboardInterrupt):
+  print('Setup cancelled. Keep any existing private configuration.',file=sys.stderr);sys.exit(1)
  except (ValueError,KeyError,OSError,subprocess.SubprocessError) as e:
   # Do not echo URLs, credentials, source JSON or subprocess output in errors.
   if isinstance(e,ValueError):print(str(e),file=sys.stderr)

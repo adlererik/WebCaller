@@ -1,0 +1,84 @@
+name: Prebuilt Docker images
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Existing reviewed release tag version, without v (for example 0.16.0)'
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.version && format('v{0}', inputs.version) || github.ref }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run check && npm test && npm run audit:source
+      - name: Validate selected version
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          node -e 'const fs=require("fs");const v=process.env.VERSION;if(!/^\d+\.\d+\.\d+$/.test(v)||JSON.parse(fs.readFileSync("package.json")).version!==v||fs.readFileSync("docker/VERSION","utf8").trim()!==v)process.exit(1)'
+      - run: docker build -t webcaller-ci:app .
+      - run: docker build -f deploy/Dockerfile.setup -t webcaller-ci:setup .
+      - run: docker build -f deploy/Dockerfile.turn -t webcaller-ci:turn .
+      - run: node scripts/docker-smoke.mjs
+      - name: Publish tested architecture images
+        if: github.event_name == 'workflow_dispatch' && github.repository == 'adlererik/WebCaller'
+        env:
+          VERSION: ${{ inputs.version }}
+          ARCH: ${{ matrix.arch }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker tag webcaller-ci:app "ghcr.io/adlererik/webcaller:$VERSION-$ARCH"
+          docker tag webcaller-ci:setup "ghcr.io/adlererik/webcaller:$VERSION-setup-$ARCH"
+          docker tag webcaller-ci:turn "ghcr.io/adlererik/webcaller:$VERSION-turn-$ARCH"
+          docker push "ghcr.io/adlererik/webcaller:$VERSION-$ARCH"
+          docker push "ghcr.io/adlererik/webcaller:$VERSION-setup-$ARCH"
+          docker push "ghcr.io/adlererik/webcaller:$VERSION-turn-$ARCH"
+  manifests:
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'adlererik/WebCaller'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - name: Combine tested architectures
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          for suffix in '' '-setup' '-turn'; do
+            if docker buildx imagetools inspect "ghcr.io/adlererik/webcaller:$VERSION$suffix" >/dev/null 2>&1; then
+              echo 'Release image already exists; do not overwrite a published release.'; exit 1
+            fi
+            docker buildx imagetools create -t "ghcr.io/adlererik/webcaller:$VERSION$suffix" "ghcr.io/adlererik/webcaller:$VERSION$suffix-amd64" "ghcr.io/adlererik/webcaller:$VERSION$suffix-arm64"
+            docker buildx imagetools inspect "ghcr.io/adlererik/webcaller:$VERSION$suffix"
+          done

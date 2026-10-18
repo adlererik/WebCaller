@@ -1,0 +1,33 @@
+#!/bin/sh
+set -eu
+bundle_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+cd "$bundle_dir"
+image_value() { sed -n "s/^$1=//p" images.env; }
+setup_image=$(image_value SETUP_IMAGE)
+if test -z "$setup_image"; then echo 'Missing images.env. Extract the complete Docker bundle.' >&2; exit 1; fi
+compose() { docker compose --project-directory "$bundle_dir" --env-file images.env --env-file .env -f compose.yaml "$@"; }
+helper() {
+ if test -t 0; then tty_arg=-it; else tty_arg=-i; fi
+ docker run --rm "$tty_arg" --user "$(id -u):$(id -g)" --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true --mount "type=bind,src=$bundle_dir,dst=/bundle" "$setup_image" "$@"
+}
+need_setup() { test -f .env && test -f config/app.env || { echo 'Run ./webcaller setup first.' >&2; exit 1; }; }
+case "${1:-help}" in
+ setup) test "$(uname -s)" = Linux || { echo 'The complete relay stack supports Linux amd64/arm64.'; exit 1; }; helper init ;;
+ qr) need_setup; helper qr ;;
+ start) need_setup; compose up -d --wait --wait-timeout 180 ;;
+ stop) need_setup; compose stop ;;
+ status) need_setup; compose ps ;;
+ logs) need_setup; compose logs --tail=100 ;;
+ update)
+  need_setup
+  version=${2:-};case "$version" in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo 'Usage: ./webcaller update vX.Y.Z [--yes]'; exit 1 ;; esac
+  echo 'Read the release notes and make any private backup you need first. Updating can interrupt calls. Database rollback is not automatic.'
+  if test "${3:-}" != --yes; then printf 'Continue? [y/N] '; read -r answer; case "$answer" in y|Y|yes) ;; *) exit 0 ;; esac; fi
+  helper prepare-update "$version"
+  docker compose --project-directory "$bundle_dir" --env-file ".updates/$version/images.env" --env-file .env -f ".updates/$version/compose.yaml" pull
+  helper apply-update "$version"
+  compose up -d --wait --wait-timeout 180
+  echo 'Containers are running/healthy. Test the public page, a call and locked-phone alerts.'
+  ;;
+ *) echo 'WebCaller: setup | start | qr | status | logs | stop | update vX.Y.Z [--yes]';;
+esac

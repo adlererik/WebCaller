@@ -73,3 +73,12 @@ test('a heard test may use an explicit phone-icon fallback without asserting dir
   await assert.rejects(f.route('/ntfy/test-result','POST',{testId:test.testId,heard:true}),{status:409});
   assert.equal((await f.route('/ntfy/test-result','POST',{testId:test.testId,heard:true,usePhoneIcon:true})).ok,true);assert.equal((await f.route('/ntfy')).pendingTest,undefined);
 });
+test('Docker publishing is an exact opt-in; secret-file errors never reveal credentials',async t=>{
+  const {mkdtempSync,writeFileSync,rmSync}=await import('node:fs');const {tmpdir}=await import('node:os');const {join}=await import('node:path');
+  const dir=mkdtempSync(join(tmpdir(),'webcaller-ntfy-secret-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+  const file=join(dir,'publisher.token');writeFileSync(file,env.NTFY_PUBLISH_TOKEN+'\n',{mode:0o400});
+  const docker={...env,NTFY_PUBLISH_TOKEN:undefined,NTFY_PUBLISH_TOKEN_FILE:file,NTFY_PUBLISH_URL:'http://ntfy:8094',NTFY_ALLOW_DOCKER_HTTP:'true'};
+  assert.equal(ntfyConfig(docker,'https://example.com').token,env.NTFY_PUBLISH_TOKEN);
+  for(const override of [{NTFY_ALLOW_DOCKER_HTTP:'false'},{NTFY_PUBLISH_URL:'http://ntfy:80'},{NTFY_PUBLISH_URL:'http://other:8094'},{NTFY_PUBLISH_URL:'http://192.168.1.1:8094'},{NTFY_PUBLISH_TOKEN:env.NTFY_PUBLISH_TOKEN}])assert.throws(()=>ntfyConfig({...docker,...override},'https://example.com'));
+  assert.throws(()=>ntfyConfig({...docker,NTFY_PUBLISH_TOKEN_FILE:join(dir,'missing')},'https://example.com'),/^Error: Cannot read the ntfy publisher secret file\.$/);
+});

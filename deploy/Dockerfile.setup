@@ -1,0 +1,23 @@
+FROM node:24-bookworm-slim
+ARG TARGETARCH
+RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-venv ca-certificates curl && rm -rf /var/lib/apt/lists/* \
+ && python3 -m venv /opt/qr && /opt/qr/bin/pip install --no-cache-dir qrcode==8.2
+# Official ntfy executable, checked before extraction; used only for isolated initialization.
+RUN case "$TARGETARCH" in \
+      amd64) checksum=2eda91800b93c882b489679d82b72e8cf3e003f008a88035054bf5bd560bd183 ;; \
+      arm64) checksum=6ff52455d7bc48e250bccec5f9f2a6c5375899f66c484fac85db9fde961e3b43 ;; \
+      *) exit 1 ;; \
+    esac \
+ && curl -fsSL "https://github.com/binwiederhier/ntfy/releases/download/v2.31.1/ntfy_2.31.1_linux_${TARGETARCH}.tar.gz" -o /tmp/ntfy.tar.gz \
+ && echo "$checksum  /tmp/ntfy.tar.gz" | sha256sum -c - \
+ && tar -xzf /tmp/ntfy.tar.gz -C /tmp \
+ && install -m 755 "/tmp/ntfy_2.31.1_linux_${TARGETARCH}/ntfy" /usr/local/bin/ntfy \
+ && install -D -m 644 "/tmp/ntfy_2.31.1_linux_${TARGETARCH}/LICENSE" /usr/share/doc/webcaller-ntfy/LICENSE \
+ && rm -rf /tmp/ntfy*
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts
+COPY scripts/docker-setup.py scripts/docker-ntfy-init.mjs ./scripts/
+COPY docker/VERSION ./VERSION
+USER node
+ENTRYPOINT ["/opt/qr/bin/python", "/app/scripts/docker-setup.py"]

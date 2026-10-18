@@ -19,3 +19,7 @@ certs/
 __pycache__/
 *.pyc
 .DS_Store
+
+# Private prebuilt-Docker installation state
+docker/config/
+docker/.updates/

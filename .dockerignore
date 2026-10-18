@@ -13,3 +13,7 @@
 !deploy/turn-container.py
 !deploy/Dockerfile.turn
 **/__pycache__/
+
+!deploy/Dockerfile.setup
+!docker/
+!docker/VERSION

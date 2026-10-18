@@ -1,0 +1,115 @@
+name: webcaller-prebuilt
+services:
+  webcaller:
+    image: ${WEBCALLER_IMAGE:?Use the webcaller command or both env files}
+    restart: unless-stopped
+    init: true
+    env_file: ./config/app.env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8080
+      DATA_DIR: /app/data
+      NODE_ENV: production
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    volumes:
+      - app_data:/app/data
+      - publisher:/run/webcaller-ntfy:ro
+    networks: [web, alerts]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      ntfy-init:
+        condition: service_completed_successfully
+  ntfy-init:
+    image: ${SETUP_IMAGE:?Set SETUP_IMAGE}
+    user: "0:0"
+    entrypoint: [node, /app/scripts/docker-ntfy-init.mjs]
+    environment:
+      NTFY_ENABLED: ${NTFY_ENABLED:-false}
+    network_mode: none
+    volumes:
+      - ./config/ntfy.yml:/etc/ntfy/server.yml:ro
+      - ntfy_state:/var/lib/ntfy
+      - publisher:/run/webcaller-ntfy
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    security_opt: [no-new-privileges:true]
+  ntfy:
+    image: ${NTFY_IMAGE:?Set NTFY_IMAGE}
+    profiles: [ntfy]
+    user: "10001:10001"
+    command: [serve, --config, /etc/ntfy/server.yml]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${NTFY_PORT:-8094}:8094"
+    volumes:
+      - ./config/ntfy.yml:/etc/ntfy/server.yml:ro
+      - ntfy_state:/var/lib/ntfy
+    networks: [alerts, ntfy_egress]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      ntfy-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD-SHELL, 'wget -q -O - http://127.0.0.1:8094/v1/health | grep -q "healthy"']
+      interval: 30s
+      timeout: 5s
+  https:
+    image: ${CADDY_IMAGE:?Set CADDY_IMAGE}
+    profiles: [https]
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./config/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [web, alerts]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      webcaller:
+        condition: service_healthy
+  tunnel:
+    image: ${TUNNEL_IMAGE:?Set TUNNEL_IMAGE}
+    profiles: [tunnel]
+    user: "${SETUP_UID:-1000}:${SETUP_GID:-1000}"
+    command: [tunnel, --no-autoupdate, run, --token-file, /run/secrets/tunnel-token]
+    restart: unless-stopped
+    volumes:
+      - ./config/tunnel-token:/run/secrets/tunnel-token:ro
+    networks: [web, alerts]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      webcaller:
+        condition: service_healthy
+  turn:
+    image: ${TURN_IMAGE:?Set TURN_IMAGE}
+    profiles: [turn]
+    restart: unless-stopped
+    network_mode: host
+    env_file: ./config/turn.env
+    volumes:
+      - ./config/certs:/certs:ro
+    read_only: true
+    tmpfs: [/tmp:mode=0700]
+    security_opt: [no-new-privileges:true]
+volumes:
+  app_data:
+  ntfy_state:
+  publisher:
+  caddy_data:
+  caddy_config:
+networks:
+  web:
+  alerts:
+    internal: true
+  ntfy_egress:

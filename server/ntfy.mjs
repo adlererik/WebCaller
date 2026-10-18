@@ -1,15 +1,22 @@
+import {readFileSync} from 'node:fs';
 import {randomBytes,randomUUID} from 'node:crypto';
 
 // ntfy carries generic alerts only. A per-device 256-bit read capability makes
 // native enrollment possible without giving an invitee any publishing password.
 export function ntfyConfig(env,appURL){
-  const values=[env.NTFY_PUBLIC_URL,env.NTFY_PUBLISH_URL,env.NTFY_PUBLISH_TOKEN];
+  let token=env.NTFY_PUBLISH_TOKEN;
+  if(env.NTFY_PUBLISH_TOKEN_FILE){
+    if(token)throw new Error('Choose an inline ntfy token or its secret file, not both.');
+    try{token=readFileSync(env.NTFY_PUBLISH_TOKEN_FILE,'utf8').trim();}catch{throw new Error('Cannot read the ntfy publisher secret file.');}
+  }
+  const values=[env.NTFY_PUBLIC_URL,env.NTFY_PUBLISH_URL,token];
   if(values.every(v=>!v))return null;
   if(values.some(v=>!v))throw new Error('Set all three NTFY_PUBLIC_URL, NTFY_PUBLISH_URL and NTFY_PUBLISH_TOKEN values, or leave all empty.');
   const pub=new URL(values[0]),publish=new URL(values[1]);
   const root=u=>u.pathname==='/'&&!u.search&&!u.hash&&!u.username&&!u.password;
   if(!root(pub)||pub.protocol!=='https:'||pub.origin===new URL(appURL).origin)throw new Error('NTFY_PUBLIC_URL must be a separate HTTPS origin without a path.');
-  if(!root(publish)||!(publish.protocol==='https:'||(publish.protocol==='http:'&&['127.0.0.1','[::1]','localhost'].includes(publish.hostname))))throw new Error('NTFY_PUBLISH_URL must be HTTPS or loopback HTTP without a path.');
+  const dockerHTTP=env.NTFY_ALLOW_DOCKER_HTTP==='true'&&publish.origin==='http://ntfy:8094';
+  if(!root(publish)||!(dockerHTTP||publish.protocol==='https:'||(publish.protocol==='http:'&&['127.0.0.1','[::1]','localhost'].includes(publish.hostname))))throw new Error('NTFY_PUBLISH_URL must be HTTPS or loopback HTTP; the exact private Docker destination requires its explicit opt-in.');
   if(!/^[A-Za-z0-9_-]{16,200}$/.test(values[2]))throw new Error('Invalid ntfy publishing token format.');
   return {origin:pub.origin,publish:publish.origin,token:values[2],iosInstant:env.NTFY_IOS_UPSTREAM==='true'};
 }

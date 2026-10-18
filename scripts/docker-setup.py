@@ -89,6 +89,8 @@ def qr(bundle):
 
 def prepare_update(bundle,version):
  if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+',version):raise ValueError('Use an explicit release such as v0.16.1.')
+ current=(bundle/'VERSION').read_text().strip()
+ if tuple(map(int,version[1:].split('.')))<=tuple(map(int,current.split('.'))):raise ValueError('Choose a newer release; downgrades need manual migration review.')
  name='WebCaller-Docker-'+version;url='https://github.com/adlererik/WebCaller/releases/download/'+version+'/'
  with urllib.request.urlopen(url+'SHA256SUMS.txt',timeout=30) as r:sums=r.read(65536).decode()
  expected=next((line.split()[0] for line in sums.splitlines() if len(line.split())==2 and line.split()[-1]==name+'.tar.gz'),None)
@@ -111,12 +113,18 @@ def prepare_update(bundle,version):
  images=dict(line.split('=',1) for line in (stage/'images.env').read_text().splitlines() if '=' in line and not line.startswith('#'))
  for key in ['WEBCALLER_IMAGE','SETUP_IMAGE','TURN_IMAGE']:
   if not re.fullmatch(r'ghcr\.io/adlererik/webcaller:[a-zA-Z0-9_.-]+@sha256:[a-f0-9]{64}',images.get(key,'')):raise ValueError('Update images must have the expected namespace and release digest.')
+ if images.get('BUNDLE_FORMAT')!='1':raise ValueError('This release needs a different installer; follow its migration guide.')
+ for key,prefix in [('NTFY_IMAGE','binwiederhier/ntfy:'),('CADDY_IMAGE','caddy:'),('TUNNEL_IMAGE','cloudflare/cloudflared:')]:
+  if not re.fullmatch(re.escape(prefix)+r'[A-Za-z0-9_.-]+@sha256:[a-f0-9]{64}',images.get(key,'')):raise ValueError('Unexpected supporting image reference.')
+ write(stage/'.verified',json.dumps({'from':current,'files':{f:hashlib.sha256((stage/f).read_bytes()).hexdigest() for f in FILES}}))
  print('Release bundle checksum and image references verified. Review its release notes before applying.')
 
 def apply_update(bundle,version):
  if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+',version):raise ValueError('Invalid version.')
  stage=bundle/'.updates'/version
- if not all((stage/f).is_file() for f in FILES):raise ValueError('Prepare the update first.')
+ if not all((stage/f).is_file() for f in FILES) or not (stage/'.verified').is_file():raise ValueError('Prepare the update first.')
+ verified=json.loads((stage/'.verified').read_text())
+ if verified.get('from')!=(bundle/'VERSION').read_text().strip() or any(verified.get('files',{}).get(f)!=hashlib.sha256((stage/f).read_bytes()).hexdigest() for f in FILES):raise ValueError('Prepared update changed or is stale; prepare it again.')
  previous=bundle/'.updates'/'previous';previous.mkdir(parents=True,exist_ok=True,mode=0o700)
  for f in FILES:
   shutil.copy2(bundle/f,previous/f)

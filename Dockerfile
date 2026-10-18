@@ -1,4 +1,5 @@
 FROM node:24-bookworm-slim
+LABEL org.opencontainers.image.source="https://github.com/adlererik/WebCaller"
 WORKDIR /app
 ENV HOST=0.0.0.0 PORT=8080 DATA_DIR=/app/data
 COPY package.json package-lock.json ./

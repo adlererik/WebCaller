@@ -15,6 +15,7 @@ export function initialize({enabled,root='/var/lib/ntfy',secrets='/run/webcaller
   if(!existsSync(db)){
     // A partial fresh init fails closed on retry; never silently replace its credentials.
     try{
+      writeFileSync(db,'',{mode:0o600,flag:'wx'});
       run(['user','add','webcaller'],{NTFY_PASSWORD:randomBytes(48).toString('base64url')});
       run(['access','webcaller','wc_*','write-only']);run(['access','everyone','wc_*','read-only']);
       const token=run(['token','add','--label','WebCaller publisher','webcaller']).match(/\btk_[a-z0-9]{20,}\b/)?.[0];

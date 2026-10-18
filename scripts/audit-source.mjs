@@ -5,9 +5,10 @@ import {pathToFileURL} from 'node:url';
 
 export function problems(path, data) {
   const issues=[];
-  if (/(^|\/)(node_modules|\.npm|\.cache|\.runtime|data|artifacts|certs|backups|__pycache__)(\/|$)/i.test(path) ||
+  if (/(^|\/)(node_modules|\.npm|\.cache|\.runtime|data|artifacts|certs|backups|__pycache__|config|\.updates)(\/|$)/i.test(path) ||
       /(^|\/)\.env(?:\..*)?$/.test(path) && path!=='.env.example' ||
       /\.(?:pem|key|sqlite(?:3)?(?:-wal|-shm)?|db|log|pyc|tgz|zip|tar\.gz)$/i.test(path)) issues.push('private/runtime filename');
+  if (/(^|\/)(?:app|turn)\.env$/.test(path)) issues.push('private service environment');
   const text=data.toString('utf8');
   if (/-----BEGIN (?:[A-Z ]*PRIVATE KEY)-----/.test(text)) issues.push('private key');
   if (/\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|AKIA[0-9A-Z]{16})\b/.test(text)) issues.push('credential pattern');

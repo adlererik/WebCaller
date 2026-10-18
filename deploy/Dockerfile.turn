@@ -1,4 +1,5 @@
 FROM debian:13-slim
+LABEL org.opencontainers.image.source="https://github.com/adlererik/WebCaller"
 RUN apt-get update && apt-get install -y --no-install-recommends coturn python3 ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY deploy/turnserver.conf.example /etc/webcaller-turn.template
 COPY deploy/turn-container.py /usr/local/bin/webcaller-turn.py

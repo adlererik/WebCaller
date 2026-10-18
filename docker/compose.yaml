@@ -59,7 +59,9 @@ services:
       ntfy-init:
         condition: service_completed_successfully
     healthcheck:
-      test: [CMD-SHELL, 'wget -q -O - http://127.0.0.1:8094/v1/health | grep -q "healthy"']
+      test:
+        - CMD-SHELL
+        - wget -q -O - http://127.0.0.1:8094/v1/health | grep -q '"healthy":true'
       interval: 30s
       timeout: 5s
   https:

@@ -1,6 +1,6 @@
 # Operations
 
-Run commands from the installed project directory. Use the same Compose profiles selected during setup.
+Run commands from the installed project directory. The first sections describe **Docker**; native systemd commands are below. Keep your chosen installation method when updating. Use the same Compose profiles selected during setup.
 
 ```sh
 sudo docker compose ps
@@ -12,14 +12,14 @@ Only include profiles you actually use. Recreating selected containers loads cha
 
 ## Updates
 
-Back up configuration and data first. Fetch/review the new release, preserve the existing `.env`, certificates and `.runtime/compose-profiles`, and keep the same Compose project name `webcaller` so named data volumes are reused. Then:
+Back up configuration and data first. Download and verify the new release using the [installation guide](INSTALL.md#2-download-webcaller-onto-the-debian-server), but do not run its first-install command again. Keep your installation path, `.env`, certificates and `.runtime/compose-profiles`; copy only the reviewed source into that directory. Do not copy a new example over `.env`. Keep the same Compose project name `webcaller` so named data volumes are reused. Then:
 
 ```sh
 sudo docker compose build webcaller
 sudo docker compose --profile https --profile turn up -d --build
 ```
 
-Use only your chosen profiles. Do not run `npm run setup` to rotate keys, delete the data volume or rename the Compose project. v0.4.0 adds optional invite names and push sound-confirmation columns through additive migrations; v0.3.0 adds deletion markers; v0.2.0 added attachment tables/indexes on startup with CREATE TABLE IF NOT EXISTS; it preserves existing identities and messages. New versions may require schema migration; read the release notes. This preview does not provide account recovery/export or browser identity synchronization.
+Use only your chosen profiles. Wait for `sudo docker compose ps` to show the app healthy, then test the public page and a real call. Do not delete the data volume, rename the Compose project or regenerate secrets. This v0.15.1 documentation/distribution update does not change the database schema or encryption protocols. Earlier previews include additive schema and security migrations; always read [release notes](../CHANGELOG.md), especially when skipping versions. This preview does not provide account recovery/export or browser identity synchronization.
 
 ## Backups and disappearing messages
 
@@ -37,6 +37,18 @@ Caddy renews its web certificate automatically. Coturn domain certificates mount
 
 `sudo docker compose --profile https --profile turn down` stops/removes containers while retaining named volumes. Remove your router/firewall forwarding if no longer needed. Deleting named volumes with `down -v` permanently removes server data and Caddy state; do so only intentionally after deciding whether you need recovery. Remove private .env/certs yourself when finished. Existing external provider records, client storage and recipient copies are separate.
 
-Both phones should refresh the page after this update to load the new composer, media preview and deletion controls. Preserve browser site data when refreshing; clearing storage removes the identity.
+After an update, refresh each phone in its usual browser or Home Screen icon **without clearing site data**. Clearing storage removes the identity and local history. Existing users can open **Settings → Set up call alerts**; new invitees see the guide automatically. Preserve the VAPID key pair so current subscriptions remain valid. Server restart clears pending calls and unfinished ten-minute sound tests; send a fresh test afterward. Notification delivery needs server HTTPS outbound access to the selected browser push provider, in addition to normal web signaling and TURN. No new inbound port is needed.
 
-After v0.4.0, refresh each phone without clearing its site data. Existing users can open **Settings → Set up call alerts**; new invitees see the guide automatically. Preserve the VAPID key pair so current subscriptions remain valid. Server restart clears pending calls and unfinished ten-minute sound tests; send a fresh test afterward. Notification delivery needs server HTTPS outbound access to the selected browser push provider, in addition to normal web signaling and TURN. No new inbound port is needed.
+## Native systemd updates
+
+For the [native installation](INSTALL_NATIVE.md), keep the original installation directory and regular service account. The generic path below is `/opt/webcaller`; substitute your own if different. Schedule a short interruption: restarting ends active calls and pending sound tests.
+
+1. Download the new release and verify its checksum as in the installation guide. Review its release notes. Do not re-run first-owner setup.
+2. Stop the app with `sudo systemctl stop webcaller.service`. Make a private backup of `.env` and the complete `data` directory while stopped, including SQLite sidecar files if present. Backups retain ciphertext past disappearance; keep them encrypted/outside Git and follow your retention policy.
+3. Copy the reviewed release's source into the **existing** installation directory as its regular owner. Preserve `.env`, `data/`, `certs/`, `.runtime/` and other private configuration. Do not delete these directories, use a mirror/delete option, or replace the whole folder. Release archives contain no private configuration. Run commands from the original directory, not the extracted download.
+4. Run `npm ci --ignore-scripts` and `npm run check` as the regular owner. Do not use sudo for npm or rotate keys. This update needs no change to the existing systemd unit.
+5. Run `sudo systemctl start webcaller.service`, then `sudo systemctl status webcaller.service --no-pager` and `curl -fsS http://127.0.0.1:8080/calls/health`. Adjust port/path only if your private config differs. Test the HTTPS page, both call directions and alerts. If startup fails, inspect local journal output before sharing anything.
+
+On both phones, reopen/refresh the usual browser or Home Screen icon **without clearing site data**. Preserve the VAPID pair, database, identity pins and ratchet state. If dependencies or startup fail, keep the app stopped while restoring the prior source and its dependencies; a database migration may also require its matching backup. Read release-specific rollback notes rather than opening a migrated database with arbitrary old code.
+
+The optional `webcaller-ntfy.service` is separate. This source update does not reinstall its binary, alter its private ACL database or rewrite its tunnel route. Keep that service's private configuration and state too. A full server restart restarts enabled systemd services; confirm health and a locked-phone sound test afterward. The ntfy installer intentionally refuses an already configured installation.

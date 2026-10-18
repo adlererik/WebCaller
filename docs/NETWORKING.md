@@ -24,7 +24,7 @@ With CGNAT, ask for a public IPv4, put TURN on a public VPS, or use a managed re
 
 The beginner self-hosted profile initially exposes authenticated UDP/TCP 3478. Media is still end-to-end DTLS-SRTP; TURN-TLS additionally encrypts the client-to-relay transport. UDP is preferable on loss-prone links because TCP can stall queued audio behind loss.
 
-To add TLS, point a **DNS-only** relay hostname such as `turn.yourdomain.com` at the relay's public IP. Put its publicly trusted certificate and key in private `certs/fullchain.pem` and `certs/privkey.pem` (never commit these). Add `turns:turn.yourdomain.com:5349?transport=tcp` to `TURN_URLS`, permit TCP 5349 and restart app/relay. The relay container detects those files. Arrange renewal and restart coturn after changed certificates; the Docker starter does not issue/renew TURN domain certificates automatically.
+To add TLS, point a **DNS-only** relay hostname such as `turn.example.com` at the relay's public IP. Put its publicly trusted certificate and key in private `certs/fullchain.pem` and `certs/privkey.pem` (never commit these). Add `turns:turn.example.com:5349?transport=tcp` to `TURN_URLS`, permit TCP 5349 and restart app/relay. The relay container detects those files. Arrange renewal and restart coturn after changed certificates; the Docker starter does not issue/renew TURN domain certificates automatically.
 
 If HTTPS already owns 443, keep it there and use TURN-TLS 5349 or 8443. A deliberately configured TLS/SNI TCP proxy or separate public relay is needed to share 443. Networks restricted to 443 may still block 5349.
 

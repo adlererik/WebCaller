@@ -1,6 +1,8 @@
-# Verification of v0.6.0
+# Verification history
 
 ## Scope
+
+Results below are historical checks for the named versions, not a certification of every release or phone. The newest release checks are at the end.
 
 The original application had eleven passing Node tests and short real Chromium WebRTC tests using synthetic audio/video, including direct and relay-only UDP/TCP/TLS, camera replacement, audio-to-video upgrade, critical-profile video pause and ICE restart with fresh credentials. Those relay tests originated inside a LAN using a public-address/hairpin path. Private deployment addresses and credentials are intentionally absent from this public report.
 
@@ -112,3 +114,12 @@ Documentation now distinguishes end-to-end content encryption from origin-delive
 - The real pinned ntfy 2.31.1 binary was tested locally: authenticated write-only publishing works, anonymous publishing and unrelated-topic reads fail, anonymous capability subscription and view actions work, and the publisher cannot read alerts. No real users were notified by these tests.
 - Synthetic Chromium checks cover Android subscription links, iPhone guided setup, narrow light/dark layouts, same-tab notification hash handling, browser-profile mismatch, recovery of pending sound tests after reload and explicit phone-icon fallback. These simulate phone browser layouts and do not certify Android/iOS native notification delivery.
 - Public HTTPS/no-store and unauthenticated WebSocket rejection are checked through the production proxy/Tunnel. Native locked-phone sounds, public ntfy routing, operator-installed service isolation and external-network delivery still require the operator/device tests in [Extra ringing](EXTRA_RINGING.md).
+
+## v0.15.1 public documentation and distribution
+
+- 139 public-source tests pass, including the existing application, encryption, signaling, media and ntfy regressions and a new publishing-guard check for embedded notification read capabilities and publisher tokens. JavaScript syntax and Debian installer/shell/Python checks pass.
+- Local documentation links and heading targets resolve; shell examples parse. The native guide's official Node 24.22.0 amd64 download and SHA-256 check were exercised without installing system services. A new guide does not certify a fresh Debian installation, public DNS, a router or phone behavior.
+- Public source, Git history and release metadata are reviewed for known deployment identifiers, private addresses/paths, credentials, setup links and notification capabilities. The release script archives only the reviewed Git tag and generates SHA-256 checksums. Runtime folders, private environment files, databases, certificates, logs and personal screenshots are excluded. Pattern scans are a publishing safeguard, not a promise that every possible secret format is detectable.
+- CI builds the app and TURN images and repeats source checks; see the [workflow results](https://github.com/adlererik/WebCaller/actions/workflows/ci.yml) for the release commit. No live server credentials are used in this workflow.
+
+This patch updates documentation, version labels, public-distribution checks and the private QR card's branding. It does not change application encryption, stored identities, codec policy, call signaling or notification delivery. Existing real-device and independent-audit limitations remain.

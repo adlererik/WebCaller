@@ -113,4 +113,4 @@ Current v2 transport uses the Olm Double Ratchet. Minimal identity verification 
 
 ## Optional extra ringing
 
-A self-hosted ntfy server can send additional generic incoming-call alerts to the optional Android/iPhone ntfy app. Web Push and encrypted calling continue independently. Setup offers Android one-tap subscription, guided iPhone copy buttons, and a locked-phone sound/opening-link test. See [Extra ringing](EXTRA_RINGING.md) for installation, credentials, retention and the iPhone upstream wake-up limitation.
+A self-hosted ntfy server can send additional generic, maximum-priority (5) incoming-call alerts to the optional Android/iPhone ntfy app. Web Push and encrypted calling continue independently. Setup offers Android one-tap subscription, guided iPhone copy buttons, and a locked-phone sound/opening-link test. See [Extra ringing](EXTRA_RINGING.md) for installation, credentials, retention and the iPhone upstream wake-up limitation.

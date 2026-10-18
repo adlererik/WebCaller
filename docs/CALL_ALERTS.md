@@ -62,4 +62,4 @@ A silent visible notice points to phone/browser notification sound controls; no 
 
 ## Optional extra ringing
 
-A self-hosted ntfy server can send additional generic incoming-call alerts to the optional Android/iPhone ntfy app. Web Push and encrypted calling continue independently. Setup offers Android one-tap subscription, guided iPhone copy buttons, and a locked-phone sound/opening-link test. See [Extra ringing](EXTRA_RINGING.md) for installation, credentials, retention and the iPhone upstream wake-up limitation.
+If enabled by your server operator, **Settings → Extra ringing · ntfy** adds another alert through the free ntfy app. It does not replace these browser alerts or change call encryption. Call and test alerts use **priority 5 (Max / urgent)**. Complete the locked-phone test before relying on it. Android sound is selected in ntfy’s Max priority notification channel; stock iPhone ntfy does not have a separate ringtone picker. See [Extra ringing](EXTRA_RINGING.md) for exact phone steps, sound settings, browser-opening differences and troubleshooting. Installing the optional relay is the operator’s job; invited people never need its publishing token.

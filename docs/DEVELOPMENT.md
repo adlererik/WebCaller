@@ -20,6 +20,12 @@ Read [CONTRIBUTING.md](../CONTRIBUTING.md). Small changes should include meaning
 
 ## Building a release
 
-Set the package version and CHANGELOG, run checks/tests/container smoke tests, stage source and run the source audit before committing. Tag the reviewed commit. `node scripts/package-release.mjs v0.4.0` archives only tracked files, produces ZIP/tar.gz and SHA256SUMS.txt under ignored .runtime/releases. Upload those assets to a GitHub release for that tag. Never tar the working directory with .env/data/runtime included. The GitHub automatic source archives are also available.
+Set the package version and CHANGELOG, run checks/tests/container smoke tests, stage source and run the source audit before committing. Tag the reviewed commit. `node scripts/package-release.mjs v0.15.1` archives only tracked files, produces ZIP/tar.gz and SHA256SUMS.txt under ignored .runtime/releases. Inspect both archives before uploading them to a GitHub release for that tag. Keep this an explicitly marked preview until its assurance and device-testing limits change. Never tar the working directory with .env/data/runtime included. The GitHub automatic source archives are also available.
 
 CI runs install, syntax, tests, tracked-source audit and builds the app/relay containers with read-only repository permissions. It uses pinned action commits. No deployment, signing key or provider secret is required to test this source.
+
+## Public distribution review
+
+Use reserved examples (`calls.example.com`, `ntfy.example.com`, `/opt/webcaller`) rather than copying a live deployment. Review staged changes, tracked assets, Git history and release notes for private hosts, IPs, account/tunnel IDs, tokens, setup/invitation links, subscription topics, logs and screenshots. The publishing guard catches known credential/runtime patterns; it cannot recognize every private value or scrub older commits. Build source archives from the reviewed tag with the supplied script, never from a deployed directory. Checksums detect archive changes; a checksum served with an archive is not an independent signature.
+
+A public report should contain commands and results with infrastructure metadata removed. Do not publish actual `.env` files, databases, server-generated configuration or first-phone QR cards. Review CI output too. See [Security](SECURITY.md) and [Operations](OPERATIONS.md).

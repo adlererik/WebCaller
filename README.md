@@ -4,7 +4,7 @@ A **Signal-like WebRTC phone** that runs in the browser on Android, iPhone and d
 
 **Start here: [Beginner installation guide](docs/INSTALL.md).** Use a Debian 12/13 server, a domain name and the guided installer. Docker supplies Node.js 24; optional Caddy supplies HTTPS and optional coturn supplies your own free relay.
 
-This is the **v0.15.0 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
+This is the **v0.15.1 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
 
 ## Why I made these choices
 
@@ -146,7 +146,7 @@ At the top of the call, separate video/voice rows show the actual codec and meas
 
 Call invitations detect the phone and guide the recipient through enabling alerts. Android can receive browser push; iPhone/iPad requires a Home Screen web app. Neutral New message notices open the intended conversation without putting routing IDs into the URL. A locked-phone sound test helps check setup. Up to three spaced alerts request the phone’s normal notification sound; the repeating ringtone plays when the page is open. OS settings, suspension, push delivery and connection still prevent guaranteed closed-phone ringing. See [Call alerts](docs/CALL_ALERTS.md).
 
-Optional **self-hosted ntfy extra ringing** adds urgent generic alerts for recipients with its free Android/iPhone app. Android has one-tap subscription; iPhone has guided copy buttons. A locked-phone sound test enables the extra path after checking the opening link or choosing the phone-icon fallback. Calls, Web Push, Olm, identity pins and SAS stay independent of ntfy. Its device-specific read address cannot send alerts or access conversations. iPhone wake-up still uses ntfy.sh and platform push infrastructure; no website can force continuous ringing or erase native notification traces. See [extra ringing setup and security](docs/EXTRA_RINGING.md).
+Optional **self-hosted ntfy extra ringing** adds maximum-priority (5) generic alerts for recipients with its free Android/iPhone app. Android has one-tap subscription; iPhone has guided copy buttons. A locked-phone sound test enables the extra path after checking the opening link or choosing the phone-icon fallback. Calls, Web Push, Olm, identity pins and SAS stay independent of ntfy. Its device-specific read address cannot send alerts or access conversations. iPhone wake-up still uses ntfy.sh and platform push infrastructure; no website can force continuous ringing or erase native notification traces. See [extra ringing setup, sound settings and security](docs/EXTRA_RINGING.md). Its optional server installer supports the [native systemd installation](docs/INSTALL_NATIVE.md); it does not automatically configure the Docker deployment.
 
 Audio cannot survive zero usable bandwidth or complete outages. Bitrate figures are codec payload ceilings; network overhead uses extra data. Browser support determines actual microphone processing, FEC, PLC and sender controls. A normal website cannot erase global or synced browser history or hide its service-worker/storage usage; see [Browser privacy](docs/BROWSER_PRIVACY.md).
 
@@ -161,6 +161,8 @@ sudo bash deploy/install-debian.sh
 ```
 
 The installer asks for your domain, HTTPS method and relay choice. Set your DNS and router/firewall first using the [beginner guide](docs/INSTALL.md). Your server's `.env` contains new private secrets; none are supplied by this repository. Existing secrets are preserved on setup.
+
+For a fresh installation using the optional ntfy server helper, follow the [native Debian guide](docs/INSTALL_NATIVE.md) instead. Invited people do not install server software or handle these secrets: they open the invitation and follow the phone's short setup guide.
 
 For local development with Node 24:
 
@@ -178,11 +180,15 @@ Open `http://localhost:8080/calls`. Loopback HTTP is suitable for local tests; p
 | Guide | What it explains |
 |---|---|
 | [Install](docs/INSTALL.md) | Plain-language Debian setup, domain, first phone QR and first call |
+| [Native Debian install](docs/INSTALL_NATIVE.md) | Alternative systemd setup for the optional ntfy server installer |
 | [Using WebCaller](docs/USER_GUIDE.md) | Every button, invitations, calls, messages and settings |
+| [Call alerts](docs/CALL_ALERTS.md) | Android/iPhone setup, notifications and the locked-phone sound test |
+| [Extra ringing](docs/EXTRA_RINGING.md) | Optional ntfy, subscriptions, sound settings and troubleshooting |
 | [Features](docs/FEATURES.md) | Audio/video adaptation, Opus and notification behavior |
 | [Networking](docs/NETWORKING.md) | TURN, public IP, CGNAT, router ports, Cloudflare Tunnel and TLS |
 | [Configuration](docs/CONFIGURATION.md) | Every environment setting and generated secret |
 | [Security](docs/SECURITY.md) | Encryption, expiry, trace limits and safe publishing |
+| [Browser privacy](docs/BROWSER_PRIVACY.md) | What the website can and cannot hide or erase |
 | [Source security review](docs/SECURITY_REVIEW.md) | Threat model, findings, forward secrecy and Signal comparison |
 | [Call verification](docs/CALL_VERIFICATION.md) | Using the four words and the SAS protocol |
 | [Architecture](docs/ARCHITECTURE.md) | Components, APIs, message formats and source files |

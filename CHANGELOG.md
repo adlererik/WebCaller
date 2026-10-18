@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.15.1 — 2026-10-18
+
+- Refresh the public installation and usage guides without changing the project’s security choices or personal README style. Use generic domain/path examples and current source download commands.
+- Add a native Debian/systemd guide for the optional ntfy server helper; distinguish it from the guided Docker deployment and document safe updates for each.
+- Explain ntfy priority 5, Android sound channels, iPhone subscription fields and sound limits, WebSockets, DNS delays, login prompts and the phone-icon fallback.
+- Expand configuration references, first-phone/iPhone guidance, public packaging checks and release verification; reject embedded ntfy read addresses and publisher tokens in the publishing guard. Replace the private setup card’s old branding with WebCaller.
+- Preserve application protocols, identities, encryption, call behavior and existing data. Distribute reviewed tracked source only, with SHA-256 checksums and no deployment configuration.
+
 ## 0.15.0 — 2026-10-17
 
 - Add optional self-hosted ntfy incoming-call alerts alongside existing Web Push; keep Olm, identity pins, SAS, media encryption and call signaling unchanged.

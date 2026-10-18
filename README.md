@@ -2,9 +2,9 @@
 
 A **Signal-like WebRTC phone** that runs in the browser on Android, iPhone and desktop: adaptive Opus voice, optional video, encrypted disappearing text, and simple invitations. No SIM, phone number or native app is required. iPhone background call alerts need this website saved to the Home Screen. WebCaller is an independent project; “Signal-like” describes its interface and conversation workflow.
 
-**Start here: [Beginner installation guide](docs/INSTALL.md).** Use a Debian 12/13 server, a domain name and the guided installer. Docker supplies Node.js 24; optional Caddy supplies HTTPS and optional coturn supplies your own free relay.
+**Start here: [Prebuilt Docker installation](docker/README.md).** Download the small setup bundle for a Linux Intel/AMD or ARM64 server. Docker supplies the phone, optional ntfy, HTTPS/Tunnel and TURN services. A short wizard creates your private configuration and first-phone QR. [Source-built Docker](docs/INSTALL.md) and [native Node.js/systemd](docs/INSTALL_NATIVE.md) installations remain available.
 
-This is the **v0.15.1 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
+This is the **v0.16.0 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
 
 ## Why I made these choices
 
@@ -146,7 +146,7 @@ At the top of the call, separate video/voice rows show the actual codec and meas
 
 Call invitations detect the phone and guide the recipient through enabling alerts. Android can receive browser push; iPhone/iPad requires a Home Screen web app. Neutral New message notices open the intended conversation without putting routing IDs into the URL. A locked-phone sound test helps check setup. Up to three spaced alerts request the phone’s normal notification sound; the repeating ringtone plays when the page is open. OS settings, suspension, push delivery and connection still prevent guaranteed closed-phone ringing. See [Call alerts](docs/CALL_ALERTS.md).
 
-Optional **self-hosted ntfy extra ringing** adds maximum-priority (5) generic alerts for recipients with its free Android/iPhone app. Android has one-tap subscription; iPhone has guided copy buttons. A locked-phone sound test enables the extra path after checking the opening link or choosing the phone-icon fallback. Calls, Web Push, Olm, identity pins and SAS stay independent of ntfy. Its device-specific read address cannot send alerts or access conversations. iPhone wake-up still uses ntfy.sh and platform push infrastructure; no website can force continuous ringing or erase native notification traces. See [extra ringing setup, sound settings and security](docs/EXTRA_RINGING.md). Its optional server installer supports the [native systemd installation](docs/INSTALL_NATIVE.md); it does not automatically configure the Docker deployment.
+Optional **self-hosted ntfy extra ringing** adds maximum-priority (5) generic alerts for recipients with its free Android/iPhone app. Android has one-tap subscription; iPhone has guided copy buttons. A locked-phone sound test enables the extra path after checking the opening link or choosing the phone-icon fallback. Calls, Web Push, Olm, identity pins and SAS stay independent of ntfy. Its device-specific read address cannot send alerts or access conversations. iPhone wake-up still uses ntfy.sh and platform push infrastructure; no website can force continuous ringing or erase native notification traces. See [extra ringing setup, sound settings and security](docs/EXTRA_RINGING.md). The [prebuilt Docker package](docker/README.md) includes an isolated ntfy service and automatic credential initialization. The separate native helper supports [systemd installations](docs/INSTALL_NATIVE.md); it does not configure the older source-built Docker recipe.
 
 Audio cannot survive zero usable bandwidth or complete outages. Bitrate figures are codec payload ceilings; network overhead uses extra data. Browser support determines actual microphone processing, FEC, PLC and sender controls. A normal website cannot erase global or synced browser history or hide its service-worker/storage usage; see [Browser privacy](docs/BROWSER_PRIVACY.md).
 
@@ -154,7 +154,9 @@ Disappearing messages cannot guarantee zero forensic traces: recipient copies, b
 
 ## Install
 
-Download and extract the [latest release](https://github.com/adlererik/WebCaller/releases). On your Debian server, enter the extracted folder and run:
+For the simplest fresh server setup, download **WebCaller-Docker** from the [release page](https://github.com/adlererik/WebCaller/releases) and follow its [short guide](docker/README.md). It uses tested prebuilt images for Linux amd64/arm64 and includes optional ntfy. Run `./webcaller setup`, `./webcaller start`, then `./webcaller qr`. Docker Engine and Compose must already be installed.
+
+For a **source-built Docker** installation on Debian, extract the source archive, enter its folder and run:
 
 ```sh
 sudo bash deploy/install-debian.sh
@@ -162,7 +164,7 @@ sudo bash deploy/install-debian.sh
 
 The installer asks for your domain, HTTPS method and relay choice. Set your DNS and router/firewall first using the [beginner guide](docs/INSTALL.md). Your server's `.env` contains new private secrets; none are supplied by this repository. Existing secrets are preserved on setup.
 
-For a fresh installation using the optional ntfy server helper, follow the [native Debian guide](docs/INSTALL_NATIVE.md) instead. Invited people do not install server software or handle these secrets: they open the invitation and follow the phone's short setup guide.
+For a direct Node.js installation with the optional native ntfy server helper, follow the [native Debian guide](docs/INSTALL_NATIVE.md). Invited people do not install server software or handle these secrets: they open the invitation and follow the phone's short setup guide.
 
 For local development with Node 24:
 
@@ -179,7 +181,8 @@ Open `http://localhost:8080/calls`. Loopback HTTP is suitable for local tests; p
 
 | Guide | What it explains |
 |---|---|
-| [Install](docs/INSTALL.md) | Plain-language Debian setup, domain, first phone QR and first call |
+| [Prebuilt Docker](docker/README.md) | Ready-made images, setup wizard, optional ntfy, first phone and updates |
+| [Source-built Docker](docs/INSTALL.md) | Debian build/install, domain, first phone QR and first call |
 | [Native Debian install](docs/INSTALL_NATIVE.md) | Alternative systemd setup for the optional ntfy server installer |
 | [Using WebCaller](docs/USER_GUIDE.md) | Every button, invitations, calls, messages and settings |
 | [Call alerts](docs/CALL_ALERTS.md) | Android/iPhone setup, notifications and the locked-phone sound test |

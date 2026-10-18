@@ -99,6 +99,11 @@ services:
     restart: unless-stopped
     network_mode: host
     env_file: ./config/turn.env
+    healthcheck:
+      test: [CMD, python3, -c, "import pathlib,socket; assert b'turnserver' in pathlib.Path('/proc/1/cmdline').read_bytes(); socket.create_connection(('127.0.0.1',3478),2).close()"]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
     volumes:
       - ./config/certs:/certs:ro
     read_only: true

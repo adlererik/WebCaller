@@ -35,6 +35,10 @@ The WebSocket recommendation and instant-delivery service are documented by the 
 
 To stop extra alerts, use **Disconnect extra ringing** in WebCaller. Remove the old Incoming calls subscription in ntfy too. Reconnecting creates a fresh read address; normal browser alerts stay enabled.
 
+## Prebuilt Docker installation
+
+For a fresh all-container installation, follow the [prebuilt Docker guide](../docker/README.md) and enable ntfy in its setup wizard. That package initializes a separate ntfy state volume and publisher-secret volume automatically. Do not run the native installer below inside Docker. Its exact private-network HTTP destination requires the package’s explicit server-only opt-in; ordinary native validation remains HTTPS/loopback only. Phone subscription, sound tests, read capabilities and encryption boundaries remain as described above.
+
 ## Install on Debian
 
 This section is for the person running the server, not an invited caller. This optional installer is separate from the main phone installer. It works with an existing **systemd** WebCaller installation on Debian amd64/arm64; start with the [native installation guide](INSTALL_NATIVE.md) for a fresh setup. It does not configure Docker installations or change router forwarding. If you already use Docker, keep that working installation; do not run a second phone server to add alerts. The manual Docker requirements are below. The helper installs a pinned official ntfy 2.31.1 binary after verifying the pinned architecture-specific SHA-256 checksum.

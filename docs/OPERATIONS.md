@@ -1,5 +1,7 @@
 # Operations
 
+For the ready-made image distribution, use the [prebuilt Docker guide](../docker/README.md): `./webcaller status`, `./webcaller stop`, `./webcaller start`, and `./webcaller update vX.Y.Z`. Its update command checks an explicit newer bundle, downloads images before replacing public files and waits for startup/health. Keep `.env`, `config/` and named volumes. It does not automatically back up conversation history or roll back database migrations. The older source-build and native workflows are below.
+
 Run commands from the installed project directory. The first sections describe **Docker**; native systemd commands are below. Keep your chosen installation method when updating. Use the same Compose profiles selected during setup.
 
 ```sh
@@ -19,7 +21,7 @@ sudo docker compose build webcaller
 sudo docker compose --profile https --profile turn up -d --build
 ```
 
-Use only your chosen profiles. Wait for `sudo docker compose ps` to show the app healthy, then test the public page and a real call. Do not delete the data volume, rename the Compose project or regenerate secrets. This v0.15.1 documentation/distribution update does not change the database schema or encryption protocols. Earlier previews include additive schema and security migrations; always read [release notes](../CHANGELOG.md), especially when skipping versions. This preview does not provide account recovery/export or browser identity synchronization.
+Use only your chosen profiles. Wait for `sudo docker compose ps` to show the app healthy, then test the public page and a real call. Do not delete the data volume, rename the Compose project or regenerate secrets. v0.16.0 adds an alternative prebuilt distribution and restricted ntfy secret-file/private-network configuration; it does not change the database schema or encryption protocols. Earlier previews include additive schema and security migrations; always read [release notes](../CHANGELOG.md), especially when skipping versions. This preview does not provide account recovery/export or browser identity synchronization.
 
 ## Backups and disappearing messages
 

@@ -32,12 +32,16 @@ if(digestFile){
       env=env.replace(line[0],key+'='+line[1].split('@')[0]+'@'+digests[key]);
     }
     writeFileSync(`${dir}/${prefix}/images.env`,env);
-    execFileSync('python3',['-c',`import pathlib,tarfile,zipfile,sys
+    execFileSync('python3',['-c',`import pathlib,tarfile,zipfile,sys,time,stat
 root=pathlib.Path(sys.argv[1]);base=root/sys.argv[2];out=pathlib.Path(sys.argv[3])
-with tarfile.open(out/(base.name+'.tar.gz'),'w:gz') as tar:tar.add(base,arcname=base.name)
+epoch=int(sys.argv[4])
+def neutral(info):
+ info.uid=info.gid=0;info.uname=info.gname='root';info.mtime=epoch;info.pax_headers={};return info
+with tarfile.open(out/(base.name+'.tar.gz'),'w:gz') as tar:tar.add(base,arcname=base.name,filter=neutral)
 with zipfile.ZipFile(out/(base.name+'.zip'),'w',zipfile.ZIP_DEFLATED) as z:
- for p in sorted(base.iterdir()):z.write(p,base.name+'/'+p.name)
-`,dir,prefix,out]);
+ for p in sorted(base.iterdir()):
+  info=zipfile.ZipInfo(base.name+'/'+p.name,time.gmtime(epoch)[:6]);info.create_system=3;info.external_attr=(stat.S_IFREG|(0o755 if p.name=='webcaller' else 0o644))<<16;info.compress_type=zipfile.ZIP_DEFLATED;z.writestr(info,p.read_bytes())
+`,dir,prefix,out,execFileSync('git',['log','-1','--format=%ct',tag]).toString().trim()]);
     for(const suffix of ['tar.gz','zip']){const name=prefix+'.'+suffix;files.push(createHash('sha256').update(readFileSync(`${out}/${name}`)).digest('hex')+'  '+name);}
   }finally{rmSync(dir,{recursive:true,force:true});}
 }

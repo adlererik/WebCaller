@@ -1,6 +1,6 @@
 # Native Debian installation
 
-This is an alternative to Docker for a **fresh Debian 12/13 server**. Choose it if you want the supplied optional ntfy server installer. The same WebCaller code runs under systemd, Debian's service manager, so it starts again after reboot. A normal caller never needs to follow this guide.
+This is an alternative to Docker for a **fresh Debian 12/13 server**. Choose it if you prefer running Node directly with systemd and its separate optional ntfy server installer. The [prebuilt Docker package](../docker/README.md) also supports ntfy entirely in containers. The same WebCaller code runs under systemd, Debian's service manager, so it starts again after reboot. A normal caller never needs to follow this guide.
 
 You need a regular SSH account with `sudo`, a domain you control, HTTPS forwarding, and a reachable TURN relay. Use `/opt/webcaller` below; paths for this helper must not contain spaces. Replace `calls.example.com` and `ntfy.example.com` with subdomains of your own domain. They are examples, not addresses to register or copy literally.
 
@@ -8,7 +8,7 @@ Do not use this as a migration recipe for an existing Docker or native installat
 
 ## 1. Download the release
 
-Connect to the server as your regular user, then follow [Download WebCaller](INSTALL.md#2-download-webcaller-onto-the-debian-server), including the checksum. From inside the extracted `WebCaller-v0.15.1` folder:
+Connect to the server as your regular user, then follow [Download WebCaller](INSTALL.md#2-download-webcaller-onto-the-debian-server), including the checksum. From inside the extracted `WebCaller-v0.16.0` folder:
 
 ```sh
 sudo apt update

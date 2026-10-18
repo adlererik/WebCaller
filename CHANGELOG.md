@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.16.0 — 2026-10-18
+
+- Add a complete prebuilt Docker distribution alongside native and source-built installations, with native amd64/arm64 image builds, ready-made image publishing and small digest-pinned setup bundles.
+- Containerize the setup wizard, private first-phone QR, ntfy initialization and optional Cloudflare connector; retain optional Caddy and coturn. Generate credentials privately at installation time and preserve existing configuration/volumes on restart.
+- Isolate ntfy state and its publisher-secret volume from app data. Add secret-file loading and an explicit exact-host private Docker HTTP opt-in; native HTTPS/loopback validation remains the default. Keep existing Olm, identity pins, SAS, media encryption and calling protocols.
+- Add an explicit-version update command with checksum/digest checks, download-before-replacement, downgrade/tamper rejection, local confirmation and startup checks. No unattended updates, conversation archives or automatic database rollback.
+- Document all three install choices, domain/router requirements, notification setup, data retention, updates and migration limits. Existing installations are not automatically migrated.
+
 ## 0.15.1 — 2026-10-18
 
 - Refresh the public installation and usage guides without changing the project’s security choices or personal README style. Use generic domain/path examples and current source download commands.

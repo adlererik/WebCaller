@@ -106,3 +106,13 @@ See the [13 October 2026 source review](SECURITY_REVIEW.md) and the [side-by-sid
 ## Optional ntfy alert transport
 
 The ntfy integration sends generic alerts and opaque opening references only; it never transports conversation keys, signed SDP, chat or media. The native read address is a separate random 256-bit capability, while a write-only publishing token stays server-side. An alert cannot authenticate or automatically answer a call. Existing Olm, pins, SAS and DTLS-SRTP checks still apply. The additional service runs isolated from WebCaller files; compromised alert delivery can still cause spam/missed alerts. Read the full [boundary, retention and iPhone relay limitations](EXTRA_RINGING.md#security-and-privacy-boundary).
+
+### Prebuilt Docker trust and isolation
+
+The optional v0.16 Docker bundle runs the same phone code. Published bundles pin project and upstream images by digest; GitHub Actions tests native amd64/arm64 stacks before publishing. Image/release integrity remains dependent on the maintainer, GitHub/registry access, build dependencies and the host. SHA-256 checksums fetched beside a release are not an independent signature or an audit.
+
+The app and ntfy have separate data/state mounts. A network-disabled one-shot helper creates ntfy's deny-all/read-capability ACLs and write-only publisher token, stored in a dedicated volume mounted read-only by the app. Runtime ntfy cannot read the app environment/database or its publisher-token volume. The app does not receive the Docker socket. Setup creates secrets at installation time; images/releases contain no live configuration.
+
+For this bundle only, `NTFY_ALLOW_DOCKER_HTTP=true` permits exactly `http://ntfy:8094`; without it, HTTPS/loopback rules remain. This is plaintext on an isolated same-host Docker bridge, including the alert publisher credential, not TLS between containers. Compromise of that network/host can expose the alert token/metadata; it still supplies no chat/media/ratchet/SAS keys or caller authentication. No redirect is followed with the token. External clients use the separate HTTPS ntfy origin. `_FILE` credentials fail closed if unreadable and cannot be set alongside an inline token.
+
+Updates preserve volumes/configuration, reject downgrades and require an explicit newer release. Startup checks are not cryptographic migration proofs. No automatic conversation archive is created; manually retained backups can outlive disappearing timers. Read the release's migration notes and keep a matching private backup if your recovery policy requires one. Existing endpoint, browser-origin, metadata and independent-audit limitations remain.

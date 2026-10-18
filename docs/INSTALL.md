@@ -1,4 +1,4 @@
-# Beginner installation guide
+# Source-built Docker installation
 
 ## What you are installing
 
@@ -6,7 +6,7 @@ WebCaller is a small website on your server. Phones open it in Safari or Chrome.
 
 You will need a Debian 12/13 computer or VPS with administrator access, internet access, a domain you control, and two devices to test a call. The installer is intended for a fresh server. It will not remove existing container software or overwrite an existing `.env`.
 
-**Choose one installation method before setting up phones.** This guide uses Docker and is the simplest general setup. If you want to use the optional automatic **ntfy server installer**, use the separate [native Debian/systemd guide](INSTALL_NATIVE.md) instead. Both run the same phone application; do not install both over the same account data.
+**Choose one installation method before setting up phones.** The simplest fresh setup is now the [prebuilt Docker package](../docker/README.md), including optional ntfy without a native app service. This guide remains available for building the phone/HTTPS/TURN images locally on Debian. For a direct Node installation and its separate **ntfy systemd installer**, use the [native Debian guide](INSTALL_NATIVE.md). Both run the same phone application; do not install both over the same account data.
 
 The examples use `example.com`, a reserved demonstration domain. Replace it with a domain you already control. Adding a `calls` or `ntfy` subdomain does not register another domain; hosting, domain renewal, mobile data and any optional paid relay are separate costs.
 
@@ -31,16 +31,16 @@ Download the release:
 ```sh
 sudo apt update
 sudo apt install -y curl tar
-curl -fL https://github.com/adlererik/WebCaller/releases/download/v0.15.1/WebCaller-v0.15.1.tar.gz -o WebCaller-v0.15.1.tar.gz
-curl -fL https://github.com/adlererik/WebCaller/releases/download/v0.15.1/SHA256SUMS.txt -o SHA256SUMS.txt
+curl -fL https://github.com/adlererik/WebCaller/releases/download/v0.16.0/WebCaller-v0.16.0.tar.gz -o WebCaller-v0.16.0.tar.gz
+curl -fL https://github.com/adlererik/WebCaller/releases/download/v0.16.0/SHA256SUMS.txt -o SHA256SUMS.txt
 ```
 
 Check the archive before extracting:
 
 ```sh
-grep 'WebCaller-v0.15.1.tar.gz$' SHA256SUMS.txt | sha256sum -c -
-tar -xzf WebCaller-v0.15.1.tar.gz
-cd WebCaller-v0.15.1
+grep 'WebCaller-v0.16.0.tar.gz$' SHA256SUMS.txt | sha256sum -c -
+tar -xzf WebCaller-v0.16.0.tar.gz
+cd WebCaller-v0.16.0
 ```
 
 A successful checksum says `OK`. Stop if it fails. Alternatively download/extract the ZIP on your computer and copy the folder to your server.
@@ -105,7 +105,7 @@ The invitation guides the other person through call alerts. Android asks for not
 
 ## Optional extra ringing
 
-Normal calls and browser alerts do not require ntfy. If the server operator enables it, **Settings → Extra ringing · ntfy** offers an additional sound through the free ntfy phone app. Android has a connect button; iPhone uses two copy/paste fields. Each person tests it on their locked phone. See [Extra ringing](EXTRA_RINGING.md) for the exact steps, sound settings and server requirements. The ntfy systemd installer does not configure this Docker installation; choose the native guide for a fresh setup using that helper, or have an experienced operator configure an isolated relay for Docker.
+Normal calls and browser alerts do not require ntfy. If the server operator enables it, **Settings → Extra ringing · ntfy** offers an additional sound through the free ntfy phone app. Android has a connect button; iPhone uses two copy/paste fields. Each person tests it on their locked phone. See [Extra ringing](EXTRA_RINGING.md) for the exact steps, sound settings and server requirements. The ntfy systemd installer does not configure this older source-built recipe; the [prebuilt Docker stack](../docker/README.md) provides a complete containerized alternative for a fresh installation. Experienced users can also build those same three images locally; see Development.
 
 ## If something goes wrong
 

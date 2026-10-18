@@ -14,7 +14,11 @@ const compose=(...args)=>docker('compose','--project-directory',dir,'--env-file'
 const settings={host:'calls.example.test',mode:'proxy',relay:'self',publicIP:'1.1.1.1',appPort:18180,ntfyPort:18194,ntfy:true,ntfyHost:'notify.example.test',ios:false};
 try{
  execFileSync('docker',['run','--rm','-i','--user',`${process.getuid()}:${process.getgid()}`,'--mount',`type=bind,src=${dir},dst=/bundle`,'webcaller-ci:setup','init','--settings','/dev/stdin'],{input:JSON.stringify(settings),encoding:'utf8',stdio:['pipe','pipe','pipe']});
- compose('config','--quiet');compose('up','-d','--wait','--wait-timeout','180');
+ compose('config','--quiet');
+ const upstream=Object.fromEntries(images.split('\n').filter(v=>v.includes('=')&&!v.startsWith('#')).map(v=>v.split(/=(.*)/s).slice(0,2)));
+ docker('run','--rm','--mount',`type=bind,src=${dir}/config/Caddyfile,dst=/etc/caddy/Caddyfile,readonly`,upstream.CADDY_IMAGE,'caddy','validate','--config','/etc/caddy/Caddyfile');
+ assert.ok(docker('run','--rm',upstream.TUNNEL_IMAGE,'tunnel','run','--help').includes('--token-file'));
+ compose('up','-d','--wait','--wait-timeout','180');
  const base='http://127.0.0.1:18180/calls',origin='https://calls.example.test';
  for(const path of ['/', '/health','/api/config','/app.js']){const r=await fetch(base+path);assert.equal(r.status,200);assert.equal(r.headers.get('cache-control'),'no-store');}
  assert.equal((await(await fetch(base+'/api/config')).json()).ntfyAvailable,true);

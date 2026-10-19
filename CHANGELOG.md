@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.18.0-experimental.1 — libsignal/PQXDH branch, 2026-10-19
+
+- Add official libsignal v0.105.1 at 1738ead8a12ffe539f6309958123dadb16dc3b95 through a custom browser WASM/storage adapter. Require v4 PQXDH with X25519/Kyber-1024; retain upstream Double/Triple Ratchet/SPQR. Stable Olm accounts are not imported.
+- Use Web Crypto Ed25519 application signatures. Earlier libsignal test P-256 identities keep pins/history through certified nonextractable signers, strict framing, old signature verification and bounded prekey batches.
+- Retain the media-bound optional four-word SAS, AES-GCM files/local records, adaptive calls, chat, timers, codes, cache and alert workflows. Live media remains DTLS-SRTP, not post-quantum media.
+- Include pinned upstream source, binding/locks/build/oracle, AGPL source offer, MIT/dependency notices and complete branch-specific documentation. No private deployment credentials/state are included.
+- Label the integration unaudited. Block the stable prebuilt launcher here and restrict stable registry publishing. No experimental prebuilt image or stable release is published by this branch.
+
+Entries below describe historical stable releases, not this branch's current encryption or migration support.
+
 ## 0.17.1 — 2026-10-19
 
 - Publish the complete adaptive-sharing / 200 MiB release below with source archives, digest-pinned Docker setup bundles and native amd64/arm64 images.

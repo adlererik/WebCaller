@@ -12,7 +12,7 @@ import {contactName,renameContact} from './contact-names.js';
 import { newIdentity, fingerprint, safetyNumber, vault } from './crypto.js';
 import {secureMessaging} from './secure-messaging.js';
 import {checkContactTrust} from './contact-trust.js';
-import {orderedEnvelopes} from './olm-wire.js';
+import {orderedEnvelopes} from './signal-wire.js';
 const messenger=secureMessaging({api});
 const seal=(...args)=>messenger.seal(...args),open=(...args)=>messenger.open(...args);
 import { Phone, testRelay } from './media.js';

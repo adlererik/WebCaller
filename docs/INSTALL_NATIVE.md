@@ -1,29 +1,23 @@
-# Native Debian installation
+# Native experimental installation on Debian
 
-This is an alternative to Docker for a **fresh Debian 12/13 server**. Choose it if you prefer running Node directly with systemd and its separate optional ntfy server installer. The [prebuilt Docker package](../docker/README.md) also supports ntfy entirely in containers. The same WebCaller code runs under systemd, Debian's service manager, so it starts again after reboot. A normal caller never needs to follow this guide.
+This guide creates a **new** native test installation on Debian 12/13. It does not replace an existing WebCaller, its Node installation or its service. Use disposable accounts. Commands assume a regular SSH user with sudo. Replace `calls-test.example.com` with a separate hostname under your own domain.
 
-You need a regular SSH account with `sudo`, a domain you control, HTTPS forwarding, and a reachable TURN relay. Use `/opt/webcaller` below; paths for this helper must not contain spaces. Replace `calls.example.com` and `ntfy.example.com` with subdomains of your own domain. They are examples, not addresses to register or copy literally.
-
-Do not use this as a migration recipe for an existing Docker or native installation. Preserve its identity database, private `.env`, browser data and deployment method; see [Operations](OPERATIONS.md). Do not run both phone services on port 8080.
-
-## 1. Download the release
-
-Connect to the server as your regular user, then follow [Download WebCaller](INSTALL.md#2-download-webcaller-onto-the-debian-server), including the checksum. From inside the extracted `WebCaller-v0.17.1` folder:
+## 1. Download into a separate folder
 
 ```sh
 sudo apt update
-sudo apt install -y ca-certificates curl xz-utils nano python3 python3-venv
-sudo test ! -e /opt/webcaller
-sudo install -d -m 755 -o "$(id -un)" -g "$(id -gn)" /opt/webcaller
-cp -a . /opt/webcaller/
-cd /opt/webcaller
+sudo apt install -y git ca-certificates curl xz-utils nano python3 python3-venv
+if sudo test -e /opt/webcaller-experimental; then echo 'Stop: the target directory already exists.'; exit 1; fi
+sudo install -d -m 755 -o "$(id -un)" -g "$(id -gn)" /opt/webcaller-experimental
+git clone --recurse-submodules --branch codex/experimental-libsignal-pqxdh https://github.com/adlererik/WebCaller.git /opt/webcaller-experimental
+cd /opt/webcaller-experimental
 ```
 
-Run each command only after the previous one succeeds. If the existence check fails, stop: there is already an installation to review, not a folder to overwrite.
+Run each command only after the previous succeeds. If the existence check fails, stop: review the existing directory rather than overwriting it. Use a different new folder if needed and substitute that path throughout this guide. GitHub ZIPs omit source submodules; the recursive clone includes the exact official source needed for the source offer.
 
-## 2. Install Node.js 24
+## 2. Install a private Node.js 24 runtime
 
-WebCaller needs **Node.js 24 LTS**, rather than an older Debian default. If `node --version` already shows v24 and `npm --version` works, skip the download below. Otherwise, on a fresh server with no existing Node installation, these commands download the official v24.22.0 Linux binary for amd64 or arm64 and check its checksum. For another architecture or an existing managed Node installation, use the [official Node downloads](https://nodejs.org/en/download) and keep a system-wide Node 24 available to systemd and sudo. Keep this runtime patched; the pinned version here is a reproducible starting point.
+WebCaller needs Node 24. These commands download the official Linux x64/arm64 binary into this project's ignored `.runtime` folder; they do not change system Node or another service. The SHA-256 list and archive are fetched over HTTPS. Node also documents [signed-checksum verification](https://github.com/nodejs/node#verifying-binaries).
 
 ```sh
 mkdir -p .runtime/node-download
@@ -31,92 +25,135 @@ cd .runtime/node-download
 case "$(dpkg --print-architecture)" in
   amd64) webcaller_arch=x64 ;;
   arm64) webcaller_arch=arm64 ;;
-  *) echo 'Use the official Node guide for this architecture'; exit 1 ;;
+  *) echo 'Use the official Node.js download instructions for this architecture'; exit 1 ;;
 esac
-webcaller_node=v24.22.0
-curl -fLO "https://nodejs.org/dist/$webcaller_node/node-$webcaller_node-linux-$webcaller_arch.tar.xz"
-curl -fLO "https://nodejs.org/dist/$webcaller_node/SHASUMS256.txt"
-grep " node-$webcaller_node-linux-$webcaller_arch.tar.xz$" SHASUMS256.txt | sha256sum -c -
+curl -fLO https://nodejs.org/dist/latest-v24.x/SHASUMS256.txt
+webcaller_archive=$(awk -v arch="$webcaller_arch" '$2 ~ ("-linux-" arch "\\.tar\\.xz$") {print $2; exit}' SHASUMS256.txt)
+test -n "$webcaller_archive"
+curl -fLO "https://nodejs.org/dist/latest-v24.x/$webcaller_archive"
+awk -v file="$webcaller_archive" '$2 == file {print}' SHASUMS256.txt | sha256sum -c -
 ```
 
-Continue only after `OK`. These checksums are fetched over HTTPS; Node also documents [verification of signed checksums](https://github.com/nodejs/node#verifying-binaries).
+Continue only after `OK`. If downloading/checking fails, stop rather than using an incomplete archive.
 
 ```sh
-sudo test ! -e /usr/local/lib/webcaller-node
-sudo install -d -m 755 /usr/local/lib/webcaller-node
-sudo tar -xJf "node-$webcaller_node-linux-$webcaller_arch.tar.xz" -C /usr/local/lib/webcaller-node --strip-components=1 --no-same-owner
-sudo ln -s /usr/local/lib/webcaller-node/bin/node /usr/local/bin/node
-sudo ln -s /usr/local/lib/webcaller-node/bin/npm /usr/local/bin/npm
-cd /opt/webcaller
+mkdir -p ../node
+tar -xJf "$webcaller_archive" -C ../node --strip-components=1 --no-same-owner
+cd /opt/webcaller-experimental
+export PATH="$PWD/.runtime/node/bin:$PATH"
 node --version
 npm --version
-sudo node --version
-```
-
-If any destination already exists, stop and review it rather than replacing it. Both Node commands must report v24. This native runtime is not updated by the Docker image or by downloading a new WebCaller release.
-
-## 3. Create the private configuration
-
-```sh
 npm ci --ignore-scripts
 npm run setup
+npm run prepare:source
+```
+
+Node should report v24. Rust is not needed: browser WASM is already bundled. `prepare:source` creates the public corresponding-source download and requires the clean checked-out upstream source. It excludes private `.env`/data/runtime files. Preserve your `.runtime` Node directory and keep that runtime patched during future updates.
+
+## 3. Set private configuration
+
+```sh
 nano .env
 ```
 
-Set `PUBLIC_URL` to your real address, for example `https://calls.example.com/calls`, and `VAPID_SUBJECT` to your own contact URL or `mailto:` email. Leave `HOST=127.0.0.1`, `PORT=8080` and `DATA_DIR=./data` for this guide. Keep the generated secrets; the supplied file's empty secret fields are filled automatically. In nano, save with Ctrl+O, Enter, then exit with Ctrl+X. Do not paste the resulting `.env` into an issue or commit it to Git.
+Use these values, replacing the example hostname:
 
-For an existing TURN relay, enter its `TURN_URLS` and the matching REST shared `TURN_SECRET` privately. If using the Cloudflare TURN API instead, fill its two separate credential fields. A Tunnel is not a TURN relay. See [Networking](NETWORKING.md) before relying on calls across different networks. The optional ntfy fields stay empty until step 7.
-
-## 4. Start the phone service
-
-```sh
-sudo bash deploy/install-system.sh
-sudo systemctl status webcaller.service --no-pager
-curl -fsS http://127.0.0.1:8080/calls/health
+```dotenv
+HOST=127.0.0.1
+PORT=8088
+PUBLIC_URL=https://calls-test.example.com/calls
+DATA_DIR=./data
+WEBCALLER_TEST_INSTANCE=libsignal-preview-v1
 ```
 
-The service should say `active (running)` and health should contain `"ok":true`. The helper uses your current regular user as the service user and the system Node binary; run it with sudo from that account. It restricts writes to the project's data directory. This helper does not install HTTPS or TURN.
+Keep the generated owner token and VAPID keys. Set `VAPID_SUBJECT` to your own contact URL/email. In nano: Ctrl+O, Enter to save; Ctrl+X to exit. Keep `.env` private and never commit/share it. The empty secret fields in `.env.example` are filled by setup, not by this documentation.
 
-If startup fails, use `sudo journalctl -u webcaller.service -n 50 --no-pager` locally. Review and redact output before sharing it. Do not repeatedly regenerate secrets to fix a startup error.
+For an existing TURN relay, privately configure its REST `TURN_SECRET` and comma-separated `TURN_URLS`. Alternatively use the Cloudflare TURN API fields. [Networking](NETWORKING.md) explains public IP, CGNAT, ports and TLS. A website Tunnel is not a media relay. Optional ntfy fields remain blank until its server is configured.
 
-## 5. Give the website HTTPS
-
-Choose **one** route:
-
-- **Existing Cloudflare Tunnel:** the connector must run directly on this Debian host. Add a published application for your `calls` subdomain, Service URL `http://127.0.0.1:8080`, with no path filter. Follow the [dashboard steps](INSTALL.md#1-choose-your-address); keep existing routes. No website router forward is needed.
-- **Existing HTTPS proxy:** forward `/calls` and `/calls/*`, including WebSocket upgrades, to loopback port 8080. Use a valid certificate for your own calls hostname.
-- **Fresh server using Caddy:** first point your hostname at the public server/router and forward TCP 80/443 as described in the main guide. Only if those ports and `/etc/caddy/Caddyfile` are not serving another website, install Caddy with `sudo apt install -y caddy`, then edit `/etc/caddy/Caddyfile` using `sudo nano`. Use this configuration with your own hostname:
-
-  ```caddyfile
-  calls.example.com {
-      @phone path /calls /calls/*
-      reverse_proxy @phone 127.0.0.1:8080
-      respond "Not found" 404
-  }
-  ```
-
-  Check it with `sudo caddy validate --config /etc/caddy/Caddyfile`, then `sudo systemctl enable --now caddy` and `sudo systemctl reload caddy`. Do not replace an existing site's configuration with this example. [Caddy HTTPS requirements](https://caddyserver.com/docs/automatic-https/).
-
-Open your real `https://calls…/calls` address. It should show WebCaller without certificate errors. Do not expose port 8080 directly to the internet as a substitute for HTTPS.
-
-## 6. Set up the first phone, then invite people
+Test the server in the foreground:
 
 ```sh
+npm start
+```
+
+From another SSH terminal, `curl -fsS http://127.0.0.1:8088/calls/health` should return `"ok":true`. Use Ctrl+C in the first terminal to stop that foreground process before enabling the boot service. Do not regenerate secrets to fix a connection problem.
+
+## 4. Give this installation its own service
+
+The following creates **webcaller-experimental.service**, using the current regular user and the private Node runtime. Do not run it from a root login. Check `whoami` first. If the unit already exists, inspect it instead of overwriting it.
+
+```sh
+test "$(id -u)" -ne 0 || { echo 'Use a regular SSH account, not root.'; exit 1; }
+if sudo test -e /etc/systemd/system/webcaller-experimental.service; then echo 'Stop: the test service already exists.'; exit 1; fi
+mkdir -p data
+chmod 700 data
+sudo tee /etc/systemd/system/webcaller-experimental.service >/dev/null <<EOF
+[Unit]
+Description=WebCaller experimental libsignal phone
+After=network-online.target
+
+[Service]
+Type=simple
+User=$(id -un)
+Group=$(id -gn)
+WorkingDirectory=/opt/webcaller-experimental
+EnvironmentFile=/opt/webcaller-experimental/.env
+ExecStart=/opt/webcaller-experimental/.runtime/node/bin/node /opt/webcaller-experimental/server/index.mjs
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/webcaller-experimental/data
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload
+sudo systemctl enable --now webcaller-experimental.service
+sudo systemctl status webcaller-experimental.service --no-pager
+curl -fsS http://127.0.0.1:8088/calls/health
+```
+
+The service should be `active (running)`. Troubleshoot locally with `sudo journalctl -u webcaller-experimental.service -n 50 --no-pager`; redact logs before sharing. This service uses the same regular Unix account, not a complete host-security boundary. Use a dedicated account/additional isolation for stronger separation. The stable `deploy/install-system.sh` uses a different service name; it is not needed here.
+
+## 5. Add HTTPS for the new hostname
+
+Choose one existing HTTPS method; preserve existing routes/websites.
+
+- **Cloudflare Tunnel running on this host:** add a published hostname `calls-test.example.com`, HTTP service `127.0.0.1:8088`, no path filter. Keep all earlier routes. No website router forwarding is needed.
+- **Existing HTTPS reverse proxy:** forward `/calls` and `/calls/*`, including WebSocket upgrades, to `127.0.0.1:8088`. Use a valid certificate for the new hostname.
+- **Fresh server using Caddy:** point the hostname at the public server/router; ports 80/443 must be available and forwarded appropriately. Add a new site block to your Caddy configuration rather than replacing other sites:
+
+```caddyfile
+calls-test.example.com {
+    @phone path /calls /calls/*
+    reverse_proxy @phone 127.0.0.1:8088
+    respond "Not found" 404
+}
+```
+
+Validate/reload your proxy using its official instructions. Open the HTTPS site without certificate warnings. Do not expose raw port 8088 as a substitute for HTTPS. [Networking](NETWORKING.md).
+
+## 6. First phone, QR and invites
+
+```sh
+cd /opt/webcaller-experimental
 python3 -m venv .runtime/qr-venv
-.runtime/qr-venv/bin/python -m pip install --disable-pip-version-check qrcode==8.2
+.runtime/qr-venv/bin/python -m pip install qrcode==8.2
 .runtime/qr-venv/bin/python scripts/phone-setup-qr.py --env .env --terminal
 ```
 
-Keep this QR private. Follow [First phone by QR](INSTALL.md#4-set-up-your-first-phone-by-qr), including its iPhone note, then [Invite someone and test](INSTALL.md#5-invite-someone-and-test). Invited people only open their link and follow the phone guide. Keep using that browser or, on iPhone, the saved Home Screen icon. Clearing its site data removes the identity.
+Keep this owner QR private. Scan it with the first Android phone's camera and open it in the browser you will keep using. It supplies the owner code automatically. Choose a test name, then **Invite someone** to connect the other phone. The invitee does not need the owner code, server password or publishing tokens.
 
-Test calls in both directions on different networks. A successful page load or TURN allocation alone does not prove a working voice path. Complete the built-in locked-phone alert test on each phone.
+On iPhone follow the invitation's Add to Home Screen guidance and use the new **WC Test** icon. If the first device is an iPhone, add the site before enrollment and open the owner setup there, or enroll a desktop first and invite the iPhone. Different browser/Home Screen profiles may not share identities; keep any normal WebCaller icon/storage.
 
-## 7. Optional ntfy server
+Test messages, reloads, both call directions, matching SAS, photo transfer while calling, different networks and locked-screen sound. Optional ntfy uses its own hostname/service; adapt [Extra ringing](EXTRA_RINGING.md) with this installation's private `.env` and **webcaller-experimental.service**. Its stock iPhone wake-up relay limitation still applies.
 
-Once the phone service works, follow [Extra ringing → Install on Debian](EXTRA_RINGING.md#install-on-debian). For this guide, the private config is `/opt/webcaller/.env` and the app service is `webcaller.service`. The helper creates a separate restricted ntfy service on loopback 8094; add its own HTTPS hostname/route. Choose `--ios` if supporting the stock iPhone client, and read the wake-up metadata relay limitation first.
+## Updates and removal
 
-No recipient needs your server password or publishing token. The setup screen gives each phone its own read-only subscription address and sound test. Normal browser alerts remain available without ntfy.
-
-## Restarting and updating
-
-After a private config edit, run `sudo systemctl restart webcaller.service` and check health again. Use `sudo systemctl status webcaller-ntfy.service --no-pager` for the optional alert service. See [Operations](OPERATIONS.md#native-systemd-updates) for source upgrades that preserve configuration and data. Keep Debian, Node, HTTPS/TURN and ntfy patched separately; re-running the ntfy installer is not its upgrade process.
+Follow [Operations](OPERATIONS.md): preserve configuration/database/phone storage, update only this branch, regenerate its source archive and refresh both test phones. Stop only this test service with `sudo systemctl stop webcaller-experimental.service`. Removing a test service is not a reason to restore or alter a stable installation.

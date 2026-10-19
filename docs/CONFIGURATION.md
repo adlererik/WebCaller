@@ -1,11 +1,14 @@
 # Configuration reference
 
+Use a separate directory/database/origin and [experimental native service](INSTALL_NATIVE.md). The stable prebuilt launcher/images do not install this branch. `WEBCALLER_TEST_INSTANCE=libsignal-preview-v1` is required; there is no runtime switch back to Olm.
+
 Copy `.env.example` or use the installer/setup command. `.env` is private, ignored by Git and never copied into the image/release. Values are plain `KEY=value`; use single-line values without surrounding quotes in the supplied helpers. Never paste the file into an issue.
 
 | Variable | Purpose |
 |---|---|
 | HOST | Native HTTP bind, default loopback. Compose overrides to 0.0.0.0 inside the container |
-| PORT | Native HTTP port, default 8080; Compose uses internal 8080 |
+| PORT | `.env.example` uses separate native port 8088; Compose uses internal 8080 |
+| WEBCALLER_TEST_INSTANCE | Must equal libsignal-preview-v1 for direct startup of this branch; not needed by stable WebCaller |
 | PUBLIC_URL | Canonical full HTTPS origin/path, e.g. https://calls.example.com/calls with your own domain substituted; determines allowed Origin and path |
 | DATA_DIR | SQLite directory; Compose overrides to /app/data in its named volume |
 | BOOTSTRAP_TOKEN | Generated 24-byte random first-owner bearer secret; private QR hides typing, not its sensitivity |
@@ -46,7 +49,7 @@ Map configuration is public through `/api/config`; never put secret keys in thes
 
 Leave `NTFY_PUBLIC_URL`, `NTFY_PUBLISH_URL` and `NTFY_PUBLISH_TOKEN` all empty to use only normal Web Push. Enabling ntfy requires all three together; a partial configuration fails startup. `NTFY_IOS_UPSTREAM` describes the ntfy server's actual upstream setup rather than configuring it. Phone subscriptions have their own random read-only addresses, not the publisher token or a shared password. See [Extra ringing](EXTRA_RINGING.md) for setup, isolation, retention and the iPhone wake-up limitation.
 
-## Prebuilt Docker files
+## Stable prebuilt Docker reference (not this branch)
 
 The [Docker bundle](../docker/README.md) separates release-pinned `images.env` from private `.env` installation choices and `config/app.env`, `config/turn.env`, ntfy/proxy configuration and a private optional connector-token file. App data, ntfy auth state and its publisher credential use separate persistent volumes; ntfy never mounts the app database or app environment. Use the supplied wrapper so both environment files are loaded. The setup wizard refuses existing configuration; upgrades preserve it.
 

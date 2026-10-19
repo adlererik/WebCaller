@@ -1,4 +1,4 @@
-name: webcaller
+name: webcaller-experimental
 services:
   webcaller:
     build: .

@@ -1,5 +1,7 @@
 # Networking, TURN, HTTPS and CGNAT
 
+Experimental branch: use the separate installation in [Install](INSTALL.md). New encrypted transport is libsignal/PQXDH with Ed25519 application signatures; the normal workflow remains. Stable Olm accounts are not imported. [Security](SECURITY.md).
+
 ## Two separate paths
 
 HTTPS/WebSocket carries the page, authentication and encrypted signaling. DTLS-SRTP carries media directly between browsers or through TURN. A working page does not prove a working call. Cloudflare Tunnel's HTTP application route does not carry browser TURN/RTP. WebSocket upgrades must reach the app. [Cloudflare WebSockets](https://developers.cloudflare.com/network/websockets/).

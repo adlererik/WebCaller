@@ -8,10 +8,10 @@ import {newAttachment,attachmentKey,encryptChunk,decryptChunk} from '../public/a
 import {mediaCache} from '../public/media-cache.js';
 import {IDBFactory} from 'fake-indexeddb';
 import {ratchetStatement,envelopeHeader} from '../public/envelope-auth.js';
-import {b64} from '../public/crypto.js';
+import {signApplication} from '../public/application-signatures.js';
 const send=(f,text='Synthetic timed message',seconds=30)=>f.a.seal(f.alice.identity,f.alice.user.id,f.bob.user,{kind:'text',text},seconds,{perView:true});
 const postRead=(f,e)=>f.apiB('/message-events','POST',{events:[{target:e.lifetime.target,kind:'read',envelope:e}]});
-async function sign(f,e){e.signature=b64(await crypto.subtle.sign({name:'ECDSA',hash:'SHA-256'},f.bob.identity.sign,new TextEncoder().encode(ratchetStatement(e))));return e;}
+async function sign(f,e){e.signature=await signApplication({key:f.bob.identity.sign},ratchetStatement(e));return e;}
 test('v3 authenticates the per-view policy while v2 framing stays unchanged',async t=>{
  const f=await fixture(t),e=await send(f);assert.equal(e.v,3);assert.deepEqual(e.lifetime,{mode:'after-view',seconds:30});assert.equal(e.expiresAt,NO_EXPIRY);assert.ok(validLifetime(e));
  await f.apiA('/messages','POST',e);assert.equal((await f.openB(e)).text,'Synthetic timed message');

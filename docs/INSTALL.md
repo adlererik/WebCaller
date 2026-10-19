@@ -1,123 +1,35 @@
-# Source-built Docker installation
+# Install the experimental libsignal version
 
-## What you are installing
-
-WebCaller is a small website on your server. Phones open it in Safari or Chrome. Docker runs the server program; Caddy can give it a secure HTTPS address; coturn helps calls cross different internet connections. The phones do not need SIM cards.
-
-You will need a Debian 12/13 computer or VPS with administrator access, internet access, a domain you control, and two devices to test a call. The installer is intended for a fresh server. It will not remove existing container software or overwrite an existing `.env`.
-
-**Choose one installation method before setting up phones.** The simplest fresh setup is now the [prebuilt Docker package](../docker/README.md), including optional ntfy without a native app service. This guide remains available for building the phone/HTTPS/TURN images locally on Debian. For a direct Node installation and its separate **ntfy systemd installer**, use the [native Debian guide](INSTALL_NATIVE.md). Both run the same phone application; do not install both over the same account data.
-
-The examples use `example.com`, a reserved demonstration domain. Replace it with a domain you already control. Adding a `calls` or `ntfy` subdomain does not register another domain; hosting, domain renewal, mobile data and any optional paid relay are separate costs.
-
-## 1. Choose your address
-
-Use a separate address such as `calls.example.com`. The app lives at `https://calls.example.com/calls`. A separate subdomain keeps it isolated from scripts on another website.
-
-Choose one HTTPS method:
-
-**A. Automatic Caddy:** point the domain's DNS A record at your public server/router IPv4. If behind a home router, forward TCP 80 and TCP 443 to the Debian computer. These ports must be free. A Cloudflare DNS record for this route should be DNS-only while configuring certificates. The installer starts Caddy and obtains/renews the certificate. [Caddy HTTPS requirements](https://caddyserver.com/docs/automatic-https).
-
-**B. Existing HTTPS proxy or Cloudflare Tunnel:** choose option 2 in the installer. In the Cloudflare dashboard, go to **Networking → Tunnels → your existing tunnel → Routes → Add route → Published application**. Set Subdomain to `calls`, select your own Domain, leave Path empty and enter Service URL `http://127.0.0.1:8080`. Older screens split that into type **HTTP** and URL **127.0.0.1:8080**. Keep all existing routes. The tunnel connector must run on this server; if it runs in another container, loopback means that container, so use a shared network and `http://webcaller:8080` instead. Preserve WebSocket upgrades and do not add interactive proxy login in front of the app. Caddy is not started, so an existing website keeps ports 80/443. No inbound router port is needed for the website through Tunnel; TURN still needs its own reachable ports. [Cloudflare's route instructions](https://developers.cloudflare.com/tunnel/get-started/#publish-an-application).
-
-Do not replace an existing website's port forwarding. Follow [Networking](NETWORKING.md) if ports are occupied or you use a home connection.
-
-## 2. Download WebCaller onto the Debian server
-
-The easiest way to connect is to open Terminal on your computer and enter `ssh YOUR_USERNAME@YOUR_SERVER_ADDRESS`. Replace the capitalized words with your own details. Enter the server password locally if asked; never post it in an issue.
-
-Download the release:
+Use a **separate website, directory and database** with disposable accounts. This is not a stable release or a migration tool. Keep any working WebCaller installation and phone storage intact. Public examples contain no maintainer deployment credentials or first-phone links.
 
 ```sh
-sudo apt update
-sudo apt install -y curl tar
-curl -fL https://github.com/adlererik/WebCaller/releases/download/v0.17.1/WebCaller-v0.17.1.tar.gz -o WebCaller-v0.17.1.tar.gz
-curl -fL https://github.com/adlererik/WebCaller/releases/download/v0.17.1/SHA256SUMS.txt -o SHA256SUMS.txt
+git clone --recurse-submodules --branch codex/experimental-libsignal-pqxdh https://github.com/adlererik/WebCaller.git WebCaller-Experimental
+cd WebCaller-Experimental
 ```
 
-Check the archive before extracting:
+Stable release ZIPs/prebuilt images contain Olm, not this branch. GitHub's ordinary ZIP omits submodule contents; use the recursive clone for complete source. Bundled browser WASM is ready to use, so callers/server operators do not need Rust unless rebuilding it.
 
-```sh
-grep 'WebCaller-v0.17.1.tar.gz$' SHA256SUMS.txt | sha256sum -c -
-tar -xzf WebCaller-v0.17.1.tar.gz
-cd WebCaller-v0.17.1
-```
+## What you need
 
-A successful checksum says `OK`. Stop if it fails. Alternatively download/extract the ZIP on your computer and copy the folder to your server.
+- A Linux server. The native guide targets Debian 12/13 with SSH/sudo for prerequisites and an optional boot service.
+- Node.js 24, Python 3 and Git. Browsers need native Web Crypto Ed25519 support; unsupported browsers fail explicitly rather than changing algorithms.
+- A new HTTPS hostname under a domain you control, such as `calls-test.example.com`. Adding a subdomain does not itself register another domain. Provider charges depend on your provider.
+- A reachable TURN relay for calls across difficult networks. A Cloudflare Tunnel carries the website/WebSockets, not TURN media. A suitable relay can be reused without sharing phone databases or owner/push keys.
 
-## 3. Run the guided installer
+**Follow [Native Debian installation](INSTALL_NATIVE.md)** for the complete route: separate directory, private Node runtime, `webcaller-experimental.service`, HTTPS, owner QR and phones. Do not use the stable service installer as an in-place upgrade.
 
-```sh
-sudo bash deploy/install-debian.sh
-```
+## First phone and invitations
 
-It installs Docker from Docker's official signed Debian repository when needed, supplies Python/QR support, asks the questions below, creates private secrets and starts the selected containers. It does not add your account to the Docker administrator group. [Official Docker installation](https://docs.docker.com/engine/install/debian/).
+Generate the private QR after the website serves HTTPS. Scan it with the first Android phone's camera and keep using the same browser. The owner code fills automatically; choose a test name. Use **Invite someone** for the other phone.
 
-Enter your domain, for example `calls.example.com` with your own domain substituted. Choose HTTPS option 1 for Caddy or 2 for your existing proxy/Tunnel. Choose TURN option 1 for self-hosted coturn, 2 for an existing REST-credential relay, or 3 to configure later. Option 3 lets you finish setup, but calls across different networks may fail until a relay is configured. If asked for a push contact, use your own email/contact URL; the sample address is not yours.
+On iPhone, follow the invitation's Home Screen instructions and use its new **WC Test** icon. Safari/Home Screen storage can differ. Keep any normal WebCaller icon/storage. If the first phone is an iPhone, save the test site to the Home Screen before enrollment and open the owner link/code there, or enroll a desktop first and invite the iPhone.
 
-For self-hosted TURN, enter the public IPv4 visible in your router's WAN page or VPS dashboard. If the Debian computer is behind your home router, enter its fixed LAN IPv4 too. On a directly public VPS, leave the LAN field empty. A private address such as `192.168.x.x` is not a public WAN address.
+After setup, optional calling codes are available in Settings. A code is an address, not a password or proof of identity.
 
-For home TURN, manually forward TCP/UDP 3478 and UDP 49160–49260 to the Debian computer and allow them in the host/provider firewall. Tunnel alone does not carry TURN media. See [Networking](NETWORKING.md) for CGNAT and TLS.
+## Test and update
 
-The first download/build may take several minutes. Check:
+Send messages both ways, refresh and reopen chats. Call both ways, compare all four SAS words, and send a photo while talking. Try different networks, locked-screen alerts and Wi-Fi/mobile transitions. OS permissions still apply; urgency cannot force sound. [Optional ntfy](EXTRA_RINGING.md) is a separate alert channel, not conversation transport; never give recipients a publishing token/server password.
 
-```sh
-sudo docker compose ps
-```
+Stable Olm accounts cannot be imported. Earlier **libsignal test** P-256 accounts preserve their pins/history through certified Ed25519 signers. Refresh both test phones after updates; keep site data.
 
-`webcaller` should become healthy. Open your real HTTPS address. A local `localhost` address on your phone refers to that phone, not the server.
-
-## 4. Set up your first phone by QR
-
-In the server terminal, run:
-
-```sh
-sudo .runtime/qr-venv/bin/python scripts/phone-setup-qr.py --env .env --terminal
-```
-
-This intentionally displays a **private setup QR** in your terminal. Open your phone's Camera, scan the QR, tap the website link, and press **Set up this phone**. Change the default name if wanted. No long code needs typing. Keep the QR private; it contains the credential for the first registration.
-
-**First phone is an iPhone?** The easiest route is to open the private setup link on your own computer first, register that browser, then invite the iPhone using step 5. Invitations include the Home Screen handoff; the owner's QR does not. Alternatively, add the website to the iPhone Home Screen before registration, open its new icon and privately paste the owner setup code into its code field. Keep **Open as Web App** on if shown. Registering in Safari first does not move that identity into the Home Screen app; do not clear an existing identity to fix this.
-
-If scanning a terminal is awkward, use the private browser card. On the server:
-
-```sh
-sudo .runtime/qr-venv/bin/python scripts/phone-setup-qr.py --env .env
-```
-
-Leave that command running. Open a second terminal **on your computer**, then run:
-
-```sh
-ssh -L 8093:127.0.0.1:8093 YOUR_USERNAME@YOUR_SERVER_ADDRESS
-```
-
-Open `http://localhost:8093/` on your computer. Scan the displayed QR with the phone, or use **Copy setup link** and send it to yourself. The private card closes after 30 minutes; it never goes on the public website. If the local port is busy, stop your previous card/tunnel before retrying. The setup link works while no browser is registered; it is not a separate 30-minute authentication token.
-
-A manual alternative is to privately read `BOOTSTRAP_TOKEN` from `.env` and paste it into the first phone's code field. Other phones use invitations, not the owner code. Clearing all server users can make the owner code eligible again, so continue to keep it private.
-
-## 5. Invite someone and test
-
-On the first phone choose **Invite someone**, optionally enter their name, then **Create invitation → Share invitation** or **Copy link**. The other person opens the complete link in their phone browser and presses **Accept invitation**. Their name is optional. Each invitation works once and lasts 24 hours.
-
-Tap the phone icon for voice or the camera icon for video. Allow the microphone and, for video, the camera. Test both call directions, then put the devices on different internet connections. Open Settings → **Check calling connection**. A relay allocation test is useful, but a real cross-network conversation is the final check.
-
-The invitation guides the other person through call alerts. Android asks for notification permission. iPhone/iPad first explains **Share → Add to Home Screen → Add**, then finishes the invitation from the new icon. Both get a sound test: tap **Send test alert**, lock the phone, listen, tap the alert, then confirm **I heard it**. Use the Home Screen icon on iPhone afterward. Closed-phone alerts remain dependent on OS settings and push delivery. See [the simple call-alert guide](CALL_ALERTS.md). Connection management is always **Automatic**; unknown networks default to saving data. Ringing activates with your first normal tap or keypress, without a separate setup switch.
-
-## Optional extra ringing
-
-Normal calls and browser alerts do not require ntfy. If the server operator enables it, **Settings → Extra ringing · ntfy** offers an additional sound through the free ntfy phone app. Android has a connect button; iPhone uses two copy/paste fields. Each person tests it on their locked phone. See [Extra ringing](EXTRA_RINGING.md) for the exact steps, sound settings and server requirements. The ntfy systemd installer does not configure this older source-built recipe; the [prebuilt Docker stack](../docker/README.md) provides a complete containerized alternative for a fresh installation. Experienced users can also build those same three images locally; see Development.
-
-## If something goes wrong
-
-| Symptom | What to check |
-|---|---|
-| Incorrect setup code | Use the private QR or complete setup link; placeholder text is not the code |
-| Invitation expired/used | Create a fresh one-person invitation |
-| Microphone unavailable | Open the real HTTPS site and allow microphone permission |
-| Website unreachable | DNS, Caddy certificate, port forwarding or Tunnel route; `sudo docker compose ps` |
-| App port occupied | Choose a free `APP_PORT` in `.env`; change the proxy target to the same port |
-| Page works but calls fail | TURN credentials and external relay ports; Tunnel is not a media relay |
-| iPhone does not ring when closed | Open from the Home Screen icon, enable alerts, then run the locked-phone sound test; check Silent mode/Focus |
-| Very slow internet | Audio adapts and video pauses; complete outages cannot carry a call |
-
-For updates use [Operations](OPERATIONS.md); do not regenerate `.env` or delete the data volume.
+Back up source, configuration, database and dependency locks first. Server backups do not contain phone private keys. [Operations](OPERATIONS.md). [Container note](../docker/README.md): there is no published experimental prebuilt image/all-in-one release bundle here.

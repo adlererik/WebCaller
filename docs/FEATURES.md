@@ -1,8 +1,10 @@
 # Features and media behavior
 
+Experimental libsignal/PQXDH branch: call/chat/media workflows below are retained while new transport uses official libsignal, Ed25519 signatures and the independent SAS. Stable Olm accounts are not imported. See [Security](SECURITY.md), [Install](INSTALL.md) and [Verification](VERIFICATION.md). Historical version labels describe feature origins, not current transport assurance.
+
 ## Adaptive audio/video
 
-| Profile | Mono Opus payload ceiling | Video ceiling | Encoder bounding box |
+| Profile | Opus payload ceiling | Video ceiling | Encoder bounding box |
 |---|---:|---:|---|
 | Wi-Fi | 48 kb/s | 900 kb/s | 960×540, 24 fps |
 | Cellular / unknown network / remote saver | 20 kb/s | 120 kb/s | 320×180, 12 fps |
@@ -109,7 +111,7 @@ Privacy remains bounded by browser/OS capabilities, durable identity/media stora
 - Device storage and server lookup have a total deadline so a sleeping worker can still show the notification. Ended/answered and expired calls remain silent; the original call deadline determines whether a delayed wake-up is still timely.
 - Worker updates bypass the import cache. Locked-phone sound remains a physical-device check subject to the phone's notification settings.
 
-Current v2 transport uses the Olm Double Ratchet. Minimal identity verification records survive contact/history removal. Four per-call words provide an optional human comparison bound to the media connection; the video name is upper left, the words centered in that row, and quality below the aligned codecs. See [call verification](CALL_VERIFICATION.md) and [security review](SECURITY_REVIEW.md).
+Current v2 transport uses the libsignal PQXDH/Triple Ratchet. Minimal identity verification records survive contact/history removal. Four per-call words provide an optional human comparison bound to the media connection; the video name is upper left, the words centered in that row, and quality below the aligned codecs. See [call verification](CALL_VERIFICATION.md) and [security review](SECURITY_REVIEW.md).
 
 ## Optional extra ringing
 

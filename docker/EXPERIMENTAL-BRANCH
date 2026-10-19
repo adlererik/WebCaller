@@ -1,0 +1,1 @@
+This source branch uses experimental libsignal/PQXDH. Stable prebuilt images contain Olm. Use docs/INSTALL_NATIVE.md; do not launch the stable bundle from this branch.

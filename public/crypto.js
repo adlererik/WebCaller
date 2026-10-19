@@ -1,11 +1,13 @@
+import {signApplication,verifyApplicationSignature} from './application-signatures.js';
 const enc = new TextEncoder(), dec = new TextDecoder();
-export const b64 = (data) => btoa(String.fromCharCode(...new Uint8Array(data))).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');
+export const b64 = data => {const bytes=new Uint8Array(data);let binary='';for(let i=0;i<bytes.length;i+=16384)binary+=String.fromCharCode(...bytes.subarray(i,i+16384));return btoa(binary).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');};
 export const unb64 = (text) => Uint8Array.from(atob(text.replaceAll('-','+').replaceAll('_','/')), c => c.charCodeAt(0));
 const curve = { name: 'ECDH', namedCurve: 'P-256' };
-const signing = { name: 'ECDSA', namedCurve: 'P-256' };
+const signing = { name: 'Ed25519' };
 export async function newIdentity() {
   const dh = await crypto.subtle.generateKey(curve, false, ['deriveBits']);
-  const sign = await crypto.subtle.generateKey(signing, false, ['sign','verify']);
+  let sign;try{sign=await crypto.subtle.generateKey(signing,false,['sign','verify']);}
+  catch{throw Error('This browser needs Ed25519 support. Update your browser to set up this test phone.');}
   const keys = { dh: await crypto.subtle.exportKey('jwk', dh.publicKey), sign: await crypto.subtle.exportKey('jwk', sign.publicKey) };
   return { dh: dh.privateKey, sign: sign.privateKey, keys };
 }
@@ -34,15 +36,14 @@ export async function seal(identity, from, contact, payload, ttl = 86400) {
   const params = { name:'AES-GCM', iv:unb64(e.iv), additionalData };
   e.ciphertext = b64(await crypto.subtle.encrypt(params, await aes(pair.privateKey, contact.keys.dh, header(e)), data));
   e.selfCiphertext = b64(await crypto.subtle.encrypt(params, await aes(pair.privateKey, identity.keys.dh, header(e)), data));
-  e.signature = b64(await crypto.subtle.sign({ name:'ECDSA', hash:'SHA-256' }, identity.sign, enc.encode(unsigned(e))));
+  e.signature = await signApplication({key:identity.sign},unsigned(e));
   return e;
 }
 export async function open(identity, self, contact, e) {
   if (e.expiresAt <= Date.now()) throw new Error('Expired');
   const outgoing = e.from === self;
   if ((outgoing && e.to !== contact.id) || (!outgoing && (e.from !== contact.id || e.to !== self))) throw new Error('Wrong recipient');
-  const signingKey = await crypto.subtle.importKey('jwk', outgoing ? identity.keys.sign : contact.keys.sign, signing, false, ['verify']);
-  if (!await crypto.subtle.verify({ name:'ECDSA', hash:'SHA-256' }, signingKey, unb64(e.signature), enc.encode(unsigned(e)))) throw new Error('Invalid signature');
+  if (!await verifyApplicationSignature(outgoing?identity.keys.sign:contact.keys.sign,e.from,unsigned(e),e.signature)) throw new Error('Invalid signature');
   const clear = await crypto.subtle.decrypt({ name:'AES-GCM', iv:unb64(e.iv), additionalData:enc.encode(header(e)) }, await aes(identity.dh, e.ephemeral, header(e)), unb64(outgoing ? e.selfCiphertext : e.ciphertext));
   return JSON.parse(dec.decode(clear));
 }

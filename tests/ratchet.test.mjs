@@ -13,6 +13,7 @@ import {once} from 'node:events';
 import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {fixture} from './helpers/ratchet-fixture.mjs';
+import {signApplication} from '../public/application-signatures.js';
 test('ratcheted delivery, replies and encrypted history survive reload without static self-copies',async t=>{
   const f=await fixture(t),first=await f.sendA('Synthetic secret');assert.equal(first.v,2);assert.equal(first.selfCiphertext,undefined);assert.equal(first.ephemeral,undefined);assert.ok(!JSON.stringify(first).includes('Synthetic secret'));
   await f.apiA('/messages','POST',first);assert.equal((await f.openB(first)).text,'Synthetic secret');assert.equal((await f.openA(first)).text,'Synthetic secret');
@@ -79,7 +80,7 @@ test('a hostile key directory cannot substitute a prekey or the pinned Olm ident
   await assert.rejects(send(),/Invalid signature/);
   // Even a correctly signed replacement Olm account cannot reset an existing
   // Olm pin. Signing with the fixture key models account rotation, not forgery.
-  const sign=async text=>Buffer.from(await crypto.subtle.sign({name:'ECDSA',hash:'SHA-256'},f.bob.identity.sign,new TextEncoder().encode(text))).toString('base64url');
+  const sign=text=>signApplication({key:f.bob.identity.sign},text);
   bundle={v:2,identity:attacker.curve25519_key,signature:await sign(identityStatement(f.bob.user.id,attacker.curve25519_key)),prekey:{id,key,signature:await sign(prekeyStatement(f.bob.user.id,attacker.curve25519_key,id,key))}};
   await assert.rejects(send(),/Secure identity changed/);
   assert.equal((await f.openB(await f.sendA('Original session remains usable'))).text,'Original session remains usable');

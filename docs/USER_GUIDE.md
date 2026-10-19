@@ -1,5 +1,7 @@
 # Using WebCaller
 
+Experimental branch: use the separate installation in [Install](INSTALL.md). New encrypted transport is libsignal/PQXDH with Ed25519 application signatures; the normal workflow remains. Stable Olm accounts are not imported. [Security](SECURITY.md).
+
 ## Your browser is your device
 
 The first browser uses the owner's private setup QR/link. Other people accept an invitation or dial an optional personal calling code. Device keys and your access token stay in that browser's IndexedDB. Use the same browser for later calls. Clearing site storage or changing browsers creates a new device; there is no password-based recovery or multi-device identity synchronization.
@@ -141,7 +143,7 @@ During a connected voice/video call, four small words appear at the top. In vide
 
 Reading the words is optional: the call works without confirmation, including a child’s call. Skipping them gives no additional human verification. Matching words check this call’s connection under trusted software; they do not defeat malicious website code or prove the security of all earlier messages. They are not a password/recovery phrase and are cleared on hang-up/page exit. [How it works](CALL_VERIFICATION.md).
 
-Messages and files are end-to-end encrypted, but local readable history, metadata and browser/device traces have separate risks. Deleting a contact preserves minimal verification pins to resist identity replacement. Clearing site storage loses keys/history and those pins. See [security](SECURITY.md), [review](SECURITY_REVIEW.md) and [Signal comparison](../README.md#webcaller-beside-signal).
+Messages and files are end-to-end encrypted, but local readable history, metadata and browser/device traces have separate risks. Deleting a contact preserves minimal verification pins to resist identity replacement. Clearing site storage loses keys/history and those pins. See [security](SECURITY.md), [review](SECURITY_REVIEW.md) and [Signal comparison](../README.md#forward-secrecy-mitm-and-comparison-with-signal).
 
 ## Optional extra ringing
 

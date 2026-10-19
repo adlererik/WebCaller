@@ -1,5 +1,7 @@
 # Call by code
 
+Experimental branch: use the separate installation in [Install](INSTALL.md). New encrypted transport is libsignal/PQXDH with Ed25519 application signatures; the normal workflow remains. Stable Olm accounts are not imported. [Security](SECURITY.md).
+
 A calling code is a public address inside this WebCaller server. You can keep using invitations too. There is no SIM, mobile number, account password or app-store download to arrange.
 
 ## Choose your code
@@ -41,7 +43,7 @@ A code finds the other person; it cannot restore your previous messages after cl
 
 ## Encryption and first-contact trust
 
-Calling codes use the existing Olm V2 Double Ratchet, signed message envelopes, persistent identity pins, authenticated signaling and DTLS-SRTP media. No encryption keys are derived from the digits. Neither the code nor a calling link can read history, replace an identity, recover a token, or authorize microphone/camera capture or answering by itself.
+Calling codes use the existing libsignal PQXDH/Triple Ratchet, signed message envelopes, persistent identity pins, authenticated signaling and DTLS-SRTP media. No encryption keys are derived from the digits. Neither the code nor a calling link can read history, replace an identity, recover a token, or authorize microphone/camera capture or answering by itself.
 
 There is one important difference from an invitation: an invitation carries the inviter's fingerprint, which can be delivered over a trusted channel. A code relies on this server's initial directory mapping. HTTPS protects that lookup in transit, but a malicious server/directory could misdirect first contact. Compare **all four call words aloud** with the person you recognize on your first call, before sharing sensitive information. Matching words authenticate the bound call context under the documented SAS assumptions; they do not retroactively protect earlier unverified text. Verification stays optional. This feature is not equivalent to a key-transparency directory or an independent security audit.
 

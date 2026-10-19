@@ -5,7 +5,9 @@ import http from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { randomBytes, randomUUID, createHash, createHmac, timingSafeEqual, createPublicKey, verify } from 'node:crypto';
+import { randomBytes, randomUUID, createHash, createHmac, timingSafeEqual, createPublicKey } from 'node:crypto';
+import {signingKeyType,validApplicationSignature} from '../public/application-signatures.js';
+import {verifyApplicationSignature} from './application-signatures.mjs';
 import { WebSocketServer, WebSocket } from 'ws';
 import webpush from 'web-push';
 import {gzipSync} from 'node:zlib';
@@ -29,10 +31,12 @@ const validName = (s) => typeof s === 'string' && s.trim().length >= 1 && s.trim
 const same = (a, b) => typeof a === 'string' && typeof b === 'string' && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 function validKeys(keys) {
   try {
-    for (const k of [keys.dh, keys.sign]) {
+    for (const k of [keys.dh]) {
       if (k.kty !== 'EC' || k.crv !== 'P-256' || k.d || typeof k.x !== 'string' || typeof k.y !== 'string') return false;
       createPublicKey({ key: k, format: 'jwk' });
     }
+    if(!signingKeyType(keys.sign))return false;
+    createPublicKey({key:keys.sign,format:'jwk'});
     return true;
   } catch { return false; }
 }
@@ -132,7 +136,7 @@ export function createApp(options = {}) {
       if (path.startsWith(`${base}/api/`)) {
         if (req.method !== 'GET' && req.headers.origin !== origin) fail(403, 'Unrecognized origin');
         const route = path.slice((base + '/api').length);
-        if (route === '/config' && req.method === 'GET') return json(200, { base, mapTileURL, mapAttribution, ntfyAvailable:extraAlerts.available, dialCodes:env.DIAL_CODES_ENABLED!=='false', publicURL: publicURL.href.replace(/\/$/, ''), vapidPublicKey: env.VAPID_PUBLIC_KEY || null, bootstrap: !store.get('SELECT id FROM users LIMIT 1'), turnConfigured: Boolean((env.TURN_SECRET && env.TURN_URLS) || (env.CF_TURN_KEY_ID && env.CF_TURN_API_TOKEN)) });
+        if (route === '/config' && req.method === 'GET') return json(200, { base, mapTileURL, mapAttribution, ntfyAvailable:extraAlerts.available, dialCodes:env.DIAL_CODES_ENABLED!=='false', publicURL: publicURL.href.replace(/\/$/, ''), vapidPublicKey: env.VAPID_PUBLIC_KEY || null, experimental: true, cryptoEngine:'libsignal 0.105.1 / PQXDH', bootstrap: !store.get('SELECT id FROM users LIMIT 1'), turnConfigured: Boolean((env.TURN_SECRET && env.TURN_URLS) || (env.CF_TURN_KEY_ID && env.CF_TURN_API_TOKEN)) });
         if(route==='/dial/connect'&&req.method==='POST')return await directory.connect(req,json);
         if(route==='/invite-info'&&req.method==='POST'){
           rate(`invite-info:${req.socket.remoteAddress}`,30);const b=await body(req);
@@ -348,19 +352,19 @@ export function createApp(options = {}) {
   });
   function validateEnvelope(b, sender, signaling = false, reservedUpload = false) {
     const now = Date.now();
-    if (![1,2,3].includes(b?.v) || b.from !== sender || typeof b.to !== 'string' || typeof b.id !== 'string' || !/^[a-f0-9-]{36}$/.test(b.id) || !Number.isSafeInteger(b.createdAt) || !Number.isSafeInteger(b.expiresAt) || b.createdAt > now + 30000 || (!reservedUpload && b.createdAt < now - 300000) || b.expiresAt <= now || !validLifetime(b,signaling) || b.expiresAt <= b.createdAt || typeof b.signature !== 'string' || !/^[A-Za-z0-9_-]{86}$/.test(b.signature)) fail(400, 'Invalid encrypted message');
+    if (![1,2,3].includes(b?.v) || b.from !== sender || typeof b.to !== 'string' || typeof b.id !== 'string' || !/^[a-f0-9-]{36}$/.test(b.id) || !Number.isSafeInteger(b.createdAt) || !Number.isSafeInteger(b.expiresAt) || b.createdAt > now + 30000 || (!reservedUpload && b.createdAt < now - 300000) || b.expiresAt <= now || !validLifetime(b,signaling) || b.expiresAt <= b.createdAt || !validApplicationSignature(b.signature)) fail(400, 'Invalid encrypted message');
     if(b.v===1){
       if(typeof b.ciphertext!=='string'||b.ciphertext.length>24000||typeof b.selfCiphertext!=='string'||b.selfCiphertext.length>24000||typeof b.iv!=='string'||b.iv.length!==16||!b.ephemeral?.x||!b.ephemeral?.y||b.ephemeral.d)fail(400,'Invalid encrypted message');
       if(store.get('SELECT owner FROM ratchet_accounts WHERE owner IN (?,?)',sender,b.to)&&!reservedUpload)fail(426,'Reopen WebCaller on both phones to update secure messaging.');
     }else{
-      const r=b.ratchet,key=s=>typeof s==='string'&&/^[A-Za-z0-9+/]{43}$/.test(s);
-      if(b.selfCiphertext!==undefined||b.ephemeral!==undefined||r?.protocol!=='olm-v2'||!['chat','events','signal','files','typing','transfer'].includes(r.lane)||typeof r.scope!=='string'||r.scope.length>100||![0,1].includes(r.type)||!key(r.sessionId)||!key(r.identity)||!key(r.recipientIdentity)||typeof r.data!=='string'||!/^[A-Za-z0-9_-]+$/.test(r.data)||r.data.length>24000||typeof r.prekeyId!=='string'||r.prekeyId.length>24)fail(400,'Invalid ratchet message');
+      const r=b.ratchet,key=s=>typeof s==='string'&&/^[A-Za-z0-9+/]{44}$/.test(s);
+      if(b.selfCiphertext!==undefined||b.ephemeral!==undefined||r?.protocol!=='signal-pqxdh-v1'||!['chat','events','signal','files','typing','transfer'].includes(r.lane)||typeof r.scope!=='string'||r.scope.length>100||![2,3].includes(r.type)||!key(r.sessionId)||!key(r.identity)||!key(r.recipientIdentity)||typeof r.data!=='string'||!/^[A-Za-z0-9_-]+$/.test(r.data)||r.data.length>24000||typeof r.prekeyId!=='string'||r.prekeyId.length>24)fail(400,'Invalid ratchet message');
       const from=store.get('SELECT identity FROM ratchet_accounts WHERE owner=?',sender),to=store.get('SELECT identity FROM ratchet_accounts WHERE owner=?',b.to);
       if(!from||!to||from.identity!==r.identity||to.identity!==r.recipientIdentity)fail(400,'Secure device identity does not match');
-      if(b.v===3){
+      {
         const signer=store.get('SELECT keys FROM users WHERE id=?',sender);let authentic=false;
-        try{authentic=verify('sha256',Buffer.from(ratchetStatement(b)),{key:createPublicKey({key:JSON.parse(signer.keys).sign,format:'jwk'}),dsaEncoding:'ieee-p1363'},Buffer.from(b.signature,'base64url'));}catch{}
-        if(!authentic)fail(400,'Invalid signed message lifetime');
+        try{authentic=verifyApplicationSignature(JSON.parse(signer.keys).sign,sender,ratchetStatement(b),b.signature);}catch{}
+        if(!authentic)fail(400,'Invalid signed encrypted message');
       }
     }
   }
@@ -471,6 +475,7 @@ export function createApp(options = {}) {
   return { server, store, base, close: async () => { alerts.close();extraAlerts.close();testTimers.forEach(clearTimeout);disconnectTimers.forEach(clearTimeout);clearInterval(cleanup); clearInterval(heartbeat); for (const ws of wss.clients) ws.terminate(); wss.close(); await new Promise(r => server.close(r));disconnectTimers.forEach(clearTimeout); store.close(); } };
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  if(process.env.WEBCALLER_TEST_INSTANCE!=='libsignal-preview-v1')throw new Error('This is an isolated experimental build. Set its explicit test-instance environment; never replace the working Olm service.');
   const app = createApp();
   const port = Number(process.env.PORT || 8080), host = process.env.HOST || '127.0.0.1';
   app.server.listen(port, host, () => console.log(`WebCaller Calls listening on http://${host}:${port}${app.base}/`));

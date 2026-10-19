@@ -1,5 +1,7 @@
 # Hear incoming calls
 
+Experimental branch: use the separate installation in [Install](INSTALL.md). New encrypted transport is libsignal/PQXDH with Ed25519 application signatures; the normal workflow remains. Stable Olm accounts are not imported. [Security](SECURITY.md).
+
 ## Send an easy invitation
 
 1. Tap **Invite someone**.

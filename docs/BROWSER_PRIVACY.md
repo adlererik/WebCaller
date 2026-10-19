@@ -1,5 +1,7 @@
 # What this web phone can keep private
 
+Experimental branch: use the separate installation in [Install](INSTALL.md). New encrypted transport is libsignal/PQXDH with Ed25519 application signatures; the normal workflow remains. Stable Olm accounts are not imported. [Security](SECURITY.md).
+
 The app minimizes traces it creates, but it cannot make use of a website invisible to someone inspecting an unlocked phone or browser.
 
 ## What the app does

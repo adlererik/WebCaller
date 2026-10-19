@@ -24,9 +24,11 @@ flowchart LR
 | server/dialing.mjs | Opt-in code reservation, bounded guest enrollment, pending requests, acceptance and identity blocking |
 | public/theme.js, contact-names.js | Local appearance selection and per-device contact labels; no account/key changes |
 | public/crypto.js | Existing identity/vault, safety numbers and legacy envelope verification |
-| public/secure-messaging.js, secure-store.js, contact-trust.js, olm-wire.js | Signed Olm Double Ratchet integration, encrypted history, atomic cross-tab state, persistent identity verification and ordered hydration |
+| public/secure-messaging.js, secure-store.js, contact-trust.js, signal-wire.js | Signed libsignal PQXDH/Triple Ratchet integration, encrypted history, atomic cross-tab state, persistent identity verification and ordered hydration |
 | public/call-sas.js, sas-words.js | Ephemeral media-bound X25519 commit/reveal SAS, local 44-bit word display, retry/cleanup |
-| public/vendor/vodozemac | Pinned WASM ratchet core/bindings, provenance and license notices |
+| public/vendor/vodozemac | Independent SAS primitive and legacy regression core; no new Olm transport |
+| public/signal-core.js, vendor/signal; third_party/libsignal | Serialized-store adapter, hash-checked official WASM, pinned upstream/binding/locks and native oracle |
+| public/application-signatures.js, server/application-signatures.mjs | Direct/certified Ed25519 signatures, account-bound continuity and historical P-256 verification |
 | server/ratchet.mjs | Signed public prekey publication/one-use claims and legacy migration snapshot |
 | public/attachments.js | Per-file keys, validated manifests, indexed chunk encryption/decryption and size limits |
 | server/attachments.mjs | Authenticated chunk upload/download, pending transfer cleanup and storage quotas |
@@ -103,13 +105,13 @@ Upload progress uses authenticated WebSocket `{type:"transfer", messageId, envel
 
 ## Security boundaries
 
-The Olm ratchet encrypts signaling, while the browser’s separate DTLS-SRTP connection encrypts audio/video. The call SAS binds accepted certificate fingerprints to fresh contributions and authenticated contact identities. Retained browser history is independently wrapped under a same-origin AES-256-GCM key; it remains readable after transport keys are discarded. Ratchet lanes/call scopes are independent, so post-compromise healing must occur in the affected stream. A path is not origin isolation. See [security review](SECURITY_REVIEW.md).
+The libsignal ratchet encrypts signaling, while the browser’s separate DTLS-SRTP connection encrypts audio/video. The call SAS binds accepted certificate fingerprints to fresh contributions and authenticated contact identities. Retained browser history is independently wrapped under a same-origin AES-256-GCM key; it remains readable after transport keys are discarded. Ratchet lanes/call scopes are independent, so post-compromise healing must occur in the affected stream. A path is not origin isolation. See [security review](SECURITY_REVIEW.md).
 
 ## Calling-code enrollment
 
 Calling codes are optional public addresses, separate from authentication and encryption. Existing identities are unlisted. A fresh browser atomically saves its own identity and a random access token before first enrollment; retries reuse them. A code lookup adds a pending relationship, not unrestricted contact access. Answering, replying or explicit recipient acceptance promotes it to a normal mutual contact. Pending peers can exchange authenticated encrypted call signaling and at most five initial chat packets; attachments and typing require acceptance. The client withholds receipts until acceptance.
 
-The additive `dial_codes`, `contact_requests` and `contact_blocks` tables contain directory/contact metadata. Codes remain reserved to their owner while the identity exists. Returning clients remember code-to-contact bindings and retain the existing public-key and Olm identity pins. First contact by code still depends on the initial directory mapping; compare the live SAS as explained in [Calling codes](CALLING_CODES.md).
+The additive `dial_codes`, `contact_requests` and `contact_blocks` tables contain directory/contact metadata. Codes remain reserved to their owner while the identity exists. Returning clients remember code-to-contact bindings and retain the existing public-key and libsignal identity pins. First contact by code still depends on the initial directory mapping; compare the live SAS as explained in [Calling codes](CALLING_CODES.md).
 
 ## Per-view lifetimes and camera framing
 

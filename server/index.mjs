@@ -475,7 +475,7 @@ export function createApp(options = {}) {
   return { server, store, base, close: async () => { alerts.close();extraAlerts.close();testTimers.forEach(clearTimeout);disconnectTimers.forEach(clearTimeout);clearInterval(cleanup); clearInterval(heartbeat); for (const ws of wss.clients) ws.terminate(); wss.close(); await new Promise(r => server.close(r));disconnectTimers.forEach(clearTimeout); store.close(); } };
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  if(process.env.WEBCALLER_TEST_INSTANCE!=='libsignal-preview-v1')throw new Error('This is an isolated experimental build. Set its explicit test-instance environment; never replace the working Olm service.');
+  if(process.env.WEBCALLER_TEST_INSTANCE!=='libsignal-preview-v1'&&process.env.WEBCALLER_CRYPTO_ENGINE!=='libsignal-pqxdh-v1')throw new Error('This experimental build requires an explicit preview or approved libsignal cutover configuration.');
   const app = createApp();
   const port = Number(process.env.PORT || 8080), host = process.env.HOST || '127.0.0.1';
   app.server.listen(port, host, () => console.log(`WebCaller Calls listening on http://${host}:${port}${app.base}/`));

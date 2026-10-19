@@ -7,7 +7,7 @@ const signing = { name: 'Ed25519' };
 export async function newIdentity() {
   const dh = await crypto.subtle.generateKey(curve, false, ['deriveBits']);
   let sign;try{sign=await crypto.subtle.generateKey(signing,false,['sign','verify']);}
-  catch{throw Error('This browser needs Ed25519 support. Update your browser to set up this test phone.');}
+  catch{throw Error('This browser needs Ed25519 support. Update your browser to set up this phone.');}
   const keys = { dh: await crypto.subtle.exportKey('jwk', dh.publicKey), sign: await crypto.subtle.exportKey('jwk', sign.publicKey) };
   return { dh: dh.privateKey, sign: sign.privateKey, keys };
 }
@@ -49,7 +49,7 @@ export async function open(identity, self, contact, e) {
 }
 export async function vault(action, value) {
   const db = await new Promise((resolve,reject) => {
-    const r = indexedDB.open('webcaller-device',1);
+    const r = indexedDB.open('ellie-device',1);
     r.onupgradeneeded = () => r.result.createObjectStore('device');
     r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error);
   });

@@ -2,7 +2,7 @@ import {NO_EXPIRY} from './message-lifetime.js';
 import {CHUNK_SIZE,MAX_FILE_SIZE} from './attachments.js';
 // Persist ciphertext only. Keys, names, MIME types and plaintext stay in encrypted
 // messages / memory. Transactions keep deletion ahead of late transfer writes.
-export function mediaCache({indexedDB=globalThis.indexedDB,name='webcaller-media',now=Date.now}={}){
+export function mediaCache({indexedDB=globalThis.indexedDB,name='webcaller-signal-media-v1',now=Date.now}={}){
   let database,lastError;
   const connect=()=>database ||=new Promise((resolve,reject)=>{
     if(!indexedDB)return reject(new Error('Browser storage unavailable'));

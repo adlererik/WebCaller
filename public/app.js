@@ -77,13 +77,13 @@ const sendCallSignal=callOutbox({current:()=>call,ready:()=>wsReady&&ws?.readySt
 const ringer=callRinger({current:()=>call,burst:ringBurst,silence:silenceRing});
 let deletedMessages=new Map(),typingPeers=new Map(),typingSeen=new Map(),typingTimer,typingSent=0,typingPeerId,typingChain=Promise.resolve(),viewerMessage,draft;
 let messages=new Map(),unread=new Map(),seenSignals=new Set(),pendingCandidates=new Map(),settings={timers:{}},transfer,contactToRemove,contactToRename,contactPressCleanup=[];
-try{settings={...settings,...JSON.parse(localStorage.getItem('webcaller-settings')||'{}')};}catch{}
+try{settings={...settings,...JSON.parse(localStorage.getItem('ellie-settings')||'{}')};}catch{}
 delete settings.mode; // Retire saved manual modes; connection management is always Automatic.
 const preference=()=> 'auto';
 const timerFor=id=>timerValue(settings.timers?.[id]);
 const initials=name=>name.trim().split(/\s+/).slice(0,2).map(s=>s[0]).join('').toUpperCase();
 function toast(text){$('toast').textContent=text;$('toast').classList.remove('hidden');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.add('hidden'),6000);}
-function saveSettings(){localStorage.setItem('webcaller-settings',JSON.stringify(settings));if(selected)$('expiry-label').textContent=timerDescription(timerFor(selected.id));}
+function saveSettings(){localStorage.setItem('ellie-settings',JSON.stringify(settings));if(selected)$('expiry-label').textContent=timerDescription(timerFor(selected.id));}
 async function api(path,method='GET',data,signal){
   const headers={};if(device?.token&&(device.user||path==='/dial/connect'))headers.Authorization=`Bearer ${device.token}`;if(data)headers['Content-Type']='application/json';
   const timeout=AbortSignal.timeout(20000);
@@ -974,7 +974,7 @@ $('confirm-remove-contact').onclick=async()=>{
   }catch(e){if(contactToRemove?.id===c.id){$('remove-contact-error').textContent=e.message;$('confirm-remove-contact').disabled=false;}else toast(e.message);}
 };
 $('confirm-forget').onclick=async()=>{
-  try{await api('/device','DELETE');if(ws){ws.onclose=null;ws.close();}clearTimeout(reconnectTimer);clearInterval(heartbeat);finishCall('');transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();await cachedMedia.clear();await notificationIntents.clear();await chatNotificationIntents.clear();await messenger.forget();await vault('delete');localStorage.removeItem('webcaller-settings');device=null;location.reload();}catch(e){toast(e.message);}
+  try{await api('/device','DELETE');if(ws){ws.onclose=null;ws.close();}clearTimeout(reconnectTimer);clearInterval(heartbeat);finishCall('');transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();await cachedMedia.clear();await notificationIntents.clear();await chatNotificationIntents.clear();await messenger.forget();await vault('delete');localStorage.removeItem('ellie-settings');device=null;location.reload();}catch(e){toast(e.message);}
 };
 function clearMessage(m){m.reactions=null;m.receipt=null;m.versions=null;m.pinVersion=null;m.replyTo=null;if(viewerMessage?.id===m.id)closeViewer();if(m.blobURL)URL.revokeObjectURL(m.blobURL);m.blobURL=null;m.blob=null;m.location=null;m.text='';m.attachment=null;}
 setInterval(()=>{if(purgeTransfers(pendingTransfers)&&selected)renderMessages();if(selected&&document.visibilityState==='visible')updateCountdowns($('messages'));for(const [id,updates]of pendingMessageEvents)if(!updates.some(e=>e.envelope.expiresAt>Date.now()))pendingMessageEvents.delete(id);queueReceipts();void pumpViewOutbox();for(const [id,expiry]of deletedMessages)if(expiry<=Date.now())deletedMessages.delete(id);for(const [id,expiry]of typingSeen)if(expiry<=Date.now())typingSeen.delete(id);renderTyping();let changed=false;for(const [id,m]of messages)if(m.expiresAt<=Date.now()){void cachedMedia.remove(device?.user.id,id,m.wireExpiresAt||m.expiresAt);if(m.lifetime){deletedMessages.set(id,m.wireExpiresAt);void messenger.purge().catch(()=>{});}clearMessage(m);messages.delete(id);receiptWanted.delete(id);visibleSince.delete(id);changed=true;}if(changed&&selected)renderMessages();},1000);

@@ -16,6 +16,7 @@ import {orderedEnvelopes} from './signal-wire.js';
 const messenger=secureMessaging({api});
 const seal=(...args)=>messenger.seal(...args),open=(...args)=>messenger.open(...args);
 import { Phone, testRelay } from './media.js';
+import {callPresentation,viewOrientation,validOrientation} from './call-presentation.js';
 import {callOutbox,orderedTasks,callRinger,waitingForAnswer} from './call-signaling.js';
 import {dialEntry,dialLink,checkDialTarget} from './dial-code.js';
 import {dialingUI,dialIdentity} from './dialing.js';
@@ -145,7 +146,7 @@ async function pinContacts(contacts){
 function renderContacts(){
   contactPressCleanup.splice(0).forEach(dispose=>dispose());
   const el=$('contacts');el.replaceChildren();$('contact-count').textContent=device?.contacts?.length||0;
-  const contacts=(device?.contacts||[]).filter(c=>[contactName(device,c),c.name].some(name=>name.toLowerCase().includes($('search').value.toLowerCase())));
+  const contacts=device?.contacts||[];
   for(const c of contacts){
     const label=contactName(device,c),row=document.createElement('div');row.className='person-row';
     const button=document.createElement('button');button.type='button';button.className='contact'+(selected?.id===c.id?' selected':'');button.dataset.contact=c.id;button.setAttribute('aria-label','Chat with '+label);
@@ -161,7 +162,7 @@ function renderContacts(){
     actions.append(video,options);row.append(button,actions);el.append(row);
     contactPressCleanup.push(contactPress(button,{activate:()=>selectContact(c),open:()=>editContactName(c)}));
   }
-  if(!contacts.length){const p=document.createElement('p');p.className='no-contacts';p.textContent=$('search').value?'No people found.':config?.dialCodes?'Your people will appear here.\nDial a code or invite someone.':'Your people will appear here.\nStart with an invitation.';el.append(p);}
+  if(!contacts.length){const p=document.createElement('p');p.className='no-contacts';p.textContent=config?.dialCodes?'Your people will appear here.\nDial a code or invite someone.':'Your people will appear here.\nStart with an invitation.';el.append(p);}
 }
 function editContactName(c){
   if(!device.contacts.some(peer=>peer.id===c.id))return;
@@ -590,7 +591,7 @@ async function connect(){
 }
 function scheduleReconnect(){clearTimeout(reconnectTimer);if(!device)return;reconnectTimer=setTimeout(connect,Math.min(20000,1000*2**Math.min(5,reconnectAttempt++))+Math.random()*400);}
 async function signal(kind,payload){
-  return sendCallSignal(kind,payload);
+  return sendCallSignal(kind,['offer','answer','restart','video'].includes(kind)?{...payload,orientation:viewOrientation()}:payload);
 }
 function unlockSound(){
   const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
@@ -624,6 +625,7 @@ function showCall(incoming=false){
   renderCallSas('pending');
   $('call-status').textContent=incoming?(call.video?'Incoming video call':'Incoming voice call'):'Calling…';$('call-duration').textContent='';for(const id of ['call-rate','call-audio-codec','call-video-codec']){$(id).textContent='';$(id).classList.add('hidden');} $('call-quality').textContent='Voice first';$('call-warning').textContent='';
   $('incoming-actions').classList.toggle('hidden',!incoming);$('active-actions').classList.toggle('hidden',incoming);$('mute').classList.remove('selected');$('speaker').classList.remove('selected');$('speaker').setAttribute('aria-pressed','false');$('speaker').classList.toggle('hidden',call.video);cameraButton(call.video);$('mute').ariaLabel='Mute microphone';renderOutput();renderCallMetrics();$('play-audio').classList.add('hidden');
+  presentation.reset(call.remoteOrientation);
 }
 async function createPhone(video,caller){
   const current=call,id=current.id;
@@ -648,6 +650,7 @@ function updateCall(update){
   if(update.connected||update.state==='connected')void prepareCallSas();
   if(update.remoteVideo!==undefined)call.remoteVideo=update.remoteVideo;
   if(update.localVideo!==undefined||update.remoteVideo!==undefined)videoLayout();
+  else if(update.state||update.connected)presentation.update();
   if(update.cameraFacing){$('local-media').dataset.facing=update.cameraFacing;$('switch-camera').ariaLabel=update.cameraFacing==='environment'?'Switch to front camera':'Switch to back camera';}
   if(update.label){$('call-quality').title=update.label;$('call-quality').textContent={wifi:'Wi-Fi · clear',saver:'Data saver',weak:'Weak · voice first',critical:'Very weak'}[update.profile]||update.label;}
   if(update.videoPaused)$('call-quality').textContent='Weak · video paused';
@@ -722,7 +725,7 @@ async function processSignal(b){
   if(b.kind==='offer'){
     if(call?.id===b.callId)return;if(call)return;
     if(payload.description?.type!=='offer')throw new Error('Invalid call offer');
-    call={id:b.callId,peer,video:!!payload.video,caller:false,offer:payload.description,codecs:payload.codecs,mode:payload.mode,sasSupported:payload.sasVersion===1};showCall(true);ring();
+    call={id:b.callId,peer,video:!!payload.video,caller:false,offer:payload.description,codecs:payload.codecs,mode:payload.mode,remoteOrientation:validOrientation(payload.orientation)?payload.orientation:null,sasSupported:payload.sasVersion===1};showCall(true);ring();
     call.timeout=setTimeout(()=>{if(call?.id===b.callId&&!call.started)finishCall('Missed call');},Math.max(1,b.envelope.expiresAt-Date.now()));void tryNotificationAnswer();return;
   }
   if(b.kind==='ice'){
@@ -730,6 +733,7 @@ async function processSignal(b){
     else{if(pendingCandidates.size>10)pendingCandidates.clear();const list=pendingCandidates.get(b.callId)||[];if(list.length<80)list.push(payload.candidate);pendingCandidates.set(b.callId,list);}return;
   }
   if(call?.id!==b.callId)return;
+  if(validOrientation(payload.orientation)){call.remoteOrientation=payload.orientation;presentation.setRemoteOrientation(payload.orientation);}
   const current=call,active=phone;
   if(b.kind==='answer'){if(!current.caller||!active||payload.description?.type!=='answer')return;stopRing();clearTimeout(current.timeout);current.sasSupported=payload.sasVersion===1;active.setRemoteMode(payload.mode);const changed=active.setVideoPreferences(payload.codecs);await active.receive(payload.description);if(call!==current)return;await active.replayCandidates();if(call!==current)return;if(changed)void active.restart();void prepareCallSas();}
   else if(b.kind==='sas'){
@@ -797,6 +801,7 @@ function finishCall(reason='Call ended'){
   if(call)call.ending=true;
   clearCallSas();if(call){clearTimeout(call.timeout);navigator.serviceWorker?.controller?.postMessage({type:'call-ended',callId:call.id});}stopRing();clearInterval(callTicker);phone?.close();phone=null;call=null;pendingCandidates.clear();wakeLock?.release().catch(()=>{});wakeLock=null;
   output.stop();$('audio-output-dialog').close();$('return-call').classList.add('hidden');$('call-screen').classList.add('hidden');queueMicrotask(pumpMedia);if(reason)toast(reason);
+  presentation.reset();
   if(device?.needsDialAlerts&&!device.alertsConfirmedAt){device.needsDialAlerts=false;void vault('put',device);setTimeout(()=>{if(!call&&document.visibilityState==='visible')void alerts.show();},500);}
 }
 async function endCall(reason='Call ended'){const current=call;if(!current)return;current.ending=true;stopRing();try{await signal('hangup',{reason});}catch{}if(call===current)finishCall(reason);}
@@ -877,9 +882,8 @@ $('contact-name-form').onsubmit=async event=>{
   finally{$('save-contact-name').disabled=false;}
 };
 $('call-settings').onclick=settingsDialog;$('call-more').onclick=settingsDialog;
-$('call-back').onclick=()=>{$('call-screen').classList.add('hidden');$('return-call').classList.remove('hidden');selectContact(call.peer);};
-$('return-call').onclick=()=>{if(call){$('call-screen').classList.remove('hidden');$('return-call').classList.add('hidden');}};
-$('search').oninput=renderContacts;
+$('call-back').onclick=()=>{$('call-screen').classList.add('hidden');$('return-call').classList.remove('hidden');presentation.update();selectContact(call.peer);};
+$('return-call').onclick=()=>{if(call){$('call-screen').classList.remove('hidden');$('return-call').classList.add('hidden');presentation.update();presentation.reveal();}};
 $('back').onclick=()=>{actions.reset();stopTyping();closeViewer();captures.close();document.querySelector('.app').classList.remove('chat-open');};
 document.querySelectorAll('[data-close]').forEach(e=>e.onclick=()=>e.closest('dialog').close());
 $('copy-invite').onclick=async()=>{try{await navigator.clipboard.writeText($('invite-link').value);toast('Invitation copied.');}catch{$('invite-link').select();toast('Select and copy the invitation link.');}};
@@ -928,6 +932,7 @@ function renderOutput(){
   if(output.supported)for(const d of [{deviceId:'',label:'Phone / system default'},...output.items.filter(d=>d.deviceId!=='default'&&d.deviceId)]){const b=document.createElement('button');b.className='secondary full';b.textContent=d.label||'Audio device';b.setAttribute('aria-pressed',String(output.sink===d.deviceId));b.onclick=async()=>{try{if(await output.route(d.deviceId))$('audio-output-dialog').close();}catch{toast('The browser could not switch audio. Use your phone’s audio controls.');}};list.append(b);}
 }
 const output=new AudioOutput($('remote-media'),navigator.mediaDevices,renderOutput);
+const presentation=callPresentation({screen:$('call-screen'),remote:$('remote-media'),local:$('local-media'),onOrientationChange:()=>{if(phone&&call)void signal('video',{enabled:phone.videoWanted,mode:phone.localMode()}).catch(()=>{});}});
 $('speaker').onclick=async()=>{if(!phone)return;try{await output.refresh();if(output.canToggle){if(await output.toggle())return;}else if(await output.choose())return;}catch{}$('audio-output-dialog').showModal();renderOutput();};
 $('choose-output').onclick=async()=>{try{if(await output.choose())$('audio-output-dialog').close();}catch(e){if(e.name!=='NotAllowedError')toast('Could not switch audio. Use your phone’s audio controls.');}};
 function videoLayout(){
@@ -935,6 +940,7 @@ function videoLayout(){
   const local=!!phone?.videoWanted,remote=!!call?.remoteVideo;
   $('call-screen').classList.toggle('has-video',local||remote);$('call-screen').classList.toggle('has-remote-video',remote);
   cameraButton(local);$('switch-camera').classList.toggle('hidden',!local);$('speaker').classList.toggle('hidden',local||remote);void output.setVideo(local||remote).catch(()=>{});
+  presentation.update();
 }
 $('toggle-video').onclick=async()=>{if(!phone)return;try{await phone.toggleVideo();videoLayout();}catch(e){toast(e.name==='NotAllowedError'?'Allow camera access to use video.':e.message);}};
 $('switch-camera').onclick=async()=>{if(!phone)return;$('switch-camera').disabled=true;try{await phone.switchCamera();}catch(e){toast(e.name==='OverconstrainedError'?'No other camera is available.':e.name==='NotAllowedError'?'Allow camera access to switch cameras.':e.message);}finally{$('switch-camera').disabled=false;videoLayout();}};

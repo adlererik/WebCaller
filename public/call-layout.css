@@ -1,7 +1,42 @@
-/* Preserve the complete camera frame across mixed device orientations. */
+/* Display crops only. The transmitted frame and adaptive encoder are unchanged. */
+:root:has(.call-screen:not(.hidden)),body:has(.call-screen:not(.hidden)) { overflow:hidden; }
 .call-screen #remote-media,.call-screen #local-media { object-fit:contain; object-position:center; }
 .call-screen #remote-media { background:#11141b; opacity:1; }
 .call-screen #local-media { background:#11141b; }
+.call-screen.has-video #remote-media { object-fit:cover; object-position:50% 42%; }
+.call-screen.has-video.square-video #remote-media {
+  inset:0; margin:auto; width:min(100vw,100dvh); height:min(100vw,100dvh);
+  max-width:100%; max-height:100%; border-radius:0;
+}
+.call-screen.has-video #local-media {
+  --self-width:clamp(76px,22vw,130px); width:var(--self-width);
+  height:calc(var(--self-width) * 4 / 3); object-fit:cover; object-position:50% 42%;
+  right:max(12px,env(safe-area-inset-right));
+}
+.call-screen.has-video.square-video #local-media { height:var(--self-width); }
+/* Fade without reflow: call words and the metrics keep their exact positions. */
+.call-screen.has-video.call-connected .active-actions,
+.call-screen.has-video.call-connected #call-back,
+.call-screen.has-video.call-connected #call-settings,
+.call-screen.has-video.call-connected #call-peer-top,
+.call-screen.has-video.call-connected #call-warning {
+  transition:opacity .25s ease,visibility .25s;
+}
+.call-screen.has-video.call-connected.controls-hidden .active-actions,
+.call-screen.has-video.call-connected.controls-hidden #call-back,
+.call-screen.has-video.call-connected.controls-hidden #call-settings,
+.call-screen.has-video.call-connected.controls-hidden #call-peer-top,
+.call-screen.has-video.call-connected.controls-hidden #call-warning {
+  opacity:0; visibility:hidden; pointer-events:none;
+}
+.call-screen:focus { outline:none; }
+@media(prefers-reduced-motion:reduce){
+  .call-screen.has-video.call-connected .active-actions,
+  .call-screen.has-video.call-connected #call-back,
+  .call-screen.has-video.call-connected #call-settings,
+  .call-screen.has-video.call-connected #call-peer-top,
+  .call-screen.has-video.call-connected #call-warning { transition:none; }
+}
 .brand-icon .brand-mark { display:block; width:100%; height:100%; border-radius:inherit; }
 
 :root .sidebar .brand-icon.app-brand { background:transparent; box-shadow:none; }

@@ -49,7 +49,7 @@ Public HTTPS and WebSocket checks, exact vendor/source bytes and authenticated T
 
 1. Enroll fresh test identities on the separate HTTPS origin; retain the stable phone's storage/icon.
 2. Message both ways; refresh, close/reopen chats and check history/cache, edits, replies, reactions and timers/Off.
-3. Call both ways in voice/video; compare all four words. Switch cameras/orientation and check the full frame, codecs/rates and audio.
+3. Call both ways in voice/video; compare all four words. Check full-screen portrait fitting and square views on both sides when either phone rotates. Confirm controls fade after four seconds, a tap restores them, and the SAS/codecs/rates/quality/timer remain visible. Switch cameras and networks; check uninterrupted audio, encoder adaptation and recovery from poor conditions.
 4. Send a photo/file while talking. Check percentage/spinner, cancellation, retry, cache reuse and continued audible speech.
 5. Test Wi-Fi/mobile transitions, weak links and actual relay paths. Complete outages may interrupt sound.
 6. Test locked-screen/browser-closed alerts, notification opening and supported actions on each OS. If using ntfy, confirm the sound/opening test and absence of duplicate browser call pushes.

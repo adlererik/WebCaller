@@ -13,6 +13,6 @@ printf -v task_flags '%s\x1f' '--cfg=getrandom_backend="wasm_js"' "--remap-path-
 export CARGO_ENCODED_RUSTFLAGS="${task_flags%$'\x1f'}"
 unset RUSTFLAGS
 cargo build --locked --release --target wasm32-unknown-unknown --manifest-path "$task_source/Cargo.toml" --target-dir "$task_build/target"
-wasm-bindgen --target bundler --out-name vodozemac --out-dir "$task_build/pkg" "$task_build/target/wasm32-unknown-unknown/release/vodozemac.wasm"
+wasm-bindgen --remove-producers-section --target bundler --out-name vodozemac --out-dir "$task_build/pkg" "$task_build/target/wasm32-unknown-unknown/release/vodozemac.wasm"
 cargo metadata --locked --format-version 1 --filter-platform wasm32-unknown-unknown --manifest-path "$task_source/Cargo.toml" > "$task_build/metadata.json"
 python3 scripts/vendor-vodozemac.py "$task_build"

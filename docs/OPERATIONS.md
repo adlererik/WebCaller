@@ -55,7 +55,7 @@ On both phones, reopen/refresh the usual browser or Home Screen icon **without c
 
 The optional `webcaller-ntfy.service` is separate. This source update does not reinstall its binary, alter its private ACL database or rewrite its tunnel route. Keep that service's private configuration and state too. A full server restart restarts enabled systemd services; confirm health and a locked-phone sound test afterward. The ntfy installer intentionally refuses an already configured installation.
 
-## Updating to v0.17.0
+## Updating to v0.17.1
 
 Use the same installation method and preserve your private configuration, data volume/database and phone origin. Existing identities, contacts, Olm sessions, unread history, pins and SAS are retained. Refresh both phones after updating; older clients reject files above their old limit. Keep the existing iPhone Home Screen app and browser storage. The media cache upgrades additively and keeps old encrypted entries.
 

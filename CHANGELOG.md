@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.17.0 — 2026-10-19
+## 0.17.1 — 2026-10-19
+
+- Publish the complete adaptive-sharing / 200 MiB release below with source archives, digest-pinned Docker setup bundles and native amd64/arm64 images.
+- Remove optional WASM compiler-producer metadata so clean local and GitHub builds reproduce identical browser assets. Keep debug names and target-feature metadata; all executable sections, instructions, imports/exports and data remain byte-for-byte identical to the preceding 0.11.1 module. Keep the exact loader integrity check.
+- Add a regression pin for unchanged runtime sections and retain public CI rebuild evidence. Olm, AES-GCM, identities, saved sessions/history and call SAS are unchanged.
+
+## 0.17.0 — 2026-10-19 (build candidate)
 
 - Raise the file/media limit to 200 MiB, extend encrypted chunk routing through index 3199 and use fresh 1 GiB per-sender / 4 GiB global reservation defaults. Existing explicit lower quotas remain an operator choice.
 - Replace sequential 4 KiB in-call throttling with up to four adaptive encrypted chunk workers, measured file-path probing and a healthy-link ceiling of 24 Mbps (2 Mbps on explicitly reported cellular/Save-Data). Unknown network types no longer impose the old 8 KB/s file limit.

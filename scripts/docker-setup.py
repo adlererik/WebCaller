@@ -88,7 +88,7 @@ def qr(bundle):
  code=qrcode.QRCode(border=4);code.add_data(link);code.make(fit=True);code.print_ascii(invert=True)
 
 def prepare_update(bundle,version):
- if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+',version):raise ValueError('Use an explicit release such as v0.17.0.')
+ if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+',version):raise ValueError('Use an explicit release such as v0.17.1.')
  current=(bundle/'VERSION').read_text().strip()
  if tuple(map(int,version[1:].split('.')))<=tuple(map(int,current.split('.'))):raise ValueError('Choose a newer release; downgrades need manual migration review.')
  name='WebCaller-Docker-'+version;url='https://github.com/adlererik/WebCaller/releases/download/'+version+'/'

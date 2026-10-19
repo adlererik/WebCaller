@@ -133,3 +133,13 @@ for(const oldCaller of [true,false])test(`four-word SAS stays compatible with a 
   for(let i=0;pending.length&&i<20;i++){const {to,frame}=pending.shift();await (to==='a'?a:b).receive(frame);}
   assert.equal(a.state,'ready');assert.equal(b.state,'ready');assert.equal(states.a.words,states.b.words);assert.equal(states.a.words.split(' ').length,4);
 });
+
+test('portable build removes optional producer metadata while preserving the prior executable module byte for byte',async()=>{
+ const bytes=await readFile(new URL('../public/vendor/vodozemac/pkg/vodozemac_bg.wasm',import.meta.url));let offset=8;const standard=[bytes.subarray(0,8)],names=[];
+ const leb=()=>{let value=0,shift=0;for(;;){const byte=bytes[offset++];value|=(byte&127)<<shift;if(!(byte&128))return value;shift+=7;assert.ok(shift<35);}};
+ while(offset<bytes.length){const start=offset,kind=bytes[offset++],length=leb(),end=offset+length;assert.ok(end<=bytes.length);if(kind)standard.push(bytes.subarray(start,end));else{const n=leb();names.push(bytes.subarray(offset,offset+n).toString());}offset=end;}
+ assert.ok(!names.includes('producers'));assert.ok(names.includes('name'));assert.ok(names.includes('target_features'));
+ // All types, imports, functions, exports, instructions and data match the
+ // pre-canonicalization 0.11.1 module; only optional compiler metadata changed.
+ assert.equal(createHash('sha256').update(Buffer.concat(standard)).digest('hex'),'a226e0825686bc0263efd382208884bd5ba4284008fd9ac1dae466f4f4a401a4');
+});

@@ -25,3 +25,5 @@ Use `rustup run 1.90.0 bash scripts/build-vodozemac.sh` if your default Rust ver
 `vodozemac-legacy-test` is an exact-pinned **development-only** alias for the previous `@towns-protocol/vodozemac@0.1.0` engine (core 0.9.0). It is used only by synthetic interoperability/upgrade tests, omitted by production `npm ci --omit=dev`, and never loaded by browser code. It lets tests exercise an actual old engine, rather than merely asserting that two new engines agree.
 
 This binding and WebCaller's integration have not received an independent security audit. Pinned hashes and successful tests do not remove trust in website-delivered code.
+
+The build removes only the optional WASM `producers` section, whose compiler-description text can vary across build hosts. Debug names and target features remain. A regression pins all executable/module data sections against the preceding 0.11.1 build; the runtime code is unchanged. Tool versions and hashes remain in the provenance file. CI rebuilds and compares the complete canonical assets byte for byte, with the original loader integrity check still enforced.

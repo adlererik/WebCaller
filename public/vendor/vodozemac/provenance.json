@@ -18,14 +18,14 @@
   },
   "files": {
     "pkg/vodozemac_bg.js": "df8cf61947576458cb4d6c32747f19cb819f34d652b65d490aa5423105ba74a4",
-    "pkg/vodozemac_bg.wasm": "58f30fb84fca1476828527b4dee2308bcd985733108c33c495b817cac5b84bce",
+    "pkg/vodozemac_bg.wasm": "f62d4f0408e14f38079104e541243406bca532980edc1ebdcec6022b680566f2",
     "pkg/vodozemac.d.ts": "9201b1a5c6f94e3387ae6183a1ff1a5d067244fa0badec5449ba0662635ae4a0",
     "LICENSE-APACHE.txt": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
     "THIRD-PARTY-NOTICES.txt": "52437b2216157251c6670ec25c36ded322aabdee963c1871abc1943e1712365c",
     "UPSTREAM-Cargo.lock": "551a18aac396ebe6b5d7ccfc59f71cd2f519af380b58ec61663b0e0c6dd2824b"
   },
   "sourceFiles": {
-    "scripts/build-vodozemac.sh": "faf5b8f63d3ca8bddb2e0d321162db8abb033bb1804e5105844be92a828e12ad",
+    "scripts/build-vodozemac.sh": "a984172aed6b633895566a07b9df12afbe29b6a82f6c9f9d75a166aa347af130",
     "scripts/vendor-vodozemac.py": "568a8098515adc587a8cf95900d50361b50d712344524d475518103897453a71",
     "third_party/vodozemac-bindings/Cargo.lock": "551a18aac396ebe6b5d7ccfc59f71cd2f519af380b58ec61663b0e0c6dd2824b",
     "third_party/vodozemac-bindings/Cargo.toml": "88155c2ae6a4992968a6fbb1e31a03925b41223decd2aa75f828f4ea1614e6c7",

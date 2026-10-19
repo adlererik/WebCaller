@@ -33,5 +33,13 @@ jobs:
       - run: cargo +1.90.0 install wasm-bindgen-cli --version 0.2.100 --locked
       - run: rustup run 1.90.0 bash scripts/build-vodozemac.sh
       - run: git diff --exit-code -- public/vendor/vodozemac third_party/vodozemac-bindings/Cargo.lock
+      - name: Retain public rebuild evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: browser-crypto-rebuild-${{ github.run_id }}
+          path: public/vendor/vodozemac/
+          retention-days: 3
+          if-no-files-found: error
       - run: npm ci --ignore-scripts
       - run: node --test tests/vodozemac-upgrade.test.mjs tests/ratchet.test.mjs tests/call-sas.test.mjs

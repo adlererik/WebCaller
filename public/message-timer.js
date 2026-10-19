@@ -1,4 +1,4 @@
-import {MAX_MESSAGE_SECONDS,timerValue,timerLabel} from './message-lifetime.js';
+import {DEFAULT_MESSAGE_SECONDS,MAX_MESSAGE_SECONDS,timerValue,timerLabel} from './message-lifetime.js';
 
 export const TIMER_UNITS = [
   {id:'seconds',seconds:1,max:59}, {id:'minutes',seconds:60,max:59},
@@ -14,7 +14,7 @@ export function splitTimer(seconds) {
   for(const unit of [...TIMER_UNITS].reverse()){
     const count=seconds/unit.seconds;if(Number.isInteger(count)&&count>=1&&count<=unit.max)return {count,unit:unit.id};
   }
-  return {count:1,unit:'days'};
+  return {count:1,unit:'hours'};
 }
 
 // Three copies keep the selected item in the middle cycle. Native touch
@@ -64,7 +64,7 @@ export function timerWheel(element,{values,value,label,onChange}) {
 
 export function messageTimer({peer,get,save,back,toast}) {
   const $=id=>document.getElementById(id),page=$('message-timer-dialog'),custom=$('custom-time-dialog');
-  const presets=[0,2419200,604800,86400,28800,3600,300,30];let draft=86400,owner,customChoice=false,quantity,units,customReady=false;
+  const presets=[0,2419200,604800,86400,28800,3600,300,30];let draft=DEFAULT_MESSAGE_SECONDS,owner,customChoice=false,quantity,units,customReady=false;
   const countItems=unit=>Array.from({length:TIMER_UNITS.find(u=>u.id===unit).max},(_,i)=>i+1);
   function render(){
     $('timer-scope').textContent=peer()?'For new messages you send to '+peer().name:'For this chat';
@@ -87,7 +87,7 @@ export function messageTimer({peer,get,save,back,toast}) {
   function currentChoice(){return customSeconds(quantity.value,units.value);}
   function summary(){if(customReady)$('custom-time-summary').textContent=timerLabel(currentChoice());}
   function openCustom(){
-    const choice=splitTimer(draft||86400);customReady=false;custom.showModal();
+    const choice=splitTimer(draft||DEFAULT_MESSAGE_SECONDS);customReady=false;custom.showModal();
     if(!quantity){
       quantity=timerWheel($('timer-number-wheel'),{values:countItems(choice.unit),value:choice.count,label:'Number',onChange:summary});
       units=timerWheel($('timer-unit-wheel'),{values:TIMER_UNITS.map(u=>u.id),value:choice.unit,label:'Time unit',onChange:unit=>{quantity.set(countItems(unit),Math.min(quantity.value,TIMER_UNITS.find(u=>u.id===unit).max));summary();}});

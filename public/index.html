@@ -7,11 +7,11 @@
   <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#191b20">
   <meta name="color-scheme" content="light dark">
   <meta name="description" content="Private conversations. Clear calls. A simple invitation.">
-  <title>Ellie Calls</title>
+  <title>WebCaller</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=2">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Ellie Calls">
+  <meta name="apple-mobile-web-app-title" content="WebCaller">
   <link rel="icon" href="./icon.svg?v=2" type="image/svg+xml">
   <link rel="stylesheet" href="./style.css">
   <link rel="stylesheet" href="./sharing.css">
@@ -26,7 +26,7 @@
 <body>
   <div class="app">
     <aside class="sidebar">
-      <header class="brand"><span class="brand-icon app-brand"><img class="brand-mark" src="./icon.svg?v=2" alt=""></span><div><h1>Ellie</h1><span class="subtle">Calls &amp; messages</span></div><button id="settings" class="icon-button" aria-label="Settings" data-icon="settings"></button></header>
+      <header class="brand"><span class="brand-icon app-brand"><img class="brand-mark" src="./icon.svg?v=2" alt=""></span><div><h1>WebCaller</h1><span class="subtle">Calls &amp; messages</span></div><button id="settings" class="icon-button" aria-label="Settings" data-icon="settings"></button></header>
       <label class="search"><span data-icon="search"></span><input id="search" type="search" placeholder="Search contacts" aria-label="Search contacts"></label>
       <div class="home-actions" aria-label="Start a conversation">
         <button class="home-action home-dial hidden" id="dial-open"><span class="home-action-icon" data-icon="keypad"></span><strong>Dial a code</strong><span class="home-action-note">Start a video call</span></button>
@@ -51,7 +51,7 @@
       <section id="conversation" class="conversation hidden">
         <header class="chat-header"><button id="back" class="icon-button mobile-only" aria-label="Back to conversations" data-icon="back"></button><div id="peer-avatar" class="avatar"></div><button id="peer-details" class="peer-details"><strong id="peer-name"></strong><span>Private conversation</span></button><div class="chat-actions"><button id="video" class="icon-button" aria-label="Video call" data-icon="video"></button><button id="voice" class="icon-button" aria-label="Voice call" data-icon="phone"></button><button id="chat-settings" class="icon-button" aria-label="Conversation settings" data-icon="more"></button></div></header>
         <div id="contact-request" class="contact-request hidden"><p id="contact-request-text"></p><div><button id="accept-contact" class="primary" type="button">Accept</button><button id="block-request" class="secondary danger" type="button">Block</button></div></div>
-        <div class="privacy-strip"><span data-icon="lock"></span><span id="expiry-label">Messages disappear after 24 hours</span></div>
+        <div class="privacy-strip"><span data-icon="lock"></span><span id="expiry-label">Messages disappear after 1 hour</span></div>
         <button id="pinned-message" class="pinned-message hidden" type="button"></button>
         <div id="selection-bar" class="selection-bar hidden"><span id="selection-count"></span><button id="selection-copy" type="button">Copy</button><button id="selection-forward" type="button">Forward</button><button id="selection-delete" type="button">Delete</button><button id="selection-clear" class="icon-button" type="button" aria-label="Clear selection" data-icon="close"></button></div>
         <div id="messages" class="messages" role="log" aria-label="Messages"></div>

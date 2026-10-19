@@ -35,9 +35,10 @@ export function mediaBudget(profile,stats={},cpuLimited=false,sharing=false){
   if(cpuLimited){p.fps=Math.min(p.fps,12);p.width=Math.min(p.width,640);p.height=Math.min(p.height,360);p.video=Math.min(p.video,350000);}
   return p;
 }
-// Downscale the whole camera frame. Fixed width/height capture constraints can
-// crop a portrait camera into a landscape frame before the receiver sees it.
-export function captureConstraints(p,settings={}){return {width:{ideal:settings.height>settings.width?Math.min(p.width,p.height):Math.max(p.width,p.height)},frameRate:{ideal:p.fps},resizeMode:'none'};}
+// Capture one full camera frame. Adapt the encoder rather than repeatedly
+// switching camera resolutions/lens crops as bandwidth estimates fluctuate.
+// A bounded source also allows a saver-started call to improve on good Wi-Fi.
+export function captureConstraints(p,settings={}){const source=PROFILES.wifi;return {width:{ideal:settings.height>settings.width?Math.min(source.width,source.height):Math.max(source.width,source.height)},frameRate:{ideal:p.fps},resizeMode:'none'};}
 export function videoScale(p,settings={}){
   const {width,height}=settings;if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)return 1;
   const long=Math.max(p.width,p.height),short=Math.min(p.width,p.height),landscape=width>=height;
@@ -292,7 +293,16 @@ export class Phone {
         if(signature===this.appliedBudget)continue;this.appliedBudget=signature;
         await this.setSender(this.audioSender,false,p);if(this.pc!==pc)return;
         const track=this.stream?.getVideoTracks()[0];
-        if(track){track.enabled=p.video>0;await track.applyConstraints({...captureConstraints(p,capture),frameRate:{max:p.fps}}).catch(()=>{});}
+        if(track){
+          track.enabled=p.video>0;
+          const captureKey=JSON.stringify([track.id,p.fps]);
+          if(captureKey!==this.appliedCapture){
+            // Keep the original camera geometry/device constraints, including
+            // after rotation. Only capture frame rate follows the call budget.
+            const constraints=track.getConstraints?.()||captureConstraints(p,capture);
+            try{await track.applyConstraints({...constraints,frameRate:{max:p.fps}});this.appliedCapture=captureKey;}catch{}
+          }
+        }
         if(this.pc!==pc)return;await this.setSender(this.videoSender,true,p);
         this.update({profile:this.profile,label:p.label,sharing:this.isSharing,videoPaused:this.videoWanted&&p.video===0,localVideo:this.videoWanted,cameraFacing:this.facingMode,audioSettings:this.stream?.getAudioTracks()[0]?.getSettings()});
       }

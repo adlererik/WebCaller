@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "Ellie Calls",
-  "short_name": "Ellie Calls",
+  "name": "WebCaller",
+  "short_name": "WebCaller",
   "scope": "./",
   "display": "standalone",
   "background_color": "#ffffff",

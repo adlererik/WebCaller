@@ -2,6 +2,8 @@
 .contact{-webkit-touch-callout:none;user-select:none;touch-action:pan-y}.contact-hint{font-size:11px;color:var(--soft-ink);margin:8px 10px 16px}#remove-contact-dialog .dialog-mark{color:#d44959}#remove-contact-error:empty{display:none}
 /* Keep keyboard focus visible on buttons, without a box around the composer. */
 .compose-pill textarea:focus,.compose-pill textarea:focus-visible{outline:none;box-shadow:none}
+#draft-caption{background:var(--surface);color:var(--ink);border-color:var(--line);caret-color:var(--ink)}
+#draft-caption::placeholder{color:var(--soft-ink);opacity:1}
 .message-stack{min-width:0;max-width:100%;display:flex;flex-direction:column;align-items:flex-start;position:relative}
 .outgoing .message-stack{align-items:flex-end}.message-row{max-width:min(86%,490px)}.message-row .message-options{align-self:center}
 .message{cursor:pointer}.message:focus-visible{outline:2px solid var(--blue);outline-offset:2px}

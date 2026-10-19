@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {IDBFactory} from 'fake-indexeddb';
-import {createApp} from '../server/index.mjs';
 import {newIdentity,seal as legacySeal,unb64} from '../public/crypto.js';
 import {secureStore} from '../public/secure-store.js';
 import {secureMessaging,identityStatement,prekeyStatement} from '../public/secure-messaging.js';
@@ -10,31 +9,10 @@ import {loadOlm} from '../public/vendor/vodozemac/load.js';
 import {orderedEnvelopes,olmFraming} from '../public/olm-wire.js';
 import {newAttachment,attachmentKey,encryptChunk,decryptChunk} from '../public/attachments.js';
 import {callSas} from '../public/call-sas.js';
-import {WebSocket} from 'ws';
 import {once} from 'node:events';
 import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
-async function fixture(t,{before,clock=Date.now}={}){
-  const app=createApp({dataDir:':memory:',env:{PUBLIC_URL:'https://example.com/calls',BOOTSTRAP_TOKEN:'synthetic-owner-code'}});await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
-  t.after(()=>app.close());const url='http://127.0.0.1:'+app.server.address().port+'/calls/api';
-  async function request(path,method='GET',body,token){
-    const response=await fetch(url+path,{method,headers:{Origin:'https://example.com',...(token?{Authorization:'Bearer '+token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});const value=await response.json();
-    if(!response.ok)throw Object.assign(new Error(value.error),{status:response.status});return value;
-  }
-  const aliceIdentity=await newIdentity(),alice=await request('/register','POST',{name:'Synthetic Alice',keys:aliceIdentity.keys,setupCode:'synthetic-owner-code'});
-  const invitation=await request('/invite','POST',{},alice.token),[invite,fingerprint]=new URL(invitation.url).hash.slice(8).split('.');
-  const bobIdentity=await newIdentity(),bob=await request('/join','POST',{name:'Synthetic Bob',keys:bobIdentity.keys,invite,fingerprint});
-  alice.identity=aliceIdentity;bob.identity=bobIdentity;alice.pins={[bob.user.id]:bob.user};bob.pins={[alice.user.id]:alice.user};
-  const apiA=(p,m,b)=>request(p,m,b,alice.token),apiB=(p,m,b)=>request(p,m,b,bob.token),idbA=new IDBFactory(),idbB=new IDBFactory();
-  const optionsA={api:apiA,store:secureStore({indexedDB:idbA,name:'synthetic-a',now:clock}),now:clock},optionsB={api:apiB,store:secureStore({indexedDB:idbB,name:'synthetic-b',now:clock}),now:clock};
-  if(before)await before({alice,bob,apiA,apiB});
-  const a=secureMessaging(optionsA),b=secureMessaging(optionsB);await a.initialize(alice);await b.initialize(bob);
-  const sendA=(text,ttl=3600)=>a.seal(alice.identity,alice.user.id,bob.user,{kind:'text',text},ttl);
-  const sendB=text=>b.seal(bob.identity,bob.user.id,alice.user,{kind:'text',text},3600);
-  const openA=e=>a.open(alice.identity,alice.user.id,bob.user,e),openB=e=>b.open(bob.identity,bob.user.id,alice.user,e);
-  async function socket(d,api){const {ticket}=await api('/ticket','POST',{}),ws=new WebSocket(url.replace('/api','/ws').replace('http:','ws:'),{origin:'https://example.com'});await once(ws,'open');const ready=once(ws,'message');ws.send(JSON.stringify({type:'auth',ticket}));await ready;return ws;}
-  return {app,alice,bob,a,b,apiA,apiB,sendA,sendB,openA,openB,optionsA,optionsB,socket};
-}
+import {fixture} from './helpers/ratchet-fixture.mjs';
 test('ratcheted delivery, replies and encrypted history survive reload without static self-copies',async t=>{
   const f=await fixture(t),first=await f.sendA('Synthetic secret');assert.equal(first.v,2);assert.equal(first.selfCiphertext,undefined);assert.equal(first.ephemeral,undefined);assert.ok(!JSON.stringify(first).includes('Synthetic secret'));
   await f.apiA('/messages','POST',first);assert.equal((await f.openB(first)).text,'Synthetic secret');assert.equal((await f.openA(first)).text,'Synthetic secret');
@@ -172,6 +150,7 @@ test('an expired lease is fenced off, and replacement state stays intact',async(
 test('pinned vendor files match their provenance checksums and WASM is served with its proper MIME type',async t=>{
   const root=new URL('../public/vendor/vodozemac/',import.meta.url),manifest=JSON.parse(await readFile(new URL('provenance.json',root),'utf8'));
   for(const [name,expected]of Object.entries(manifest.files))assert.equal(createHash('sha256').update(await readFile(new URL(name,root))).digest('hex'),expected,name);
+  for(const [name,expected]of Object.entries(manifest.sourceFiles||{}))assert.equal(createHash('sha256').update(await readFile(new URL('../../../'+name,root))).digest('hex'),expected,name);
   const f=await fixture(t),address=f.app.server.address(),r=await fetch(`http://127.0.0.1:${address.port}/calls/vendor/vodozemac/pkg/vodozemac_bg.wasm`);
   assert.equal(r.headers.get('content-type'),'application/wasm');assert.equal(r.headers.get('content-encoding'),'gzip');assert.equal(createHash('sha256').update(new Uint8Array(await r.arrayBuffer())).digest('hex'),manifest.files['pkg/vodozemac_bg.wasm']);
 });

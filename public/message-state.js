@@ -7,7 +7,7 @@ export function validReaction(emoji){
 export const compareVersion=(a,b)=>a.createdAt-b.createdAt||a.id.localeCompare(b.id);
 export function applyMessageEvent(m,event,payload,now=Date.now()){
   const e=event.envelope,actor=e.from,other=actor===m.from?m.to:m.from;
-  if(m.expiresAt<=now||e.expiresAt<=now||e.expiresAt>m.expiresAt||e.createdAt<m.createdAt||e.to!==other||![m.from,m.to].includes(actor)||payload.target!==m.id||payload.kind!==`message-${event.kind}`)return false;
+  if(m.expiresAt<=now||e.expiresAt<=now||e.expiresAt>(m.wireExpiresAt||m.expiresAt)||e.createdAt<m.createdAt||e.to!==other||![m.from,m.to].includes(actor)||payload.target!==m.id||payload.kind!==`message-${event.kind}`)return false;
   const key=actor+':'+event.kind,prior=m.versions?.[key];
   if(prior&&compareVersion(e,prior)<=0)return false;
   if(event.kind==='edit'){

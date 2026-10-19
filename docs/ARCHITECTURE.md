@@ -20,6 +20,9 @@ flowchart LR
 | public/chat-ui.js | Keyed message rendering, media bubbles and searchable Unicode emoji picker |
 | public/chat-capture.js | Separate camera/voice capture, cleanup and voice-note codec selection |
 | public/app.js | Enrollment, contact pins, encrypted chat/signaling, call state, ringing, notifications, timers and reconnect |
+| public/dial-code.js, dialing.js | Public numeric addresses, saved-identity enrollment retries, keypad, code settings and request controls |
+| server/dialing.mjs | Opt-in code reservation, bounded guest enrollment, pending requests, acceptance and identity blocking |
+| public/theme.js, contact-names.js | Local appearance selection and per-device contact labels; no account/key changes |
 | public/crypto.js | Existing identity/vault, safety numbers and legacy envelope verification |
 | public/secure-messaging.js, secure-store.js, contact-trust.js, olm-wire.js | Signed Olm Double Ratchet integration, encrypted history, atomic cross-tab state, persistent identity verification and ordered hydration |
 | public/call-sas.js, sas-words.js | Ephemeral media-bound X25519 commit/reveal SAS, local 44-bit word display, retry/cleanup |
@@ -31,7 +34,7 @@ flowchart LR
 | public/media-cache.js | Identity-scoped encrypted IndexedDB media retention, expiry and transactional deletion tombstones |
 | public/call-metrics.js | Separate voice/video RTP rates, bundled totals and active codec labels |
 | public/video-codecs.js | Bounded WebRTC encode/decode efficiency probes and mutual codec variant preferences |
-| public/transfer-policy.js | Call-health checks, 4 KB piece size and paced voice-first transfers |
+| public/transfer-policy.js | Adaptive file pacing, weak-link parts, bounded workers and voice-health backoff |
 | public/media.js | Phone class, Opus SDP tuning, capture, sender adaptation, candidate queues, ICE restart and relay test |
 | public/message-intents.js | Identity-bound one-use message-notification navigation, no routing identifiers in URLs |
 | public/message-expiry.js | Compact expiry formatting and isolated countdown DOM updates |
@@ -59,8 +62,13 @@ flowchart LR
 | GET /config | Public base URL, first-registration availability, public push key and relay availability |
 | POST /register | First browser, using private owner code and browser public keys |
 | POST /join | Redeem single-use invitation; create/reuse device and connect contacts |
+| POST /dial/connect | Resolve an active code; reuse an authenticated device or enroll its saved fresh keys/token; create a bounded contact request |
+| GET /dial/settings | Authenticated own code, availability and own blocked identities |
+| PUT /dial/code, DELETE /dial/code | Choose a unique 4–12 digit public address, choose a random six-digit code, or turn it off |
+| POST /contacts/:id/accept | Recipient accepts an incoming request; saves the mutual contact relationship |
+| DELETE /blocks/:id | Remove the caller’s own block; does not restore history or the contact |
 | GET /me | Authenticated self/contact metadata |
-| DELETE /contacts/:id | Idempotently remove the mutual contact relationship and shared history/media; end this pair’s call; return contact list and deleted IDs |
+| DELETE /contacts/:id | Idempotently remove the mutual contact relationship and shared history/media; end this pair’s call; optional ?block=1 blocks this identity; return contact list and deleted IDs |
 | POST /invite | Create one-person invitation, with optional recipient name |
 | POST /invite-info | Verify invitation/fingerprint and preview names without redemption (unauthenticated) |
 | GET /ice | Authenticated STUN/TURN config with temporary credentials |
@@ -96,3 +104,19 @@ Upload progress uses authenticated WebSocket `{type:"transfer", messageId, envel
 ## Security boundaries
 
 The Olm ratchet encrypts signaling, while the browser’s separate DTLS-SRTP connection encrypts audio/video. The call SAS binds accepted certificate fingerprints to fresh contributions and authenticated contact identities. Retained browser history is independently wrapped under a same-origin AES-256-GCM key; it remains readable after transport keys are discarded. Ratchet lanes/call scopes are independent, so post-compromise healing must occur in the affected stream. A path is not origin isolation. See [security review](SECURITY_REVIEW.md).
+
+## Calling-code enrollment
+
+Calling codes are optional public addresses, separate from authentication and encryption. Existing identities are unlisted. A fresh browser atomically saves its own identity and a random access token before first enrollment; retries reuse them. A code lookup adds a pending relationship, not unrestricted contact access. Answering, replying or explicit recipient acceptance promotes it to a normal mutual contact. Pending peers can exchange authenticated encrypted call signaling and at most five initial chat packets; attachments and typing require acceptance. The client withholds receipts until acceptance.
+
+The additive `dial_codes`, `contact_requests` and `contact_blocks` tables contain directory/contact metadata. Codes remain reserved to their owner while the identity exists. Returning clients remember code-to-contact bindings and retain the existing public-key and Olm identity pins. First contact by code still depends on the initial directory mapping; compare the live SAS as explained in [Calling codes](CALLING_CODES.md).
+
+## Per-view lifetimes and camera framing
+
+`public/envelope-auth.js` preserves v2 canonical framing and adds authenticated v3 lifetime metadata. `public/view-state.js` seals per-device first-view/deadline records and an encrypted read-start retry outbox under the existing storage key. `server/message-retention.mjs` owns the additive `message_views` table rules, participant visibility and immutable read-start handling. Existing accounts, identities, ratchets and call SAS are not recreated. `public/media-cache.js` separates local cleanup time from immutable attachment AAD. `public/call-layout.css` fits complete video frames; orientation-aware capture ideals and sender downscaling in `public/media.js` preserve field of view across adaptive profiles.
+
+## Larger attachments and adaptive sharing
+
+`public/transfer-policy.js` controls healthy-link probing, metered ceilings, stale/poor-stat pauses and a four-worker pool. `public/app.js` cancels in-flight file HTTP requests on poor call health, streams encryption/decryption and records monotonic acknowledged progress. `server/transfer-limits.mjs` bounds active attachment requests and token-bucket rate separately from chat/signaling. `server/attachments.mjs` accepts up to 200 MiB and chunk indices through 3199. The 64 KiB AES-GCM wire format is unchanged.
+
+The encrypted media cache adds `chunks` and `pending` object stores in an additive version-2 IndexedDB upgrade, preserving existing `files`/`deleted` records. A random generation owns each staged set; only complete sets become visible. Aborts, deletion and replacement invalidate late writers. Temporary chunks have at most a 24-hour staging deadline; committed chunks use the local message deadline. Cache failure does not stop calling or delivery and is reported. Display/download Blobs still need browser resources.

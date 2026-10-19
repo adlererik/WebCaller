@@ -8,7 +8,7 @@ export async function loadOlm(){
       ?await (await import('node:fs/promises')).readFile(url)
       :await (await fetch(url,{cache:'no-store'})).arrayBuffer();
     const digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join('');
-    if(digest!=='5b3a606864bbcfe31f4e91f12e73b659c494f6d13c36cb6e1ec94dce992410fd')throw new Error('Secure messaging module integrity check failed. Reload the page or contact the server owner.');
+    if(digest!=='58f30fb84fca1476828527b4dee2308bcd985733108c33c495b817cac5b84bce')throw new Error('Secure messaging module integrity check failed. Reload the page or contact the server owner.');
     const {instance}=await WebAssembly.instantiate(bytes,{'./vodozemac_bg.js':bindings});
     bindings.__wbg_set_wasm(instance.exports);instance.exports.__wbindgen_start();return bindings;
   })();

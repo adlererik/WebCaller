@@ -1,5 +1,5 @@
 import {b64,unb64} from './crypto.js';
-export const MAX_FILE_SIZE=10*1024*1024, CHUNK_SIZE=64*1024;
+export const MAX_FILE_SIZE=200*1024*1024, CHUNK_SIZE=64*1024;
 const enc=new TextEncoder();
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 export const imageTypes=new Set(['image/jpeg','image/png','image/webp','image/gif','image/avif']);
@@ -11,7 +11,7 @@ export function validAttachment(a){
   return !!a&&uuid.test(a.id)&&typeof a.name==='string'&&a.name.length>0&&a.name.length<=255&&typeof a.type==='string'&&a.type.length<=100&&Number.isSafeInteger(a.size)&&a.size>0&&a.size<=MAX_FILE_SIZE&&a.chunks===Math.ceil(a.size/CHUNK_SIZE)&&typeof a.key==='string'&&/^[A-Za-z0-9_-]{43}$/.test(a.key)&&typeof a.nonce==='string'&&/^[A-Za-z0-9_-]{11}$/.test(a.nonce);
 }
 export function newAttachment(file){
-  if(!file.size||file.size>MAX_FILE_SIZE)throw new Error('Choose a file between 1 byte and 10 MB.');
+  if(!file.size||file.size>MAX_FILE_SIZE)throw new Error('Choose a file between 1 byte and 200 MB.');
   return {id:crypto.randomUUID(),name:(file.name||'file').slice(0,255),type:(file.type||'application/octet-stream').slice(0,100),size:file.size,chunks:Math.ceil(file.size/CHUNK_SIZE),key:b64(crypto.getRandomValues(new Uint8Array(32))),nonce:b64(crypto.getRandomValues(new Uint8Array(8)))};
 }
 export async function attachmentKey(a){

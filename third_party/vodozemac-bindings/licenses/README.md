@@ -1,0 +1,1 @@
+The two Apache-2.0 license texts come from https://github.com/matrix-org/matrix-pickle/blob/3eb007eae1ca87e3a3683c99a58fd19289abae52/LICENSE, matching the crate archives’ `.cargo_vcs_info.json`. Their registry archives omit the workspace-root license file. Retained here so notice generation needs no additional network lookup.

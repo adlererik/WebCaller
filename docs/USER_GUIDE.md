@@ -2,17 +2,17 @@
 
 ## Your browser is your device
 
-The first browser uses the owner's private setup QR/link. Other people accept an invitation. Device keys and your access token stay in that browser's IndexedDB. Use the same browser for later calls. Clearing site storage or changing browsers creates a new device; there is no password-based recovery or multi-device identity synchronization.
+The first browser uses the owner's private setup QR/link. Other people accept an invitation or dial an optional personal calling code. Device keys and your access token stay in that browser's IndexedDB. Use the same browser for later calls. Clearing site storage or changing browsers creates a new device; there is no password-based recovery or multi-device identity synchronization.
 
 ## Conversations and invitations
 
 **Invite someone** lets you enter the recipient’s name (optional), then **Create invitation** creates a link for one person. **Share invitation** opens the device's normal share sheet when supported; **Copy link** copies it. A recipient opens the full link, optionally enters a name and presses **Accept invitation**. The recipient’s name is already filled in if supplied. On iPhone/iPad, the link first explains how to add the website to the Home Screen, then accept from its icon. After acceptance, a short call-alert setup asks for notification permission and a locked-phone sound test. The link is single use and expires after 24 hours. Share it privately; its fragment contains the invite secret and inviter identity fingerprint.
 
-The left conversation list shows your contacts and unread indicators. **Search people** filters it locally. Tap a person to open their conversation. On narrow screens the back arrow returns to the list. Only established contacts can route messages or calls to one another.
+The left conversation list shows your contacts and unread indicators. **Search people** filters it locally. Tap a person to open their conversation. On narrow screens the back arrow returns to the list. Calling codes can also create a limited contact request; accepting, replying or answering saves the connection.
 
 Press and hold a person in the conversation list for about a second, then choose **Delete contact and history**. On a computer you can right-click; keyboard users can use Shift+F10 or the Context Menu key. The dialog explains the effect before you confirm. Cancel keeps everything.
 
-Removal disconnects the two contacts and deletes their shared messages, media, edits, receipts, reactions and pins from this server. Open phones clear that conversation and cached media; a closed phone learns the removal when it reconnects. A call with that person ends. Other conversations and your browser identity stay intact. To talk again, send a new invitation. Saved, forwarded or captured copies elsewhere cannot be recalled.
+Removal disconnects the two contacts and deletes their shared messages, media, edits, receipts, reactions and pins from this server. Open phones clear that conversation and cached media; a closed phone learns the removal when it reconnects. A call with that person ends. Other conversations and your browser identity stay intact. To talk again, use a calling code or send a new invitation, unless either identity has blocked the other. Saved, forwarded or captured copies elsewhere cannot be recalled.
 
 ## Voice and video
 
@@ -28,7 +28,11 @@ WebCaller uses full-duplex voice. On weak connections it reduces video first and
 
 Type a message and use the send button. Text is encrypted for sender and recipient device identities. Delivery to an offline recipient is queued as ciphertext until its expiry. There is no persistent plaintext browser outbox or offline cache: sending needs a working connection. The UI clears displayed plaintext when backgrounded and loads/decrypts available unexpired messages again on return.
 
-Settings → **Disappearing messages** chooses 30 seconds, 5 minutes, 1 hour, 24 hours (default), or 7 days for new messages you send in that conversation. The sender's signed timer starts at send time, including unread/offline messages. Changing the setting does not extend existing messages or override the other sender's timer. Copying/screenshotting content can preserve it outside WebCaller.
+Open a chat, tap its **Settings** cog, then **Disappearing messages**. Choose **Off**, **4 weeks**, **1 week**, **1 day** (the default), **8 hours**, **1 hour**, **5 minutes**, or **30 seconds**, then **Save**. For an exact time, tap **Custom time**, scroll the left wheel to a number and the right wheel to seconds, minutes, hours, days or weeks, tap **Set**, then **Save**. **Cancel** leaves the custom choice unchanged; going back without Save discards the draft. The longest timer is four weeks.
+
+This applies only to new messages you send in that conversation. Your countdown starts **when sent**. On the recipient’s phone, the full countdown starts **when they view the message in the chat**, even if your own copy has already disappeared. First viewing is remembered on that device: closing or refreshing the chat does not restart it. Visible messages are marked viewed after a brief on-screen check; opening a message’s actions or its media also counts. This applies to new timed text and media after this update. Older messages keep their original shared expiry.
+
+**Off** keeps new text and media until deleted; it does not restore expired messages. Changing the setting does not extend existing messages or override the other sender’s choice. Either participant can still deliberately delete for both phones. To make delayed viewing possible, the server keeps the recipient’s encrypted unread copy until it is viewed or deleted. Read acknowledgements retry after reconnection; browser suspension or no connection can delay server cleanup. Copying/screenshotting content can preserve it outside WebCaller. Refresh both phones after updating; an older open version cannot read the new timing envelopes. The current mailbox view loads the latest 500 available messages for the device, rather than unlimited scrollback.
 
 ## Photos, video, files and voice messages
 
@@ -36,7 +40,7 @@ The composer follows a rounded Signal-style layout: **Emoji**, message field, **
 
 Tap **Camera** for a live preview. Use the camera-switch button for a selfie or the main camera, then **Take photo**. **Phone camera** provides the browser’s native capture/picker fallback. Allow camera access when prompted. Tap **Microphone** to record a voice message; **Stop and preview** lets you listen before sending. Closing the recording discards it. Recording stops at five minutes. Voice notes request mono audio at 32 kbps, preferring AAC/MP4 when the browser can record it, then Opus/WebM or Ogg. Actual codec/rate depends on the browser.
 
-Tap **+** for a bottom sheet with **Gallery**, **File** and **Location**. **Gallery** opens your phone’s photo/video picker; **File** opens its file picker. Recent image/video previews from this open chat appear above the icons; tap one to preview sending it again. A website cannot automatically list your camera roll. Choose one item up to 10 MB. Preview it, add an optional caption and press **Send**. Contents, filename, media type, caption and file key are encrypted. The server sees transfer size, routing and expiry metadata. Files use this chat’s disappearing timer starting when sending begins; choose a longer timer for a large file on a slow connection.
+Tap **+** for a bottom sheet with **Gallery**, **File** and **Location**. **Gallery** opens your phone’s photo/video picker; **File** opens its file picker. Recent image/video previews from this open chat appear above the icons; tap one to preview sending it again. A website cannot automatically list your camera roll. Choose one item up to 200 MB. Preview it, add an optional caption and press **Send**. Contents, filename, media type, caption and file key are encrypted. The server sees transfer size, routing and expiry metadata. Files use this chat’s disappearing timer starting when sending begins; choose a longer timer for a large file on a slow connection.
 
 **Photos, video and audio load automatically on both sides when their bubbles are visible in the open chat.** Older off-screen media waits until you scroll to it. The first opening transfers that media. After sending or successfully opening a file, the phone keeps an encrypted local copy, so closing/reopening the chat, backgrounding the page or reloading normally does not transfer it again. Decrypted previews are still cleared when the page backgrounds. The copy follows the original disappearing timer and is removed when deletion is received; an offline phone learns remote deletion on reconnect before reopening media. Clearing website data, private browsing, low storage or browser eviction can require another download. Files not yet opened still need their first transfer. There is no automatic audio/video playback. Tap a photo or video to open the full-screen viewer; video has playback controls. Voice messages have an inline audio player and **Open audio** for the viewer. **Close media** or Escape returns to chat. Common raster images and MP4/WebM/Ogg media render through the browser’s own decoders. An unsupported codec can be saved instead. HTML/SVG and other files download as files and never execute inline. Files load only when requested.
 
@@ -144,3 +148,37 @@ Messages and files are end-to-end encrypted, but local readable history, metadat
 If your server has enabled it, open **Settings → Extra ringing · ntfy** and follow the short guide. Android has a **Connect this phone** button. On iPhone, copy the subscription topic into **Topic name**, switch on **Use another server**, then copy the server into **Service URL** and tap **Subscribe**. Use the long `wc_` topic from this phone, not the friendly name “Incoming calls.” No subscription password is needed for the supplied server setup.
 
 Return to WebCaller, press **Test the sound** and lock the phone. Confirm only after hearing it. If ntfy opens the wrong browser, return to your usual phone icon and choose the explicit phone-icon fallback. Calls and normal Web Push still work without ntfy. [Extra ringing](EXTRA_RINGING.md) explains sound changes, login/DNS troubleshooting and iPhone limitations.
+
+## Calling codes
+
+Choose **Settings → Your calling code**, enter an available number such as `4826`, and save. Friends open this website, tap **Dial a code**, enter your number and choose **Video call**, **Voice call** or **Message**. Their first visit sets up their own identity automatically. On iPhone, follow the one-time Home Screen guide and consistently use that icon. New people appear as contact requests; answering or replying accepts them. Unaccepted requests allow up to five text messages and no media uploads. You can accept or block them.
+
+Use the same browser/icon on later visits to continue your saved conversation, subject to its disappearing timer. A code cannot recover lost browser keys. Codes are public addresses, so compare the four call words on your first call. [Calling-code guide](CALLING_CODES.md) explains setup, blocking, security and operator controls.
+
+## Appearance and contact names
+
+Open **Settings → Appearance** and choose **Dark**, **Light**, or **Use phone setting** (the default). The choice takes effect immediately and stays selected on this browser. The automatic option follows changes to your phone’s appearance.
+
+Press and hold a person in the conversation list, or open their chat and choose **Conversation settings → Rename contact**. Change **Name on your phone** and tap **Save name**. Only you see this label; it does not change their device name, keys or conversation. **Use original name**, then **Save name**, restores their original name. The contact options retain **Delete contact and history**, with its separate confirmation; the combined block-and-delete shortcut has been removed from this menu. New contact requests still have a separate Block action.
+
+The keyboard icon opens **Dial a code**. Its field has no example number filled in. **Video call** is the primary action and pressing Enter starts video. Choose **Voice call** explicitly for audio only; incoming calls still require you to answer.
+
+## Contacts home screen
+
+Search contacts at the top. **Dial a code** starts a new connection using someone’s number; **Invite someone** shares an invitation link. Tap a contact’s name to open the chat, tap their camera button for a video call, or use their three-dot button for contact options such as renaming. Pressing and holding the name still opens those options. The bottom of the screen shows this phone’s name and connection status. The home screen follows your chosen appearance; the chat and call screens keep their existing layout.
+
+### Finding your settings
+
+Tap the cog on the home screen for phone settings, or the cog in an open chat for that conversation’s options. The grouped page keeps Appearance (Automatic, Light or Dark), Your calling code, contact naming, the message timer, Automatic connection management, Call alerts, optional Extra ringing with ntfy, the connection check and device removal. Open a conversation first to change its name or disappearing-message timer. Device removal still asks for confirmation.
+
+### Video orientation and app icon
+
+Calls show the complete camera frame when one person uses portrait and the other uses landscape or a desktop. Space beside or above the picture is expected when the shapes differ; rotate naturally without asking the other person to match you. The new handset mark appears in the browser, home screen metadata and notification icon. Existing Home Screen icons may remain cached. Keep your existing shortcut and site data; do not remove and reinstall the shortcut just to refresh its artwork, because some phones store that web app’s identity separately.
+
+## Sending a photo or large file while talking
+
+Tap the call's back arrow to open your chat, then **+ → Gallery** for a photo/video or **+ → File** for another document. Choose a file up to **200 MB** and tap **Send**. Your call continues. A spinner and percentage show progress; the recipient sees the completed photo/media in the chat. **Return to call** restores the picture.
+
+A strong connection can send much faster than earlier releases. Voice still takes priority: video temporarily reduces, and sharing may say **Waiting for connection · voice first** when the call needs the link. Leave the page visible; it resumes automatically when the call improves. Closing/backgrounding cancels the transfer, so choose it again when ready. Short disappearing timers may expire before a large file finishes; choose a longer timer or Off first.
+
+Verified encrypted media stays in this browser's cache until its local timer ends or it is deleted, subject to storage limits/eviction. Reopening the chat should use those bytes without downloading them again. A new browser/device has a separate cache. Very large files need enough phone memory/storage; failure to keep a local copy is reported and may require another download later.

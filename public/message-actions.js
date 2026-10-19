@@ -1,3 +1,4 @@
+import {isPermanent} from './message-lifetime.js';
 // Conversation state is deliberately memory-only and cleared on backgrounding.
 export function messageActions({messages,self,contacts,peer,render,event,sendText,sendFile,load,remove,toast,emoji}){
   const $=id=>document.getElementById(id);let chosen,editing,forwarding,replyTo,replyPeer,deleting=[];
@@ -44,7 +45,7 @@ export function messageActions({messages,self,contacts,peer,render,event,sendTex
   $('message-pin').onclick=async()=>{const m=chosen;close();if(!alive(m))return;try{await event(m,'pin',{pinned:!m.pinned});}catch(e){toast(e.message);}};
   $('message-info-button').onclick=()=>{
     const m=chosen;if(!alive(m))return;$('message-dialog').close();const el=$('message-info');el.replaceChildren();
-    for(const [name,value]of [['Sent',stamp(m.createdAt)],['Received',stamp(m.receipt?.deliveredAt)],['Seen',stamp(m.receipt?.readAt)],['Edited',m.editedAt?stamp(m.editedAt):'Never'],['Disappears',stamp(m.expiresAt)]]){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=name;dd.textContent=value;el.append(dt,dd);}
+    for(const [name,value]of [['Sent',stamp(m.createdAt)],['Received',stamp(m.receipt?.deliveredAt)],['Seen',stamp(m.receipt?.readAt)],['Edited',m.editedAt?stamp(m.editedAt):'Never'],['Disappears',m.lifetime&&!m.viewedAt&&m.from!==self()?'After you view this message':isPermanent(m.expiresAt)?'Never · Off':stamp(m.expiresAt)]]){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=name;dd.textContent=value;el.append(dt,dd);}
     $('message-info-dialog').showModal();
   };
   $('delete-message').onclick=()=>askDelete([chosen]);

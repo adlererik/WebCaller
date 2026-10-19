@@ -54,3 +54,9 @@ For the [native installation](INSTALL_NATIVE.md), keep the original installation
 On both phones, reopen/refresh the usual browser or Home Screen icon **without clearing site data**. Preserve the VAPID pair, database, identity pins and ratchet state. If dependencies or startup fail, keep the app stopped while restoring the prior source and its dependencies; a database migration may also require its matching backup. Read release-specific rollback notes rather than opening a migrated database with arbitrary old code.
 
 The optional `webcaller-ntfy.service` is separate. This source update does not reinstall its binary, alter its private ACL database or rewrite its tunnel route. Keep that service's private configuration and state too. A full server restart restarts enabled systemd services; confirm health and a locked-phone sound test afterward. The ntfy installer intentionally refuses an already configured installation.
+
+## Updating to v0.17.0
+
+Use the same installation method and preserve your private configuration, data volume/database and phone origin. Existing identities, contacts, Olm sessions, unread history, pins and SAS are retained. Refresh both phones after updating; older clients reject files above their old limit. Keep the existing iPhone Home Screen app and browser storage. The media cache upgrades additively and keeps old encrypted entries.
+
+The default file reservations increase to 1024 MiB per sender and 4096 MiB globally, with a 200 MiB per-file limit. Explicit old/lower quota settings are preserved; adjust only those fields if needed, following [Configuration](CONFIGURATION.md#file-limit-and-storage-upgrades). Leave all owner, push and relay credentials intact. Ensure enough free disk for database/journal overhead and any private backups. A restart/update can interrupt calls. Native installations remain native; this release does not require or automatically perform a Docker migration.

@@ -9,4 +9,6 @@ The UI is inspired by familiar private messaging interfaces. It is original appl
 
 The bundled Vodozemac WASM/JavaScript components provide Olm Double Ratchet messaging and the SAS X25519/HKDF/HMAC primitive. Their exact versions, upstream references and Apache-2.0 license are retained in [the vendor directory](public/vendor/vodozemac/).
 
+The current locally built binding adapts Towns Protocol's Apache-2.0 source for Vodozemac 0.11.1. Its [source/build instructions](third_party/vodozemac-bindings/README.md), dependency lock and generated dependency license notices are included. The previous Towns 0.1.0 package (Vodozemac 0.9.0) is retained only as a development-test dependency for compatibility checks; it is not a production/browser fallback.
+
 The 2048-word BIP-39 English list is used only as the optional call-comparison display alphabet. Source, authors, pinned revision and MIT license are in [third_party/bip39/NOTICE.txt](third_party/bip39/NOTICE.txt).

@@ -1,3 +1,4 @@
+import {dialEntry} from './dial-code.js';
 export function phonePlatform(nav=navigator,win=window){
   const ios=/iPhone|iPad|iPod/.test(nav.userAgent)||(/Mac/.test(nav.platform)&&nav.maxTouchPoints>1);
   const standalone=win.matchMedia('(display-mode: standalone)').matches||nav.standalone===true;
@@ -12,6 +13,12 @@ export function callSetup({api,config,device,save,toast}){
   function homeScreen(){
     page('Keep your phone ready','On iPhone and iPad, save this phone to your Home Screen to hear call alerts when it is closed.');
     $('alerts-help').classList.remove('hidden');$('alerts-help').innerHTML='<ol><li>Tap your browser’s <strong>Share</strong> button.</li><li>Choose <strong>Add to Home Screen</strong>, then <strong>Add</strong>. Keep <strong>Open as Web App</strong> on if shown.</li><li>Open the new phone icon and finish this invitation.</li></ol>';
+    const code=dialEntry(location.hash);
+    if(code){
+      $('alerts-help').innerHTML='<ol><li>Tap your browser’s <strong>Share</strong> button.</li><li>Choose <strong>Add to Home Screen</strong>, then <strong>Add</strong>. Keep <strong>Open as Web App</strong> on.</li><li>Open the new phone icon and enter calling code <strong>'+code+'</strong>.</li></ol>';
+      $('alerts-status').textContent='Do this once. Keep using that icon so your conversations stay together.';
+      button('Copy calling link for setup',async()=>{try{await navigator.clipboard.writeText(location.href);$('alerts-status').textContent='Copied. Add this page to your Home Screen, then open the new icon and dial '+code+'.';}catch{$('alerts-status').textContent='After adding the icon, open it and dial '+code+'.';}});return;
+    }
     if(!new URLSearchParams(location.hash.slice(1)).has('invite')){
       $('alerts-status').textContent='This Home Screen phone keeps a separate identity from an existing browser profile. Ask your contact for a fresh invitation for the new icon; your current conversations stay in this browser.';button('Got it',()=>dialog.close());return;
     }

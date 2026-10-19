@@ -21,8 +21,8 @@ Copy `.env.example` or use the installer/setup command. `.env` is private, ignor
 | APP_PORT | Host loopback HTTP port mapped to the app's internal 8080 |
 | TURN_PUBLIC_IP | Globally routable IPv4 for the self-hosted relay container |
 | TURN_LAN_IP | Fixed LAN IPv4 behind a home router; empty on directly public VPS |
-| ATTACHMENT_USER_QUOTA_MB | Pending/completed file plaintext-size reservation per sender, default 100 MB |
-| ATTACHMENT_GLOBAL_QUOTA_MB | Total reserved file size on this server, default 1024 MB |
+| ATTACHMENT_USER_QUOTA_MB | Pending/completed file plaintext-size reservation per sender, default 1024 MB |
+| ATTACHMENT_GLOBAL_QUOTA_MB | Total reserved file size on this server, default 4096 MB |
 | MAP_TILE_URL | Optional public HTTPS `{z}/{x}/{y}` tile template, or same-origin path; defaults to OpenStreetMap |
 | MAP_TILE_ATTRIBUTION | Visible copyright text for the selected tile provider; default © OpenStreetMap contributors |
 | MAP_TILE_ATTRIBUTION_URL | HTTPS copyright/license page shown with map cards |
@@ -38,7 +38,7 @@ Copy `.env.example` or use the installer/setup command. `.env` is private, ignor
 
 Compose profiles: default starts only the app; `--profile https` adds Caddy; `--profile turn` adds the Linux-host-networked relay. They can be combined. `.runtime/compose-profiles` is the private installer selection, not a public config file.
 
-Each file is limited to 10 MB. Quota values must be integers from 10 to 65536 MB; ciphertext tags and SQLite overhead consume additional storage.
+Each file is limited to 200 MB. Quota values must be integers from 10 to 65536 MB; ciphertext tags and SQLite overhead consume additional storage.
 
 Map configuration is public through `/api/config`; never put secret keys in these values. Select a provider whose terms permit browser tile previews, anonymous CORS canvas rendering and expected traffic. Set its required attribution text/URL together with the template. The default requests only displayed tiles with normal cache behavior and an origin referrer; no offline/bulk downloads. OpenStreetMap’s community tile service has no availability guarantee or paid subscription in this project. For larger deployments choose a suitable provider or self-host. See the [tile usage policy](https://operations.osmfoundation.org/policies/tiles/).
 
@@ -49,3 +49,13 @@ Leave `NTFY_PUBLIC_URL`, `NTFY_PUBLISH_URL` and `NTFY_PUBLISH_TOKEN` all empty t
 ## Prebuilt Docker files
 
 The [Docker bundle](../docker/README.md) separates release-pinned `images.env` from private `.env` installation choices and `config/app.env`, `config/turn.env`, ntfy/proxy configuration and a private optional connector-token file. App data, ntfy auth state and its publisher credential use separate persistent volumes; ntfy never mounts the app database or app environment. Use the supplied wrapper so both environment files are loaded. The setup wizard refuses existing configuration; upgrades preserve it.
+
+## Personal calling codes
+
+`DIAL_CODES_ENABLED` defaults to `true`. Each existing device remains unlisted until it chooses a code under Settings. Set it to `false` to disable code enrollment and code changes while preserving invitations and existing conversations. Codes enable new guest identities and limited contact requests; review [the calling-code guide](CALLING_CODES.md) before sharing codes publicly.
+
+## File limit and storage upgrades
+
+The per-file maximum is **200 MiB (209,715,200 bytes)**, shown as 200 MB in the UI. Fresh defaults reserve 1024 MiB per sender and 4096 MiB globally; these are totals across pending and committed files, not extra capacity per conversation. Disk use also includes ciphertext tags, database pages and journal overhead. Set limits for your available disk. A lower existing configured quota is preserved and may prevent a 200 MB file from being accepted.
+
+When upgrading an older source installation whose private `.env` explicitly says `ATTACHMENT_USER_QUOTA_MB=100`, change it to `1024` (or another suitable value at least `200`) if you want full-sized files. The global quota must also have enough free reservation. For the prebuilt stack edit `config/app.env`, then run `./webcaller start` to recreate the app with the new environment. For native systemd, restart the existing service after changing `.env`. Preserve all owner, push, TURN and ntfy credentials. No change to proxy upload limits is needed for the app's small chunk requests; each HTTP body remains at most 65,552 bytes.

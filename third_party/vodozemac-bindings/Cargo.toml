@@ -1,0 +1,23 @@
+[package]
+name = "webcaller-vodozemac"
+version = "0.2.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+name = "vodozemac"
+crate-type = ["cdylib"]
+
+[dependencies]
+vodozemac = { version = "=0.11.1", features = ["wasm_js", "libolm-compat", "low-level-api", "experimental-session-config"] }
+wasm-bindgen = "=0.2.100"
+js-sys = "=0.3.77"
+serde-wasm-bindgen = "=0.6.5"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "debuginfo"

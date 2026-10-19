@@ -2,6 +2,8 @@
 
 Use Node.js 24 (SQLite DatabaseSync is built in) and Python 3 for optional router/QR tools. All frontend assets are local; there is no bundler or third-party CDN. npm is the standard documented package manager; the original pnpm lock is also retained for source completeness.
 
+Browser crypto is shipped as checked-in WASM/JavaScript. Normal application installation needs no Rust tools. Maintainers updating it must use the [pinned binding build](../third_party/vodozemac-bindings/README.md), preserve full-authentication Olm V2 and pass actual old/new-engine interoperability tests. The exact previous engine is a development-only npm alias; production images omit it. The `Rebuild pinned browser crypto` workflow rebuilds and compares the checked-in artifacts without deployment credentials.
+
 ```sh
 npm ci
 npm run check
@@ -20,7 +22,7 @@ Read [CONTRIBUTING.md](../CONTRIBUTING.md). Small changes should include meaning
 
 ## Building a release
 
-Set the package version and CHANGELOG, run checks/tests/container smoke tests, stage source and run the source audit before committing. Tag the reviewed commit. `node scripts/package-release.mjs v0.16.1` archives only tracked files, produces ZIP/tar.gz and SHA256SUMS.txt under ignored .runtime/releases. Inspect both archives before uploading them to a GitHub release for that tag. Keep this an explicitly marked preview until its assurance and device-testing limits change. Never tar the working directory with .env/data/runtime included. The GitHub automatic source archives are also available.
+Set the package version and CHANGELOG, run checks/tests/container smoke tests, stage source and run the source audit before committing. Tag the reviewed commit. `node scripts/package-release.mjs v0.17.0` archives only tracked files, produces ZIP/tar.gz and SHA256SUMS.txt under ignored .runtime/releases. Inspect both archives before uploading them to a GitHub release for that tag. Release status is a distribution choice, not a security certification. State the independent-audit and physical-device testing limits in every release; use prerelease status for unfinished builds. Never tar the working directory with .env/data/runtime included. The GitHub automatic source archives are also available.
 
 CI runs install, syntax, tests, tracked-source audit and builds the app/relay containers with read-only repository permissions. It uses pinned action commits. No deployment, signing key or provider secret is required to test this source.
 
@@ -44,4 +46,4 @@ Copy the tracked `docker/` files and root `LICENSE` to a fresh installation fold
 
 `Prebuilt Docker images` CI builds and runs disposable real stacks on native amd64 and arm64 runners. Its publishing mode is manually dispatched with an existing reviewed version tag; it tests before pushing architecture tags and combines them only after both pass. Release tags are not overwritten. All three project variants share the public `ghcr.io/adlererik/webcaller` package with version, `-setup` and `-turn` tags; set that package public and verify anonymous pulls before advertising downloads. The source/revision labels link builds to the project.
 
-After publication, obtain the three multi-architecture manifest digests and run `node scripts/package-release.mjs v0.16.1 PATH_TO_DIGEST_JSON`. That JSON maps `WEBCALLER_IMAGE`, `SETUP_IMAGE` and `TURN_IMAGE` to their `sha256:` digests. This produces the normal source archives plus small Docker ZIP/tar bundles and one checksum file. The Docker bundle includes only its six public files and pins every image; it never includes generated configuration or a data volume. Measure compressed platform layers after publication when reporting download size; shared layers may reduce actual transfer.
+After publication, obtain the three multi-architecture manifest digests and run `node scripts/package-release.mjs v0.17.0 PATH_TO_DIGEST_JSON`. That JSON maps `WEBCALLER_IMAGE`, `SETUP_IMAGE` and `TURN_IMAGE` to their `sha256:` digests. This produces the normal source archives plus small Docker ZIP/tar bundles and one checksum file. The Docker bundle includes only its six public files and pins every image; it never includes generated configuration or a data volume. Measure compressed platform layers after publication when reporting download size; shared layers may reduce actual transfer.

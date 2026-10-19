@@ -148,6 +148,30 @@ test('WebSocket routes encrypted calls and replays invitations after reconnect',
   const delivered=once(a,'message');b.send(JSON.stringify({type:'signal',kind:'answer',callId,envelope:response}));
   assert.equal(JSON.parse((await delivered)[0]).kind,'answer');a.close();b.close();
 });
+test('answering silences sibling tabs and a second tab cannot replace the accepted answer',{timeout:10000},async t=>{
+ const f=await fixture();t.after(()=>f.app.close());const {bob}=await f.pair();
+ const a=await f.socket(f.alice),b=await f.socket(bob),sibling=await f.socket(bob);const callId=randomUUID();
+ const peer={id:bob.user.id,keys:bob.identity.keys},sender={id:f.alice.user.id,keys:f.alice.identity.keys};
+ const offer=await seal(f.alice.identity,f.alice.user.id,peer,{kind:'offer',callId},90);
+ const arrived=Promise.all([once(b,'message'),once(sibling,'message')]);a.send(JSON.stringify({type:'signal',kind:'offer',callId,envelope:offer}));await arrived;
+ const answer=await seal(bob.identity,bob.user.id,sender,{kind:'answer',callId},120),accepted=once(a,'message'),silenced=once(sibling,'message');
+ b.send(JSON.stringify({type:'signal',kind:'answer',callId,envelope:answer}));assert.equal(JSON.parse((await accepted)[0]).kind,'answer');assert.deepEqual(JSON.parse((await silenced)[0]),{type:'call-answered',callId});
+ let answers=0;a.on('message',raw=>{if(JSON.parse(raw).kind==='answer')answers++;});
+ const duplicate=once(sibling,'message');sibling.send(JSON.stringify({type:'signal',kind:'answer',callId,envelope:await seal(bob.identity,bob.user.id,sender,{kind:'answer',callId},120)}));assert.equal(JSON.parse((await duplicate)[0]).type,'call-answered');
+ const pong=once(b,'message');b.send(JSON.stringify({type:'ping'}));assert.equal(JSON.parse((await pong)[0]).type,'pong');assert.equal(answers,0);
+ assert.equal((await f.request('/calls/'+callId,{token:bob.token})).body.state,'answered');
+ const blocked=once(sibling,'message');sibling.send(JSON.stringify({type:'signal',kind:'hangup',callId,envelope:await seal(bob.identity,bob.user.id,sender,{kind:'hangup',callId},120)}));assert.equal(JSON.parse((await blocked)[0]).type,'call-answered');
+ assert.equal((await f.request('/calls/'+callId,{token:bob.token})).body.state,'answered');
+ const ended=Promise.all([once(a,'message'),once(b,'message'),once(sibling,'message')]);b.send(JSON.stringify({type:'signal',kind:'hangup',callId,envelope:await seal(bob.identity,bob.user.id,sender,{kind:'hangup',callId},120)}));
+ const final=(await ended).map(([raw])=>JSON.parse(raw));assert.equal(final[0].kind,'hangup');assert.equal(final[1].type,'call-ended');assert.equal(final[2].type,'call-ended');
+ a.close();b.close();sibling.close();
+});
+test('late and unauthorized call errors identify the request without accepting an unknown call',{timeout:10000},async t=>{
+ const f=await fixture();t.after(()=>f.app.close());const {bob}=await f.pair(),a=await f.socket(f.alice),callId=randomUUID();
+ const envelope=await seal(f.alice.identity,f.alice.user.id,{id:bob.user.id,keys:bob.identity.keys},{kind:'ice',callId},90),error=once(a,'message');
+ a.send(JSON.stringify({type:'signal',kind:'ice',callId,envelope}));assert.deepEqual(JSON.parse((await error)[0]),{type:'error',error:'Unknown call',callId,kind:'ice'});
+ assert.equal((await f.request('/calls/'+callId,{token:f.alice.token})).body.state,'ended');a.close();
+});
 test('encrypted attachments require complete upload, stay private and disappear with device/expiry',async t=>{
  const f=await fixture();t.after(()=>f.app.close());const {bob}=await f.pair(),{bob:other}=await f.pair();
  const file=new File([new Uint8Array(CHUNK_SIZE+3).fill(83)],'hidden-filename.txt',{type:'text/plain'}),a=newAttachment(file);
@@ -182,7 +206,7 @@ test('encrypted attachments require complete upload, stay private and disappear 
  f.app.store.purge(pending.expiresAt+1);assert.equal(f.app.store.get('SELECT COUNT(*) AS n FROM attachments').n,0);
 });
 test('attachment size and storage quotas prevent unbounded uploads',async t=>{
- const f=await fixture(false,{ATTACHMENT_USER_QUOTA_MB:'10',ATTACHMENT_GLOBAL_QUOTA_MB:'10'});t.after(()=>f.app.close());const {bob}=await f.pair();
+ const f=await fixture(false,{ATTACHMENT_USER_QUOTA_MB:'200',ATTACHMENT_GLOBAL_QUOTA_MB:'200'});t.after(()=>f.app.close());const {bob}=await f.pair();
  const make=()=>seal(f.alice.identity,f.alice.user.id,{id:bob.user.id,keys:bob.identity.keys},{kind:'attachment'},60);
  const first={id:randomUUID(),size:MAX_FILE_SIZE,envelope:await make()};
  assert.equal((await f.request('/attachments',{method:'POST',token:f.alice.token,body:{...first,size:MAX_FILE_SIZE+1}})).status,400);
@@ -283,12 +307,12 @@ test('answered and cancelled calls stop real server reminders; call status is pa
   async function signal(socket,from,to,kind,callId){const envelope=await seal(from.identity,from.user.id,{id:to.user.id,keys:to.identity.keys},{kind,callId},90);socket.send(JSON.stringify({type:'signal',kind,callId,envelope}));}
   const id=randomUUID(),incoming=once(b,'message');await signal(a,f.alice,bob,'offer',id);await incoming;
   assert.equal((await f.request('/calls/'+id,{token:bob.token})).body.state,'ringing');assert.equal((await f.request('/calls/'+id,{token:outsider.token})).status,404);
-  const answered=once(a,'message');await signal(b,bob,f.alice,'answer',id);await answered;await new Promise(r=>setTimeout(r,200));
-  assert.equal(deliveries.length,1);assert.ok(deliveries[0].options.TTL<=20);assert.equal(deliveries[0].options.urgency,'high');assert.equal(deliveries[0].payload.mutable,true);assert.equal((await f.request('/calls/'+id,{token:bob.token})).body.state,'answered');
+  const answered=once(a,'message');await signal(b,bob,f.alice,'answer',id);await answered;const answeredCount=deliveries.length;await new Promise(r=>setTimeout(r,200));
+  assert.ok(answeredCount>=1);assert.equal(deliveries.length,answeredCount);assert.ok(deliveries[0].options.TTL<=20);assert.equal(deliveries[0].options.urgency,'high');assert.equal(deliveries[0].payload.mutable,true);assert.equal((await f.request('/calls/'+id,{token:bob.token})).body.state,'answered');
   const ended=once(b,'message');await signal(a,f.alice,bob,'hangup',id);await ended;
   assert.equal((await f.request('/calls/'+id,{token:bob.token})).body.state,'ended');
-  const next=randomUUID(),again=once(b,'message');await signal(a,f.alice,bob,'offer',next);await again;const cancel=once(b,'message');await signal(a,f.alice,bob,'hangup',next);await cancel;await new Promise(r=>setTimeout(r,200));
-  assert.equal(deliveries.length,2);
+  const next=randomUUID(),again=once(b,'message');await signal(a,f.alice,bob,'offer',next);await again;const cancel=once(b,'message');await signal(a,f.alice,bob,'hangup',next);await cancel;const cancelledCount=deliveries.length;await new Promise(r=>setTimeout(r,200));
+  assert.ok(cancelledCount>answeredCount);assert.equal(deliveries.length,cancelledCount);
 });
 test('location preview and coordinates are encrypted for both phones and deleted together',async t=>{
  const f=await fixture();t.after(()=>f.app.close());const {bob}=await f.pair();
@@ -426,7 +450,7 @@ test('message push opens the correct sender conversation without plaintext names
  const p=deliveries[0];assert.equal(p.messageId,e.id);assert.equal(p.peerId,f.alice.user.id);assert.equal(p.recipientId,bob.user.id);assert.equal(p.notification.title,'New message');assert.equal(p.notification.navigate,'https://example.com/calls/');assert.ok(!JSON.stringify(p).includes('Synthetic secret text'));assert.ok(!JSON.stringify(p).includes('Alice'));assert.ok(!JSON.stringify(p).includes('Private'));
 });
 
-test('optional ntfy runs alongside web push, ignores client destinations, and stops both reminders on decline',async t=>{
+test('confirmed ntfy suppresses duplicate browser call pushes and stops reminders on decline',async t=>{
   const native=[],pushes=[];
   const f=await fixture(true,{NTFY_PUBLIC_URL:'https://notify.example.com',NTFY_PUBLISH_URL:'http://127.0.0.1:8094',NTFY_PUBLISH_TOKEN:'tk_synthetic_publisher_token',NTFY_IOS_UPSTREAM:'true'},
     {ntfyFetch:async(url,opts)=>{native.push({url,...JSON.parse(opts.body)});return new Response('{}');},sendPush:async(...a)=>pushes.push(a),alertTiming:{delays:[120,240]}});
@@ -442,8 +466,82 @@ test('optional ntfy runs alongside web push, ignores client destinations, and st
   const a=await f.socket(f.alice),callId=randomUUID(),envelope=await seal(f.alice.identity,f.alice.user.id,{id:bob.user.id,keys:bob.identity.keys},{kind:'offer',callId,description:{sdp:'Never send SDP to ntfy'}},90);
   a.send(JSON.stringify({type:'signal',kind:'offer',callId,envelope}));
   for(let n=0;n<50&&native.length<1;n++)await new Promise(r=>setTimeout(r,2));
-  assert.equal(native.length,1);assert.equal(native[0].topic,linked.topic);assert.equal(pushes.length,1);assert.ok(!JSON.stringify(native).includes('Never send SDP'));
+  assert.equal(native.length,1);assert.equal(native[0].topic,linked.topic);assert.equal(pushes.length,0);assert.ok(!JSON.stringify(native).includes('Never send SDP'));
   assert.equal((await f.request('/calls/'+callId+'/decline',{method:'POST',token:bob.token,body:{}})).status,200);
-  await new Promise(r=>setTimeout(r,280));assert.equal(native.length,1);assert.equal(pushes.length,1);
+  await new Promise(r=>setTimeout(r,280));assert.equal(native.length,1);assert.equal(pushes.length,0);
   assert.equal((await f.request('/ntfy',{method:'DELETE',token:bob.token})).status,200);assert.equal(f.app.store.get('SELECT COUNT(*) n FROM push').n,1);a.close();
+});
+
+async function alertPair(t,{publish=async()=>new Response('{}'),delays=[]}={}){
+ const native=[],pushes=[];
+ const f=await fixture(true,{NTFY_PUBLIC_URL:'https://notify.example.com',NTFY_PUBLISH_URL:'http://127.0.0.1:8094',NTFY_PUBLISH_TOKEN:'tk_synthetic_publisher_token'},
+  {ntfyFetch:async(...args)=>{native.push(JSON.parse(args[1].body));return publish(...args);},sendPush:async(subscription,payload)=>pushes.push(JSON.parse(payload)),alertTiming:{delays}});
+ t.after(()=>f.app.close());const {bob}=await f.pair(),a=await f.socket(f.alice);t.after(()=>a.close());
+ f.app.store.run('INSERT INTO push(owner,endpoint,subscription,confirmed) VALUES(?,?,?,1)',bob.user.id,'https://fcm.googleapis.com/synthetic-routing',JSON.stringify({endpoint:'https://fcm.googleapis.com/synthetic-routing',keys:{auth:'synthetic',p256dh:'synthetic'}}));
+ async function link(confirmed=true){await f.request('/ntfy',{method:'POST',token:bob.token,body:{}});if(confirmed)f.app.store.run('UPDATE ntfy_devices SET confirmed=123 WHERE owner=?',bob.user.id);}
+ async function offer(){const id=randomUUID(),envelope=await seal(f.alice.identity,f.alice.user.id,{id:bob.user.id,keys:bob.identity.keys},{kind:'offer',callId:id,description:{type:'offer',sdp:'Synthetic encrypted SDP'}},90);a.send(JSON.stringify({type:'signal',kind:'offer',callId:id,envelope}));return {id,envelope};}
+ async function decline(id){assert.equal((await f.request('/calls/'+id+'/decline',{method:'POST',token:bob.token,body:{}})).status,200);}
+ return {...f,bob,native,pushes,offer,decline,link,callerSocket:a};
+}
+const waitAlerts=async predicate=>{for(let n=0;n<600&&!predicate();n++)await new Promise(r=>setTimeout(r,10));assert.ok(predicate(),'Expected notification delivery did not finish');};
+
+for(const mode of ['absent','unconfirmed','browser preference'])test(`browser call alerts remain available with ntfy ${mode}`,async t=>{
+ const f=await alertPair(t);
+ if(mode!=='absent')await f.link(mode==='browser preference');
+ if(mode==='browser preference')assert.equal((await f.request('/ntfy/preference',{method:'POST',token:f.bob.token,body:{useNtfy:false}})).status,200);
+ await f.offer();await waitAlerts(()=>f.pushes.length===1);assert.equal(f.native.length,0);assert.equal(f.pushes[0].type,'call');
+});
+
+for(const mode of ['rejected','network failure','timeout'])test(`ntfy ${mode} falls back to browser call alerts`,{timeout:10000},async t=>{
+ const publish=mode==='rejected'?async()=>new Response('{}',{status:503}):mode==='network failure'?async()=>{throw Error('Synthetic offline relay');}:async(_,o)=>new Promise((resolve,reject)=>o.signal.addEventListener('abort',()=>reject(o.signal.reason),{once:true}));
+ const f=await alertPair(t,{publish});await f.link();await f.offer();await waitAlerts(()=>f.pushes.length===1);
+ assert.equal(f.native.length,1);assert.equal(f.pushes[0].type,'call');
+});
+
+test('a failed ntfy call stays on browser reminders; a new call tries ntfy again',async t=>{
+ let fail=true;const f=await alertPair(t,{delays:[50,100],publish:async()=>new Response('{}',{status:fail?503:200})});await f.link();
+ const first=await f.offer();await waitAlerts(()=>f.pushes.length===3);assert.equal(f.native.length,1);await f.decline(first.id);
+ fail=false;const next=await f.offer();await waitAlerts(()=>f.native.length===4);assert.equal(f.pushes.length,3);await f.decline(next.id);
+});
+
+for(const action of ['decline','answer','hangup'])test(`${action} during a pending ntfy publish prevents a late browser fallback`,async t=>{
+ const f=await alertPair(t,{publish:async(_,o)=>new Promise((resolve,reject)=>o.signal.addEventListener('abort',()=>reject(o.signal.reason),{once:true}))});await f.link();
+ const first=await f.offer();await waitAlerts(()=>f.native.length===1);
+ if(action==='decline')await f.decline(first.id);
+ else{
+  const user=action==='answer'?f.bob:f.alice,peer=action==='answer'?f.alice:f.bob,socket=action==='answer'?await f.socket(f.bob):f.callerSocket;
+  if(action==='answer')t.after(()=>socket.close());
+  const envelope=await seal(user.identity,user.user.id,{id:peer.user.id,keys:peer.identity.keys},{kind:action,callId:first.id},90);
+  socket.send(JSON.stringify({type:'signal',kind:action,callId:first.id,envelope}));
+ }
+ let state;
+ for(let i=0;i<30;i++){state=(await f.request('/calls/'+first.id,{token:f.bob.token})).body.state;if(state===(action==='answer'?'answered':'ended'))break;await new Promise(r=>setTimeout(r,5));}
+ assert.equal(state,action==='answer'?'answered':'ended');await new Promise(r=>setTimeout(r,30));assert.equal(f.pushes.length,0);
+});
+
+test('a caller ntfy subscription cannot suppress another recipient browser alerts',async t=>{
+ const f=await alertPair(t);await f.request('/ntfy',{method:'POST',token:f.alice.token,body:{}});
+ f.app.store.run('UPDATE ntfy_devices SET confirmed=1 WHERE owner=?',f.alice.user.id);
+ await f.offer();await waitAlerts(()=>f.pushes.length===1);assert.equal(f.native.length,0);
+});
+
+test('ntfy preferences are authenticated and origin checked, while text message pushes remain on',async t=>{
+ const f=await alertPair(t);await f.link();
+ assert.equal((await f.request('/ntfy/preference',{method:'POST',body:{useNtfy:false}})).status,401);
+ assert.equal((await f.request('/ntfy/preference',{method:'POST',token:f.bob.token,requestOrigin:'https://evil.test',body:{useNtfy:false}})).status,403);
+ const e=await seal(f.alice.identity,f.alice.user.id,{id:f.bob.user.id,keys:f.bob.identity.keys},{kind:'text',text:'Synthetic text with ntfy enabled'},60);
+ assert.equal((await f.request('/messages',{method:'POST',token:f.alice.token,body:e})).status,201);await waitAlerts(()=>f.pushes.length===1);
+ assert.equal(f.pushes[0].type,'message');assert.equal(f.native.length,0);assert.equal(f.app.store.get('SELECT preferred FROM ntfy_devices WHERE owner=?',f.bob.user.id).preferred,1);
+});
+
+test('notification call opening returns only the waiting recipient encrypted offer and never answers it',async t=>{
+ const f=await alertPair(t),{bob:outsider}=await f.pair();const c=await f.offer();await waitAlerts(()=>f.pushes.length===1);
+ const path='/calls/'+c.id+'?offer=1';assert.equal((await f.request(path)).status,401);
+ assert.equal((await f.request(path,{token:outsider.token})).status,404);
+ assert.equal((await f.request(path,{token:f.alice.token})).body.offer,undefined);
+ assert.equal((await f.request('/calls/'+c.id,{token:f.bob.token})).body.offer,undefined);
+ const info=(await f.request(path,{token:f.bob.token})).body;
+ assert.equal(info.state,'ringing');assert.equal(info.canAnswer,true);assert.deepEqual(info.offer,{kind:'offer',callId:c.id,envelope:c.envelope});
+ assert.equal((await open(f.bob.identity,f.bob.user.id,{id:f.alice.user.id,keys:f.alice.identity.keys},info.offer.envelope)).description.sdp,'Synthetic encrypted SDP');
+ await f.decline(c.id);const ended=(await f.request(path,{token:f.bob.token})).body;assert.equal(ended.canAnswer,false);assert.equal(ended.offer,undefined);
 });

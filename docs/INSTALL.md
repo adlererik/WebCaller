@@ -31,16 +31,16 @@ Download the release:
 ```sh
 sudo apt update
 sudo apt install -y curl tar
-curl -fL https://github.com/adlererik/WebCaller/releases/download/v0.16.1/WebCaller-v0.16.1.tar.gz -o WebCaller-v0.16.1.tar.gz
-curl -fL https://github.com/adlererik/WebCaller/releases/download/v0.16.1/SHA256SUMS.txt -o SHA256SUMS.txt
+curl -fL https://github.com/adlererik/WebCaller/releases/download/v0.17.0/WebCaller-v0.17.0.tar.gz -o WebCaller-v0.17.0.tar.gz
+curl -fL https://github.com/adlererik/WebCaller/releases/download/v0.17.0/SHA256SUMS.txt -o SHA256SUMS.txt
 ```
 
 Check the archive before extracting:
 
 ```sh
-grep 'WebCaller-v0.16.1.tar.gz$' SHA256SUMS.txt | sha256sum -c -
-tar -xzf WebCaller-v0.16.1.tar.gz
-cd WebCaller-v0.16.1
+grep 'WebCaller-v0.17.0.tar.gz$' SHA256SUMS.txt | sha256sum -c -
+tar -xzf WebCaller-v0.17.0.tar.gz
+cd WebCaller-v0.17.0
 ```
 
 A successful checksum says `OK`. Stop if it fails. Alternatively download/extract the ZIP on your computer and copy the folder to your server.

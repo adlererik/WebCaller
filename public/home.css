@@ -1,0 +1,109 @@
+/* Contacts home only. Chat, calling screens and dialogs keep their own styles. */
+:root .sidebar {
+  --home-bg: #fbfcff;
+  --home-card: #fff;
+  --home-line: #e5e9f1;
+  --home-ink: #172235;
+  --home-muted: #626f83;
+  --home-soft: #f0f3f9;
+  --home-accent: #2868e8;
+  --home-tint: #eaf1ff;
+  --home-accent-ink: #2866db;
+  padding: 24px 20px 18px;
+  min-height: 0;
+  background: var(--home-bg);
+  color: var(--home-ink);
+  border-color: var(--home-line);
+}
+:root[data-theme="dark"] .sidebar {
+  --home-bg: #16191f;
+  --home-card: #20252e;
+  --home-line: #2c323e;
+  --home-ink: #f2f5fc;
+  --home-muted: #a1adbf;
+  --home-soft: #222731;
+  --home-tint: #233657;
+  --home-accent-ink: #a7c7ff;
+}
+:root .sidebar .brand { gap: 10px; margin: 0 0 23px; }
+:root .sidebar .brand-icon { width: 38px; height: 38px; border-radius: 13px; background: var(--home-accent); }
+:root .sidebar .brand-icon svg { width: 24px; height: 24px; }
+:root .sidebar .brand h1 { color: var(--home-ink); font-size: 24px; letter-spacing: -.7px; margin: 0 0 3px; line-height: 1.1; }
+:root .sidebar .brand .subtle { color: var(--home-muted); font-size: 12px; }
+:root .sidebar .brand > .icon-button { width: 44px; height: 44px; border-radius: 15px; color: var(--home-muted); background: var(--home-soft); }
+:root .sidebar .brand > .icon-button svg { width: 23px; height: 23px; }
+:root .sidebar .search { flex-shrink: 0; min-height: 49px; padding: 12px 15px; margin: 0 0 16px; gap: 11px; border: 1px solid transparent; border-radius: 16px; background: var(--home-soft); color: var(--home-muted); }
+:root .sidebar .search:focus-within { border-color: var(--home-accent); }
+:root .sidebar .search svg { width: 20px; height: 20px; }
+:root .sidebar .search input { font-size: 16px; color: var(--home-ink); min-width: 0; }
+:root .sidebar .search input::placeholder { color: var(--home-muted); opacity: 1; }
+:root .sidebar #dial-open { margin: 0; }
+.sidebar .home-actions { display: grid; grid-template-columns: repeat(auto-fit,minmax(120px,1fr)); gap: 12px; margin-bottom: 22px; flex-shrink: 0; }
+.sidebar .home-action { min-height: 113px; border-radius: 21px; padding: 15px; display: flex; flex-direction: column; align-items: flex-start; text-align: left; border: 1px solid var(--home-line); background: var(--home-card); color: var(--home-ink); }
+.sidebar .home-action-icon { margin-bottom: 10px; color: var(--home-accent-ink); }
+.sidebar .home-action-icon svg { width: 27px; height: 27px; stroke-width: 1.7; }
+.sidebar .home-action strong { font-size: 14px; line-height: 1.4; font-weight: 650; white-space: nowrap; }
+.sidebar .home-action-note { font-size: 11px; line-height: 1.5; color: var(--home-muted); margin-top: 2px; }
+.sidebar .home-dial { background: var(--home-accent); color: #fff; border-color: transparent; box-shadow: 0 5px 14px #3478f620; }
+.sidebar .home-dial .home-action-icon { color: #fff; }
+.sidebar .home-dial .home-action-note { color: #f4f7ff; }
+:root .sidebar .sidebar-heading { margin: 0 2px 6px; flex-shrink: 0; }
+:root .sidebar .sidebar-heading h2 { margin: 0; font-size: 18px; font-weight: 650; letter-spacing: -.3px; color: var(--home-ink); }
+:root .sidebar .count { min-width: 24px; padding: 4px 7px; text-align: center; font-size: 11px; font-variant-numeric: tabular-nums; border-radius: 8px; background: var(--home-soft); color: var(--home-muted); }
+:root .sidebar .contacts { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.sidebar .person-row { display: flex; align-items: center; gap: 2px; position: relative; }
+.sidebar .person-row + .person-row::before { content: ''; position: absolute; height: 1px; background: var(--home-line); top: 0; left: 62px; right: 2px; opacity: .65; pointer-events: none; }
+:root .sidebar .contact { flex: 1; min-width: 0; min-height: 78px; padding: 13px 5px 13px 0; margin: 0; gap: 12px; border-radius: 16px; color: var(--home-ink); background: transparent; }
+:root .sidebar .contact:hover, :root .sidebar .contact.selected { background: var(--home-soft); }
+:root .sidebar .avatar { width: 49px; height: 49px; font-size: 17px; font-weight: 600; letter-spacing: -.5px; background: #e2ebff; color: #3765b1; }
+:root .sidebar .avatar[data-tone="1"] { background: #dcefe9; color: #247b68; }
+:root .sidebar .avatar[data-tone="2"] { background: #ece5f9; color: #7c58a6; }
+:root .sidebar .avatar[data-tone="3"] { background: #f5e5de; color: #a76b4d; }
+:root .sidebar .avatar[data-tone="4"] { background: #dfeef6; color: #407b99; }
+:root[data-theme="dark"] .sidebar .avatar { background: #2b3c59; color: #b9d0f9; }
+:root[data-theme="dark"] .sidebar .avatar[data-tone="1"] { background: #24483f; color: #a4d8c9; }
+:root[data-theme="dark"] .sidebar .avatar[data-tone="2"] { background: #403452; color: #d4bfef; }
+:root[data-theme="dark"] .sidebar .avatar[data-tone="3"] { background: #4b3933; color: #e7c4ae; }
+:root[data-theme="dark"] .sidebar .avatar[data-tone="4"] { background: #2b414e; color: #b6d7e6; }
+:root .sidebar .contact-text strong { font-size: 16px; font-weight: 600; margin: 0; color: var(--home-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:root .sidebar .contact-text span { font-size: 11px; color: var(--home-muted); margin-top: 5px; }
+.sidebar .person-actions { display: flex; align-items: center; gap: 1px; flex-shrink: 0; }
+.sidebar .person-actions button { display: inline-flex; justify-content: center; align-items: center; height: 44px; flex-shrink: 0; }
+.sidebar .home-call { width: 44px; border-radius: 15px; background: var(--home-tint); color: var(--home-accent-ink); }
+.sidebar .home-call svg { width: 22px; height: 22px; }
+.sidebar .home-contact-options { width: 44px; border-radius: 12px; color: var(--home-muted); background: transparent; }
+.sidebar .home-contact-options svg { width: 21px; height: 21px; transform: rotate(90deg); }
+:root .sidebar .unread { background: var(--home-accent); color: #fff; min-width: 19px; flex-shrink: 0; font-size: 10px; padding: 3px 5px; text-align: center; }
+:root .sidebar .no-contacts { color: var(--home-muted); font-size: 14px; padding: 34px 16px; white-space: pre-line; line-height: 1.7; }
+:root .sidebar .sidebar-footer { gap: 11px; flex-shrink: 0; padding-top: 15px; margin-top: 12px; min-height: 53px; border-color: var(--home-line); }
+:root .sidebar .device-avatar { width: 35px; height: 35px; background: var(--home-tint); color: var(--home-accent-ink); font-size: 13px; }
+:root .sidebar .sidebar-footer strong { font-size: 13px; color: var(--home-ink); margin: 0 0 4px; }
+:root .sidebar .connection { font-size: 11px; color: var(--home-muted); gap: 6px; }
+.sidebar .home-action:focus-visible, .sidebar .person-actions button:focus-visible, .sidebar .contact:focus-visible { outline-offset: -3px; }
+@media (max-width:760px) {
+  :root .sidebar { padding: 19px 20px max(14px,env(safe-area-inset-bottom)); }
+  :root .sidebar .brand { margin-bottom: 22px; }
+}
+@media (max-width:350px) {
+  :root .sidebar { padding-left: 16px; padding-right: 16px; }
+  .sidebar .home-actions { gap: 10px; }
+  .sidebar .home-action { padding: 14px 12px; }
+  :root .sidebar .avatar { width: 44px; height: 44px; }
+  :root .sidebar .contact { gap: 10px; }
+  :root .sidebar .contact-text strong { font-size: 15px; }
+}
+@media (max-height:720px) and (max-width:760px) {
+  :root .sidebar .brand { margin-bottom: 12px; }
+  :root .sidebar .search { margin-bottom: 12px; }
+  .sidebar .home-actions { margin-bottom: 16px; }
+  .sidebar .home-action { min-height: 94px; padding-top: 10px; padding-bottom: 10px; }
+  .sidebar .home-action-icon { margin-bottom: 6px; }
+  .sidebar .home-action-icon svg { width: 24px; height: 24px; }
+  :root .sidebar .sidebar-footer { margin-top: 8px; padding-top: 12px; }
+  :root .sidebar .contact { min-height: 75px; }
+}
+
+@media (max-width:760px) {
+  :root .sidebar .contacts { scrollbar-width: none; }
+  .sidebar .contacts::-webkit-scrollbar { display: none; }
+}

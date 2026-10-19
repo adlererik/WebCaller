@@ -32,7 +32,7 @@ export function ntfyAlerts({env,publicURL,store,body,fail,rate,fetcher=fetch,tes
   function prune(){for(const [id,test]of tests)if(test.expiresAt<=Date.now()){clearTimeout(test.timer);timers.delete(test.timer);tests.delete(id);}}
   function view(owner){
     prune();const r=row(owner),pending=[...tests.entries()].find(([,t])=>t.owner===owner&&t.topic===r?.topic);
-    return {available:!!config,iosInstant:!!config?.iosInstant,connected:!!r,confirmed:!!r?.confirmed,
+    return {available:!!config,iosInstant:!!config?.iosInstant,connected:!!r,confirmed:!!r?.confirmed,preferred:!!r?.preferred,
       ...(pending?{pendingTest:{testId:pending[0],sent:pending[1].sent,delivered:pending[1].ok,opened:pending[1].opened}}:{}),
       ...(config&&r?{server:config.origin,topic:r.topic,link:`ntfy://${new URL(config.origin).host}/${r.topic}?display=Incoming%20calls`}:{})};
   }
@@ -41,10 +41,10 @@ export function ntfyAlerts({env,publicURL,store,body,fail,rate,fetcher=fetch,tes
     if(!config||closed||expiresAt<=Date.now()||row(r.owner)?.topic!==r.topic)return false;
     const controller=new AbortController(),job={controller,owner:r.owner,callId};active.add(job);
     const click=opening(r.owner,testId?'ntfy-test':'incoming-call',testId||callId);
-    const payload={topic:r.topic,title:testId?'Call alert test':'Incoming call',message:testId?'Tap to return to your phone and check the sound.':'Open your phone to answer.',priority:5,tags:['telephone_receiver'],click,
+    const payload={topic:r.topic,title:testId?'Call alert test':'Incoming call',message:testId?'Tap to return to your phone and check the sound.':'Open the call, then tap Answer.',priority:5,tags:['telephone_receiver'],click,
       actions:[{action:'view',label:testId?'Open test':'Open call',url:click,clear:true}]};
     // Never follow redirects with a publishing credential, and never accept a
-    // client-provided destination. Failures are independent of browser push.
+    // client-provided destination. The call scheduler handles browser fallback.
     try{
       const signal=AbortSignal.any([controller.signal,AbortSignal.timeout(Math.max(1,Math.min(4000,expiresAt-Date.now())))]);
       const res=await fetcher(config.publish,{method:'POST',redirect:'error',headers:{Authorization:'Bearer '+config.token,'Content-Type':'application/json'},body:JSON.stringify(payload),signal});
@@ -53,7 +53,7 @@ export function ntfyAlerts({env,publicURL,store,body,fail,rate,fetcher=fetch,tes
   }
   return {
     available:!!config,iosInstant:!!config?.iosInstant,stop,revoke,
-    async call(c,revision,expiresAt){const r=row(c.to);if(r?.confirmed)return publish(r,{callId:c.id,revision,expiresAt});return false;},
+    async call(c,revision,expiresAt){const r=row(c.to);if(r?.confirmed&&r.preferred)return publish(r,{callId:c.id,revision,expiresAt});return false;},
     async routes(req,route,u,json){
       if(!route.startsWith('/ntfy'))return false;
       if(route==='/ntfy'&&req.method==='GET'){json(200,view(u.id));return true;}
@@ -62,6 +62,15 @@ export function ntfyAlerts({env,publicURL,store,body,fail,rate,fetcher=fetch,tes
       if(route==='/ntfy'&&req.method==='POST'){
         rate('ntfy-setup:'+u.id,6);
         if(!row(u.id))store.run('INSERT INTO ntfy_devices(owner,topic,created,confirmed) VALUES(?,?,?,0)',u.id,'wc_'+randomBytes(32).toString('base64url'),Date.now());
+        json(200,view(u.id));return true;
+      }
+      if(route==='/ntfy/preference'&&req.method==='POST'){
+        rate('ntfy-preference:'+u.id,12);const b=await body(req),r=row(u.id);
+        if(typeof b.useNtfy!=='boolean')fail(400,'Choose ntfy or browser call alerts.');
+        if(!r)fail(409,'Connect and test ntfy first.');
+        if(b.useNtfy&&!r.confirmed)fail(409,'Test the ntfy sound before using it for calls.');
+        store.run('UPDATE ntfy_devices SET preferred=? WHERE owner=?',b.useNtfy?1:0,u.id);
+        if(!b.useNtfy)for(const job of active)if(job.owner===u.id&&job.callId)job.controller.abort();
         json(200,view(u.id));return true;
       }
       if(route==='/ntfy/test'&&req.method==='POST'){
@@ -79,7 +88,7 @@ export function ntfyAlerts({env,publicURL,store,body,fail,rate,fetcher=fetch,tes
         if(route==='/ntfy/test-open'){test.opened=true;json(200,{ok:true});return true;}
         if(route==='/ntfy/test-status'){json(200,{sent:test.sent,delivered:test.ok,opened:test.opened});return true;}
         if(b.heard!==true||!test.sent||!test.ok||(!test.opened&&b.usePhoneIcon!==true))fail(409,'Only confirm after hearing the test; open its link or explicitly choose to use your usual phone icon.');
-        store.run('UPDATE ntfy_devices SET confirmed=? WHERE owner=? AND topic=?',Date.now(),u.id,test.topic);tests.delete(b.testId);json(200,{ok:true});return true;
+        store.run('UPDATE ntfy_devices SET confirmed=?,preferred=1 WHERE owner=? AND topic=?',Date.now(),u.id,test.topic);tests.delete(b.testId);json(200,{ok:true});return true;
       }
       return false;
     },

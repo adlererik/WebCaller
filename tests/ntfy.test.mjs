@@ -73,6 +73,44 @@ test('a heard test may use an explicit phone-icon fallback without asserting dir
   await assert.rejects(f.route('/ntfy/test-result','POST',{testId:test.testId,heard:true}),{status:409});
   assert.equal((await f.route('/ntfy/test-result','POST',{testId:test.testId,heard:true,usePhoneIcon:true})).ok,true);assert.equal((await f.route('/ntfy')).pendingTest,undefined);
 });
+
+test('call alert preference is owner-scoped, requires a sound test, and keeps the subscription',async t=>{
+  const f=await fixture(t),a=await f.setup(),b=await f.route('/ntfy','POST',{},other);
+  await assert.rejects(f.route('/ntfy/preference','POST',{useNtfy:true}),{status:409});
+  await assert.rejects(f.route('/ntfy/preference','POST',{useNtfy:'true'}),{status:400});
+  f.store.run('UPDATE ntfy_devices SET confirmed=123 WHERE owner=?',owner);
+  assert.equal((await f.route('/ntfy/preference','POST',{useNtfy:false,owner:other})).preferred,false);
+  const paused=await f.route('/ntfy');assert.equal(paused.topic,a.topic);assert.equal(paused.confirmed,true);
+  assert.equal((await f.route('/ntfy','GET',{},other)).preferred,true);assert.equal((await f.route('/ntfy','GET',{},other)).topic,b.topic);
+  assert.equal(await f.alerts.call({id:callId,to:owner},0,Date.now()+20000),false);assert.equal(f.sends.length,0);
+  assert.equal((await f.route('/ntfy/preference','POST',{useNtfy:true})).preferred,true);
+  assert.equal(await f.alerts.call({id:callId,to:owner},0,Date.now()+20000),true);assert.equal(f.sends.length,1);
+  assert.equal((await f.route('/ntfy')).topic,a.topic);
+});
+
+test('switching to browser alerts aborts only that device call publish and preserves confirmation',async t=>{
+  const f=await fixture(t,(_,o)=>new Promise((resolve,reject)=>o.signal.addEventListener('abort',()=>reject(o.signal.reason),{once:true})));
+  await f.setup();f.store.run('UPDATE ntfy_devices SET confirmed=456 WHERE owner=?',owner);
+  const pending=f.alerts.call({id:callId,to:owner},0,Date.now()+20000);await flush();
+  await f.route('/ntfy/preference','POST',{useNtfy:false});assert.equal(await pending,false);
+  const saved=f.store.get('SELECT * FROM ntfy_devices WHERE owner=?',owner);assert.equal(saved.confirmed,456);assert.equal(saved.preferred,0);
+});
+
+test('additive preference migration preserves existing users, topics, confirmation and ratchet identities',async t=>{
+  const {DatabaseSync}=await import('node:sqlite'),{mkdtempSync,rmSync}=await import('node:fs'),{tmpdir}=await import('node:os'),{join}=await import('node:path');
+  const dir=mkdtempSync(join(tmpdir(),'webcaller-ntfy-preference-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+  const db=new DatabaseSync(join(dir,'calls.sqlite'));
+  db.exec('CREATE TABLE users(id TEXT PRIMARY KEY,name TEXT NOT NULL,keys TEXT NOT NULL,token_hash TEXT UNIQUE NOT NULL); CREATE TABLE ntfy_devices(owner TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,topic TEXT UNIQUE NOT NULL,created INTEGER NOT NULL,confirmed INTEGER NOT NULL DEFAULT 0); CREATE TABLE ratchet_accounts(owner TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,identity TEXT NOT NULL,signature TEXT NOT NULL)');
+  db.prepare('INSERT INTO users VALUES(?,?,?,?)').run(owner,'Synthetic user','{"synthetic":true}','synthetic-token-hash');
+  db.prepare('INSERT INTO ntfy_devices VALUES(?,?,?,?)').run(owner,'wc_synthetic_preserved_subscription',10,20);
+  db.prepare('INSERT INTO ratchet_accounts VALUES(?,?,?)').run(owner,'synthetic-preserved-identity','synthetic-signature');db.close();
+  let store=createStore(dir);const before=store.get('SELECT * FROM ntfy_devices WHERE owner=?',owner);
+  assert.equal(before.preferred,1);assert.equal(before.confirmed,20);assert.equal(before.topic,'wc_synthetic_preserved_subscription');
+  store.run('UPDATE ntfy_devices SET preferred=0 WHERE owner=?',owner);store.close();store=createStore(dir);
+  assert.equal(store.get('SELECT * FROM ntfy_devices WHERE owner=?',owner).preferred,0);
+  assert.equal(store.get('SELECT * FROM users WHERE id=?',owner).token_hash,'synthetic-token-hash');
+  assert.equal(store.get('SELECT * FROM ratchet_accounts WHERE owner=?',owner).identity,'synthetic-preserved-identity');store.close();
+});
 test('Docker publishing is an exact opt-in; secret-file errors never reveal credentials',async t=>{
   const {mkdtempSync,writeFileSync,rmSync}=await import('node:fs');const {tmpdir}=await import('node:os');const {join}=await import('node:path');
   const dir=mkdtempSync(join(tmpdir(),'webcaller-ntfy-secret-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));

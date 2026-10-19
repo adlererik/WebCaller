@@ -35,6 +35,14 @@ export function mediaBudget(profile,stats={},cpuLimited=false,sharing=false){
   if(cpuLimited){p.fps=Math.min(p.fps,12);p.width=Math.min(p.width,640);p.height=Math.min(p.height,360);p.video=Math.min(p.video,350000);}
   return p;
 }
+// Downscale the whole camera frame. Fixed width/height capture constraints can
+// crop a portrait camera into a landscape frame before the receiver sees it.
+export function captureConstraints(p,settings={}){return {width:{ideal:settings.height>settings.width?Math.min(p.width,p.height):Math.max(p.width,p.height)},frameRate:{ideal:p.fps},resizeMode:'none'};}
+export function videoScale(p,settings={}){
+  const {width,height}=settings;if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)return 1;
+  const long=Math.max(p.width,p.height),short=Math.min(p.width,p.height),landscape=width>=height;
+  return Math.max(1,width/(landscape?long:short),height/(landscape?short:long));
+}
 export function tuneOpus(sdp, bitrate=20000) {
   const payloads = [...sdp.matchAll(/^a=rtpmap:(\d+) opus\/48000(?:\/2)?\r?$/gm)].map(m=>m[1]);
   for (const pt of payloads) {
@@ -73,7 +81,7 @@ export class Phone {
     this.iceServers=ice.iceServers;this.iceExpiresAt=ice.expiresAt||Date.now()+7200000;
     const p=PROFILES[this.profile];
     const audio={ channelCount:{ideal:1}, sampleRate:{ideal:48000}, echoCancellation:true, noiseSuppression:true, autoGainControl:true };
-    this.stream=await navigator.mediaDevices.getUserMedia({audio,video:video ? {width:{ideal:p.width},height:{ideal:p.height},frameRate:{ideal:p.fps},facingMode:'user'} : false});
+    this.stream=await navigator.mediaDevices.getUserMedia({audio,video:video ? {...captureConstraints(p),facingMode:'user'} : false});
     if(this.pc!==pc){this.stream.getTracks().forEach(t=>t.stop());this.stream=null;throw new Error('Call cancelled');}
     const audioTrack=this.stream.getAudioTracks()[0]; this.audioSender=this.pc.addTrack(audioTrack,this.stream);
     const codecs=RTCRtpSender.getCapabilities?.('audio')?.codecs?.filter(c=>c.mimeType.toLowerCase()==='audio/opus');
@@ -219,7 +227,7 @@ export class Phone {
     else{
       const pc=this.pc;
       const p=PROFILES[this.profile];
-      const stream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:p.width},height:{ideal:p.height},frameRate:{ideal:p.fps},facingMode:{ideal:this.facingMode}},audio:false});
+      const stream=await navigator.mediaDevices.getUserMedia({video:{...captureConstraints(p),facingMode:{ideal:this.facingMode}},audio:false});
       if(this.pc!==pc){stream.getTracks().forEach(t=>t.stop());throw new Error('Call cancelled');}
       const track=stream.getVideoTracks()[0];this.stream.addTrack(track);await this.videoSender.replaceTrack(track);this.videoWanted=true;
     }
@@ -232,7 +240,7 @@ export class Phone {
     const pc=this.pc,old=this.stream.getVideoTracks()[0],settings=old?.getSettings()||{},prior=settings.facingMode||this.facingMode,next=prior==='environment'?'user':'environment',p=PROFILES[this.profile];
     let fresh;
     const capture=async camera=>{
-      const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{width:{ideal:p.width},height:{ideal:p.height},frameRate:{ideal:p.fps},...camera}});
+      const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{...captureConstraints(p),...camera}});
       if(this.pc!==pc){stream.getTracks().forEach(t=>t.stop());throw new Error('Call cancelled');}
       return stream.getVideoTracks()[0];
     };
@@ -263,12 +271,15 @@ export class Phone {
   async setSender(sender,video,p){
     if(!sender)return;const params=sender.getParameters();if(!params.encodings?.length)return;
     Object.assign(params.encodings[0],{maxBitrate:video?Math.max(1000,p.video):p.audio,active:!video||(p.video>0&&this.videoWanted)});
-    if(video){params.encodings[0].maxFramerate=p.fps;params.degradationPreference='balanced';}
+    if(video){params.encodings[0].maxFramerate=p.fps;params.encodings[0].scaleResolutionDownBy=videoScale(p,this.stream?.getVideoTracks()[0]?.getSettings?.());params.degradationPreference='balanced';}
     // Priority is an optional browser extension. Retry with core parameters.
     params.encodings[0].priority=video?'very-low':'high';params.encodings[0].networkPriority=video?'low':'high';
     try{await sender.setParameters(params);}catch{
       delete params.encodings[0].priority;delete params.encodings[0].networkPriority;
-      try{await sender.setParameters(params);}catch{this.update({warning:'This browser controls its own media bitrate'});}
+      try{await sender.setParameters(params);}catch{
+        delete params.encodings[0].scaleResolutionDownBy;
+        try{await sender.setParameters(params);}catch{this.update({warning:'This browser controls its own media bitrate'});}
+      }
     }
   }
   applyProfile(){
@@ -276,11 +287,13 @@ export class Phone {
     this.profileTask=Promise.resolve().then(async()=>{
       while(this.profileDirty&&this.pc){
         this.profileDirty=false;const pc=this.pc,p=mediaBudget(this.profile,this.stats||{},this.cpuSamples>=3,this.isSharing);this.budget=p;
-        const signature=JSON.stringify([p.audio,Math.floor(p.video/1000)*1000,p.width,p.height,p.fps,p.label,this.isSharing,this.videoWanted,this.stream?.getVideoTracks()[0]?.id,this.audioSender?.getParameters?.().encodings?.length,this.videoSender?.getParameters?.().encodings?.length]);
+        const capture=this.stream?.getVideoTracks()[0]?.getSettings?.()||{};
+        const signature=JSON.stringify([capture.width,capture.height,p.audio,Math.floor(p.video/1000)*1000,p.width,p.height,p.fps,p.label,this.isSharing,this.videoWanted,this.stream?.getVideoTracks()[0]?.id,this.audioSender?.getParameters?.().encodings?.length,this.videoSender?.getParameters?.().encodings?.length]);
         if(signature===this.appliedBudget)continue;this.appliedBudget=signature;
-        await this.setSender(this.audioSender,false,p);if(this.pc!==pc)return;await this.setSender(this.videoSender,true,p);
+        await this.setSender(this.audioSender,false,p);if(this.pc!==pc)return;
         const track=this.stream?.getVideoTracks()[0];
-        if(track){track.enabled=p.video>0;await track.applyConstraints({width:{ideal:p.width,max:p.width},height:{ideal:p.height,max:p.height},frameRate:{max:p.fps}}).catch(()=>{});}
+        if(track){track.enabled=p.video>0;await track.applyConstraints({...captureConstraints(p,capture),frameRate:{max:p.fps}}).catch(()=>{});}
+        if(this.pc!==pc)return;await this.setSender(this.videoSender,true,p);
         this.update({profile:this.profile,label:p.label,sharing:this.isSharing,videoPaused:this.videoWanted&&p.video===0,localVideo:this.videoWanted,cameraFacing:this.facingMode,audioSettings:this.stream?.getAudioTracks()[0]?.getSettings()});
       }
     }).finally(()=>{this.applying=false;this.profileTask=null;});return this.profileTask;
@@ -303,7 +316,7 @@ export class Phone {
       const sentDelta=Math.max(0,sent-(this.last?.sent||0)),remoteLossDelta=Math.max(0,remoteLost-(this.last?.remoteLost||0));
       const loss=Math.max(outboundLoss,sentDelta?Math.min(1,remoteLossDelta/sentDelta):0,dl+dr?dl/(dl+dr):0);
       const {samples,...traffic}=measureCall(report,this.trafficSamples);this.trafficSamples=samples;
-      const stats={loss,rtt,jitter,bandwidth,relay,...traffic};this.stats=stats;
+      const stats={loss,rtt,jitter,bandwidth,relay,sampledAt:Date.now(),...traffic};this.stats=stats;
       const limited=[...report.values()].find(s=>s.type==='outbound-rtp'&&s.kind==='video'&&s.qualityLimitationReason==='cpu');
       this.cpuSamples=limited?this.cpuSamples+1:0;
       if(this.cpuSamples===10){

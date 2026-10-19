@@ -55,7 +55,10 @@ export async function vault(action, value) {
   try { return await new Promise((resolve,reject) => {
     const tx = db.transaction('device', action === 'get' ? 'readonly' : 'readwrite');
     const store = tx.objectStore('device');
-    const r = action === 'get' ? store.get('identity') : action === 'delete' ? store.delete('identity') : store.put(value,'identity');
-    let result; r.onsuccess = () => { result = r.result; }; tx.oncomplete = () => resolve(result); tx.onerror = () => reject(tx.error);
+    const r = action === 'get' || action === 'create' ? store.get('identity') : action === 'delete' ? store.delete('identity') : store.put(value,'identity');
+    let result; r.onsuccess = () => {
+      if(action === 'create' && r.result === undefined){store.add(value,'identity');result=value;}
+      else result=r.result;
+    }; tx.oncomplete = () => resolve(result); tx.onerror = tx.onabort = () => reject(tx.error||new Error('Device storage was interrupted'));
   }); } finally { db.close(); }
 }

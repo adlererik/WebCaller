@@ -1,18 +1,44 @@
 {
-  "package": "@towns-protocol/vodozemac",
-  "version": "0.1.0",
-  "core": "vodozemac 0.9.0",
-  "source": "https://github.com/towns-protocol/vodozemac-bindings",
-  "coreSource": "https://github.com/matrix-org/vodozemac",
+  "package": "webcaller-vodozemac",
+  "version": "0.2.0",
+  "core": "vodozemac 0.11.1",
+  "source": "third_party/vodozemac-bindings",
+  "bindingUpstream": "https://github.com/towns-protocol/vodozemac-bindings",
+  "bindingUpstreamRevision": "561147cb65f416f290b70630e25938881ddf1094",
+  "coreSource": "https://github.com/matrix-org/vodozemac/tree/0.11.1",
+  "coreRevision": "3e11ae87d157da6bcac3cbf7825d37c8f5ed60af",
   "license": "Apache-2.0",
-  "npmIntegrity": "sha512-v7zcd0xDrHiAIfeY8XRDAGjNcXinCNBs46DO6b9YDIVKdHy94nHwqX8JPGA4nSjej8BSsGrEPVQEMBpiB+P2gg==",
+  "build": {
+    "rust": "1.90.0",
+    "wasmBindgen": "0.2.100",
+    "target": "wasm32-unknown-unknown",
+    "command": "bash scripts/build-vodozemac.sh",
+    "optimization": "Cargo release opt-level=s, LTO; no wasm-opt",
+    "inboundSessionConfig": "Explicit Olm V2; never inferred or defaulted"
+  },
   "files": {
-    "pkg/vodozemac_bg.js": "e061366aee4f476031d7225f755b35cfdac66a6339057f98d6baa1435f8c3411",
-    "pkg/vodozemac_bg.wasm": "5b3a606864bbcfe31f4e91f12e73b659c494f6d13c36cb6e1ec94dce992410fd",
+    "pkg/vodozemac_bg.js": "df8cf61947576458cb4d6c32747f19cb819f34d652b65d490aa5423105ba74a4",
+    "pkg/vodozemac_bg.wasm": "58f30fb84fca1476828527b4dee2308bcd985733108c33c495b817cac5b84bce",
     "pkg/vodozemac.d.ts": "9201b1a5c6f94e3387ae6183a1ff1a5d067244fa0badec5449ba0662635ae4a0",
     "LICENSE-APACHE.txt": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
-    "THIRD-PARTY-NOTICES.txt": "6623b3fbd0b83fa78dccaf7aedfcab0a4ccea9a487fd0ab131e973cbc0378536",
-    "UPSTREAM-Cargo.lock": "44ac041c0d09644e26ddbf5980e5ecfaf43ed95f73572c2e41ce45039652314a"
+    "THIRD-PARTY-NOTICES.txt": "52437b2216157251c6670ec25c36ded322aabdee963c1871abc1943e1712365c",
+    "UPSTREAM-Cargo.lock": "551a18aac396ebe6b5d7ccfc59f71cd2f519af380b58ec61663b0e0c6dd2824b"
   },
-  "bindingReview": "The third-party binding and this application integration have not been independently audited."
+  "sourceFiles": {
+    "scripts/build-vodozemac.sh": "faf5b8f63d3ca8bddb2e0d321162db8abb033bb1804e5105844be92a828e12ad",
+    "scripts/vendor-vodozemac.py": "568a8098515adc587a8cf95900d50361b50d712344524d475518103897453a71",
+    "third_party/vodozemac-bindings/Cargo.lock": "551a18aac396ebe6b5d7ccfc59f71cd2f519af380b58ec61663b0e0c6dd2824b",
+    "third_party/vodozemac-bindings/Cargo.toml": "88155c2ae6a4992968a6fbb1e31a03925b41223decd2aa75f828f4ea1614e6c7",
+    "third_party/vodozemac-bindings/LICENSE-APACHE": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+    "third_party/vodozemac-bindings/licenses/README.md": "2c3d839348199d9fdd09f718c49d3f938e6b605793d74a93ed9e970d273de30a",
+    "third_party/vodozemac-bindings/licenses/matrix-pickle-0.2.3.txt": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+    "third_party/vodozemac-bindings/licenses/matrix-pickle-derive-0.2.3.txt": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+    "third_party/vodozemac-bindings/rust-toolchain.toml": "ccffa35644e680f8f6db9451a12eb61ba5273d1deed2250ede13edaf37a6c98d",
+    "third_party/vodozemac-bindings/src/account.rs": "a17c56103c187ce26be517c509748b096a4a802275e5626e483f2bed6f319c71",
+    "third_party/vodozemac-bindings/src/group_sessions.rs": "29648f108e2a4657db8922d1cbbf828de1349d435a0b1a1d3a2a48ff65e88015",
+    "third_party/vodozemac-bindings/src/lib.rs": "078d400f52d3456b1956d7d6a68f42f90016aff9eb93a51bdc2f79ba9db117fd",
+    "third_party/vodozemac-bindings/src/sas.rs": "0a58d90f95f6cc1d9c44a4a39e732802011cc6b338777cf3af29952ff0cd0f69",
+    "third_party/vodozemac-bindings/src/session.rs": "f65537180c936b6f1832f8aa5db2bb0263a6fc2f77d029ab6b16c0c0f662002a"
+  },
+  "bindingReview": "WebCaller adaptations and this application integration have not been independently audited."
 }

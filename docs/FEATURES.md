@@ -2,7 +2,7 @@
 
 ## Adaptive audio/video
 
-| Profile | Mono Opus payload ceiling | Video ceiling | Capture target |
+| Profile | Mono Opus payload ceiling | Video ceiling | Encoder bounding box |
 |---|---:|---:|---|
 | Wi-Fi | 48 kb/s | 900 kb/s | 960×540, 24 fps |
 | Cellular / unknown network / remote saver | 20 kb/s | 120 kb/s | 320×180, 12 fps |
@@ -31,7 +31,7 @@ Signed encrypted envelopes have expiry, sender/recipient, IDs and ciphertext. Th
 
 ## Encrypted attachments
 
-A signed encrypted message carries a random per-file AES-256-GCM key and nonce prefix. Each 64 KB plaintext chunk is encrypted with a distinct indexed nonce; authenticated data binds the file ID, chunk order, size and expiry. Contents are uploaded sequentially to an authenticated contact-only mailbox and cannot be announced until all expected chunks exist. Filename/type/key stay inside the message envelope. Quotas limit pending and completed uploads. Chat sync fetches metadata; visible open conversations then automatically decrypt photos/video/audio sequentially. General files require a user action. Transfers during calls use paced encrypted parts that wait on weak connections, preserving voice priority. Files expire alongside their messages and are removed with device deletion. Downloads and screenshots cannot be erased outside the app.
+A signed encrypted message carries a random per-file AES-256-GCM key and nonce prefix. Each 64 KB plaintext chunk is encrypted with a distinct indexed nonce; authenticated data binds the file ID, chunk order, size and expiry. Contents are uploaded with bounded parallel workers to an authenticated contact-only mailbox and cannot be announced until all expected chunks exist. Filename/type/key stay inside the message envelope. Quotas limit pending and completed uploads. Chat sync fetches metadata; visible open conversations then automatically decrypt photos/video/audio sequentially. General files require a user action. Transfers during calls use paced encrypted parts that wait on weak connections, preserving voice priority. Files expire alongside their messages and are removed with device deletion. Downloads and screenshots cannot be erased outside the app.
 
 ## Chat controls
 
@@ -64,7 +64,7 @@ Signed encrypted message-state envelopes carry edits, reactions, pins and delive
 
 A viewed mark requires the visible bubble in the active chat for at least 300 ms, while the app is visible and no app dialog/call screen covers the chat. It indicates app visibility, not proof a person read the text. Replies reference the parent ID instead of copying its text. Forwarding creates a new encrypted message/file for the chosen contact. Pins cannot extend message expiry. Latest-state version checks stop delayed older edits/reactions from replacing newer state. Plaintext actions/drafts are held in memory and cleared when the app backgrounds.
 
-System appearance uses prefers-color-scheme CSS and matching browser theme-color tags. Map links use the viewing device’s platform, while the encrypted raster thumbnail continues to use the configured tile provider (OpenStreetMap by default). This does not require paid Google/Apple map imagery keys.
+Appearance defaults to the phone setting, with persistent Light and Dark overrides in Settings and matching browser theme-color tags. Map links use the viewing device’s platform, while the encrypted raster thumbnail continues to use the configured tile provider (OpenStreetMap by default). This does not require paid Google/Apple map imagery keys.
 
 
 ## Encrypted local media retention and live call metrics (v0.7.0)
@@ -75,7 +75,7 @@ Negotiated video and voice codecs and their separate measured rates appear in tw
 
 ## Call sharing, codec efficiency and handovers (v0.8.0)
 
-See [Call networking](CALL_NETWORK.md) for the full policy, budgets, browser limitations and testing steps. During calls the + sheet, location, local camera snapshots and voice notes remain available. Camera/microphone capture clones live call tracks when available and stops only its own clones; call video lens selection remains on the call screen. Encrypted file transfers use paced 4 KB HTTP pieces during a call and wait on poor audio or reconnecting media. Outside calls the existing 64 KB encrypted chunk format and fast transfers are retained. Partial ciphertext assembles into original chunks on the server; uncommitted parts inherit quota, access controls and original expiry, with foreign-key cleanup. Network errors retry idempotent transfers, at most eight attempts per request.
+See [Call networking](CALL_NETWORK.md) for the full policy, budgets, browser limitations and testing steps. During calls the + sheet, location, local camera snapshots and voice notes remain available. Camera/microphone capture clones live call tracks when available and stops only its own clones; call video lens selection remains on the call screen. Encrypted files up to 200 MiB use up to four parallel 64 KiB chunk workers on healthy links and small 4 KiB parts while probing after poor conditions. Sharing pauses and outstanding file requests are aborted when audio health deteriorates or media reconnects; healthy samples restart probing. Unknown network types can use measured file-path capacity without lifting conservative unknown-network video limits. Recognized cellular/Save-Data file traffic has its own lower ceiling. The server bounds active requests, request rate, pending reservations and stored bytes. Original ciphertext, authorization, indexed nonces and authenticated expiry are unchanged. Cache writers commit complete generation-bound ciphertext sets incrementally; old cached files remain readable. Closing/backgrounding still cancels transfers. See [Call networking](CALL_NETWORK.md).
 
 Both phones exchange signed encrypted codec efficiency summaries and network modes. Only variants reported smooth and efficient for both encoding and decoding on both phones receive the strongest preference: AV1, H.265, VP9, H.264, VP8. Unsupported/unknown efficiency leaves conservative compatible fallbacks; all repair codec capabilities remain available. Power-efficient does not prove hardware acceleration. Video adapts bitrate, frame rate and resolution without changing codecs on every speed fluctuation; a proven efficient alternative can be negotiated after sustained CPU limits.
 
@@ -113,4 +113,16 @@ Current v2 transport uses the Olm Double Ratchet. Minimal identity verification 
 
 ## Optional extra ringing
 
-A self-hosted ntfy server can send additional generic, maximum-priority (5) incoming-call alerts to the optional Android/iPhone ntfy app. Web Push and encrypted calling continue independently. Setup offers Android one-tap subscription, guided iPhone copy buttons, and a locked-phone sound/opening-link test. See [Extra ringing](EXTRA_RINGING.md) for installation, credentials, retention and the iPhone upstream wake-up limitation.
+A self-hosted ntfy server can send generic, maximum-priority (5) incoming-call alerts to the optional Android/iPhone ntfy app. Confirmed ntfy replaces browser call pushes for that phone; publishing failures fall back to Web Push. The alert method can be switched without reconnecting ntfy. Text-message pushes and encrypted calling continue normally. Setup offers Android one-tap subscription, guided iPhone copy buttons, and a locked-phone sound/opening-link test. See [Extra ringing](EXTRA_RINGING.md) for installation, credentials, retention and the iPhone upstream wake-up limitation.
+
+## Personal calling codes
+
+Optional, unique 4–12 digit codes let a new visitor call, video-call or message without an invitation. The first visit saves its own browser identity; later dialing reopens the same contact/history. Existing users stay unlisted until they opt in. A keypad, optional name, random-code chooser, shareable calling link, code disabling, pending requests, explicit acceptance, reply/answer acceptance, five-message limits, media restrictions and identity blocking are included. Existing invitations, encryption, SAS and disappearing timers remain. See [Calling codes](CALLING_CODES.md) for security and iPhone setup limits.
+
+Contact options include a locally saved name label and restoration of the original name. Labels are kept with this browser identity and used in contact search/list, chat/call headers, typing indicators and forwarding choices; they do not change another person’s account name or identity pins. The keypad uses a keyboard icon and neutral number placeholder. Code dialing defaults to video, with an explicit audio-only option.
+
+## Full camera frame and independent message countdowns
+
+Remote video and the self preview use contain fitting, keeping the whole picture across portrait/landscape combinations. Camera constraints avoid a forced landscape height/aspect ratio and request no browser cropping. Orientation-aware width ideals can still improve native capture quality as a connection recovers. The sender downscales the entire frame into the current encoder budget, swaps the bounding box for portrait, and preserves native 4:3 or other aspect ratios. Frame-rate, bitrate, congestion and audio-priority policies remain active; browsers without explicit sender scaling fall back to their own resolution control while retaining bitrate/frame-rate settings.
+
+New timed text/media starts the sender’s countdown when sent and the recipient’s countdown at first actual viewing. First-view state persists across refresh and tabs. Encrypted unread recipient copies stay available after sender expiry; delayed read-start acknowledgements retry after reconnection. Off and older messages retain their original rules. Cached media gets the recipient’s deadline without redownloading; manual deletion still removes both copies. See USER_GUIDE.md and SECURITY.md for retention, replay metadata and browser-cleanup limits.

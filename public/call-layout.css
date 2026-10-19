@@ -1,0 +1,7 @@
+/* Preserve the complete camera frame across mixed device orientations. */
+.call-screen #remote-media,.call-screen #local-media { object-fit:contain; object-position:center; }
+.call-screen #remote-media { background:#11141b; opacity:1; }
+.call-screen #local-media { background:#11141b; }
+.brand-icon .brand-mark { display:block; width:100%; height:100%; border-radius:inherit; }
+
+:root .sidebar .brand-icon.app-brand { background:transparent; box-shadow:none; }

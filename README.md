@@ -4,7 +4,7 @@ A **Signal-like WebRTC phone** that runs in the browser on Android, iPhone and d
 
 **Start here: [Prebuilt Docker installation](docker/README.md).** Download the small setup bundle for a Linux Intel/AMD or ARM64 server. Docker supplies the phone, optional ntfy, HTTPS/Tunnel and TURN services. A short wizard creates your private configuration and first-phone QR. [Source-built Docker](docs/INSTALL.md) and [native Node.js/systemd](docs/INSTALL_NATIVE.md) installations remain available.
 
-This is the **v0.16.1 preview**. It has passing automated and synthetic-browser tests, but has not been independently audited or certified on a physical Android/iPhone pair.
+This is the **v0.17.0 release**. It includes source archives and a guided prebuilt Docker bundle for Linux amd64/arm64. Automated and generated-media browser tests are documented; the application has not had an independent security audit, and physical-phone behavior still depends on browser, OS and network.
 
 ## Why I made these choices
 
@@ -28,7 +28,7 @@ New messages, edits, receipts, file-key manifests and call signaling use the **O
 
 | Component | Algorithms actually used | Meaning and limits |
 |---|---|---|
-| New message/signaling transport | Olm Double Ratchet; **Curve25519/X25519**, **AES-256-CBC**, **HMAC-SHA-256**, **HKDF-SHA-256** | Vodozemac 0.9.0 through a locally bundled binding. Olm SessionConfig V2 requires a full 32-byte MAC. This is not Signal's wire protocol. |
+| New message/signaling transport | Olm Double Ratchet; **Curve25519/X25519**, **AES-256-CBC**, **HMAC-SHA-256**, **HKDF-SHA-256** | Vodozemac 0.11.1 through a locally built binding with retained source and build hashes. Inbound and outbound Olm use SessionConfig V2 with a full 32-byte MAC. This is not Signal's wire protocol. |
 | Signed identity/prekey/envelope authentication | **ECDSA P-256 with SHA-256** | Signs published Olm identities/prekeys and complete envelope routing/expiry/ciphertext. Pins detect changes; signatures alone do not establish who a new contact is. |
 | Files, images, video and voice-note attachments | Fresh per-file **AES-256-GCM**, 128-bit authentication tags | Indexed 96-bit nonces and authenticated chunk context; the file key/name/type travel inside a ratcheted manifest. |
 | Browser account/session/history records | Separate non-exportable **AES-256-GCM** wrapping key | Stored in the same browser origin. Protects record ciphertext, not an attacker able to use that origin/profile and its key. |
@@ -73,6 +73,12 @@ Under trusted clients and an accurate comparison, matching words provide probabi
 
 Deleting a contact keeps a minimal verification record to resist identity replacement. Clearing all site storage removes that protection and the local keys/history. Reopen both phones once after upgrading, and preserve browser storage for continuity. Full details: [security model](docs/SECURITY.md), [review findings](docs/SECURITY_REVIEW.md), [browser privacy](docs/BROWSER_PRIVACY.md).
 
+## Reach someone by calling code
+
+Choose **Settings → Your calling code** and save an available number such as **4826**. Your friend opens this website, taps **Dial a code**, enters **4826** and chooses **Video call**, **Voice call** or **Message**. No invitation or account password is needed. Their browser saves its own identity, so returning with the same browser or Home Screen icon continues the same conversation until its messages expire or are deleted.
+
+Existing users remain unlisted until they choose a code. New people arrive as contact requests; accepting, replying or answering connects them. Codes are public addresses, so unwanted attempts can be blocked. An invitation still provides a fingerprint for authenticating first contact over a trusted channel. A short code relies on the server’s directory: compare the four call words aloud on your first call before exchanging sensitive information. Encryption and identity pins remain enabled. [Setup, repeat visits, blocking and security](docs/CALLING_CODES.md).
+
 ## What you get
 
 - Voice calls in both directions at once, with Opus, requested echo cancellation, noise suppression, gain control, FEC and DTX.
@@ -81,14 +87,21 @@ Deleting a contact keeps a minimal verification record to resist identity replac
 - Optional video, microphone mute, front/back camera switch and upgrading an audio call to video. Codec preferences use shared encoding/decoding efficiency reports with compatible fallbacks. Timer and quality stay at the top while central details fade.
 - Signal-style Gallery/File/Location sheet, recent chat media, map cards, emoji, camera capture, voice notes, typing dots and delete-for-both.
 - Plain dark voice-call screen with top timer/quality and a five-button tray. Speaker/output switching where the browser exposes devices; phone-specific help elsewhere.
-- Encrypted one-to-one text, images, video, voice notes and files (up to 10 MB each) with per-message countdowns and disappearing timers, including unread/offline expiry.
+- Encrypted one-to-one text, images, video, voice notes and files (up to 200 MB each) with per-message countdowns and disappearing timers, with independent sender/recipient countdowns for new messages and encrypted unread delivery.
+- A phone-friendly Settings page in light or dark. Choose **Off**, **4 weeks**, **1 week**, **1 day** (default), **8 hours**, **1 hour**, **5 minutes** or **30 seconds** for new outgoing messages. **Custom time** has scrolling number and unit wheels; tap **Set**, then **Save**. Off keeps new text/media until deleted, while new timed messages count down from sending for you and first viewing for the recipient. Refresh both phones before using the new lifetime options. [Timer instructions and storage limits](docs/USER_GUIDE.md).
 - One-person, single-use invitations; recipients choose an optional name and accept.
 - Press-and-hold contact removal with confirmation, shared history/media deletion, active-call cleanup and protection against delayed uploads.
 - Private QR onboarding for the first phone, so nobody has to type a long setup secret.
 - Contact safety numbers, identity change detection, reconnection, relay diagnostics and guided call-alert setup with a locked-phone sound test, bounded high-urgency reminders and Answer/Decline notification actions where supported.
 - Local SQLite ciphertext storage, authenticated WebSocket signaling and temporary TURN credentials.
-- Files/media during calls with encrypted spinner/percentage placeholders on both phones; both video encoders temporarily yield bandwidth, with small encrypted transfers that wait when voice needs the link.
+- Files/media during calls with encrypted spinner/percentage placeholders on both phones; both video encoders temporarily yield bandwidth, with adaptive parallel encrypted transfers that speed up on healthy connections and pause when voice needs the link.
 - Aligned video/voice codec and rate rows, transparent video controls, cellular budgets for both endpoints and automatic Wi-Fi/cellular recovery. See [Call networking](docs/CALL_NETWORK.md).
+
+## Photos and files while you talk
+
+Send a photo, video, voice note or document up to **200 MB (200 MiB)** from **+ → Gallery / File** while the call continues. A strong connection now uses bounded parallel chunk transfers and adapts using call health and measured HTTP throughput. It no longer falls back to an 8 KB/s file cap simply because a browser cannot identify Wi-Fi. Voice takes priority: sharing backs off/pauses on poor statistics and video temporarily yields bandwidth. The percentage spinner remains visible on both phones. [Transfer policy and limits](docs/CALL_NETWORK.md).
+
+Encrypted files are cached incrementally so reopening the chat can use the local copy, without retaining another full ciphertext array in memory. Old cached files and encrypted history remain readable. Large-file display/download still needs browser memory and storage; keep the page visible. Fresh server quotas allow the full 200 MB size. Existing explicitly smaller quotas are preserved; [upgrade them deliberately](docs/CONFIGURATION.md#file-limit-and-storage-upgrades).
 
 ## Audio and video quality
 
@@ -146,7 +159,7 @@ At the top of the call, separate video/voice rows show the actual codec and meas
 
 Call invitations detect the phone and guide the recipient through enabling alerts. Android can receive browser push; iPhone/iPad requires a Home Screen web app. Neutral New message notices open the intended conversation without putting routing IDs into the URL. A locked-phone sound test helps check setup. Up to three spaced alerts request the phone’s normal notification sound; the repeating ringtone plays when the page is open. OS settings, suspension, push delivery and connection still prevent guaranteed closed-phone ringing. See [Call alerts](docs/CALL_ALERTS.md).
 
-Optional **self-hosted ntfy extra ringing** adds maximum-priority (5) generic alerts for recipients with its free Android/iPhone app. Android has one-tap subscription; iPhone has guided copy buttons. A locked-phone sound test enables the extra path after checking the opening link or choosing the phone-icon fallback. Calls, Web Push, Olm, identity pins and SAS stay independent of ntfy. Its device-specific read address cannot send alerts or access conversations. iPhone wake-up still uses ntfy.sh and platform push infrastructure; no website can force continuous ringing or erase native notification traces. See [extra ringing setup, sound settings and security](docs/EXTRA_RINGING.md). The [prebuilt Docker package](docker/README.md) includes an isolated ntfy service and automatic credential initialization. The separate native helper supports [systemd installations](docs/INSTALL_NATIVE.md); it does not configure the older source-built Docker recipe.
+Optional **self-hosted ntfy extra ringing** adds maximum-priority (5) generic alerts for recipients with its free Android/iPhone app. Android has one-tap subscription; iPhone has guided copy buttons. A locked-phone sound test selects ntfy as this phone’s call-alert method after checking the opening link or choosing the phone-icon fallback. Successful ntfy publishing suppresses duplicate browser call pushes; publishing failures fall back to Web Push. Settings lets you switch methods without reconnecting ntfy. Text-message pushes stay on. Tap Open call, then Answer in WebCaller. Encrypted call signaling, Olm, identity pins, SAS and media stay independent of ntfy. Its device-specific read address cannot send alerts or access conversations. iPhone wake-up still uses ntfy.sh and platform push infrastructure; no website can force continuous ringing or erase native notification traces. See [extra ringing setup, sound settings and security](docs/EXTRA_RINGING.md). The [prebuilt Docker package](docker/README.md) includes an isolated ntfy service and automatic credential initialization. The separate native helper supports [systemd installations](docs/INSTALL_NATIVE.md); it does not configure the older source-built Docker recipe.
 
 Audio cannot survive zero usable bandwidth or complete outages. Bitrate figures are codec payload ceilings; network overhead uses extra data. Browser support determines actual microphone processing, FEC, PLC and sender controls. A normal website cannot erase global or synced browser history or hide its service-worker/storage usage; see [Browser privacy](docs/BROWSER_PRIVACY.md).
 
@@ -201,4 +214,10 @@ Open `http://localhost:8080/calls`. Loopback HTTP is suitable for local tests; p
 
 ## Release and license
 
-[Release notes](CHANGELOG.md) describe each preview. Code is available under the [MIT license](LICENSE). Dependency notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Please report vulnerabilities privately using [SECURITY.md](SECURITY.md).
+[Release notes](CHANGELOG.md) describe each release and preview. Code is available under the [MIT license](LICENSE). Dependency notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Please report vulnerabilities privately using [SECURITY.md](SECURITY.md).
+
+### Complete video frames and separate countdowns
+
+A portrait caller now stays fully in frame on a desktop or landscape phone, with space around the picture when the shapes differ. Capture and sender scaling preserve the camera aspect ratio while bandwidth adaptation continues. The handset icon replaces the earlier chat-bubble mark.
+
+For new timed text and media, your countdown starts when sent; the other person gets the full countdown when they first view it. Refreshing does not restart it. This means encrypted unread copies remain available until viewed/deleted, even after your copy expires. Read acknowledgements retry after reconnection. Off, existing messages and encryption identities keep their established behavior. Both phones should refresh after this update. [Usage](docs/USER_GUIDE.md), [security and retention](docs/SECURITY.md).

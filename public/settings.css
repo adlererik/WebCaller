@@ -1,0 +1,91 @@
+:root dialog.settings-page,:root dialog.custom-time-dialog { --bg:var(--surface); --text:var(--ink); --accent:var(--blue); --accent-soft:var(--blue-light); --danger:#c34a60; color:var(--ink); background:var(--surface); }
+/* Settings is a phone-sized page with calm grouped controls in both themes. */
+:root dialog.settings-page { --settings-panel:var(--panel); --settings-tint:var(--accent-soft); padding:0; width:min(100%,540px); max-width:100%; height:min(92dvh,900px); max-height:100dvh; border:1px solid var(--line); border-radius:28px; background:var(--bg); color:var(--text); overflow:hidden; }
+.settings-page[open] { display:flex; flex-direction:column; }
+.settings-header { display:flex; align-items:center; gap:12px; padding:18px 20px 14px; flex-shrink:0; background:var(--bg); }
+.settings-header h2 { font-size:23px; line-height:1.25; letter-spacing:-.6px; margin:0; font-weight:650; }
+.settings-header .icon-button { width:44px; height:44px; flex-shrink:0; color:var(--text); border-radius:50%; }
+.settings-body { min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:4px 24px 24px; }
+.settings-profile { display:flex; align-items:center; gap:14px; padding:10px 2px 24px; }
+.settings-avatar { display:grid; place-items:center; flex:0 0 56px; height:56px; border-radius:19px; background:var(--accent-soft); color:var(--accent); font-size:20px; font-weight:650; }
+.settings-profile>div { min-width:0; display:grid; gap:4px; flex:1; }
+.settings-profile strong { font-size:21px; overflow-wrap:anywhere; font-weight:650; }
+.settings-profile>div>span { font-size:13px; color:var(--muted); }
+.settings-profile-lock { color:var(--muted); padding:8px; }
+.settings-profile-lock svg { width:20px; height:20px; }
+.settings-section { margin:0 0 24px; }
+.settings-section h3 { font-size:12px; font-weight:650; color:var(--muted); letter-spacing:.3px; margin:0 0 9px 12px; }
+.settings-group { background:var(--settings-panel); border:1px solid var(--line); border-radius:20px; overflow:hidden; }
+.settings-item { width:100%; display:flex; align-items:center; gap:12px; padding:16px 14px; margin:0; text-align:left; color:var(--text); background:transparent; border:0; border-radius:0; min-height:76px; font:inherit; cursor:default; }
+button.settings-item { cursor:pointer; }
+.settings-item+ .settings-item { border-top:1px solid var(--line); }
+.settings-item:disabled { cursor:default; opacity:.65; }
+.settings-item:focus-visible,.settings-remove:focus-visible { outline:2px solid var(--accent); outline-offset:-3px; }
+.settings-icon { width:36px; height:36px; border-radius:12px; flex:0 0 36px; background:var(--settings-tint); color:var(--accent); display:grid; place-items:center; }
+.settings-icon svg { width:20px; height:20px; }
+.settings-copy { flex:1; min-width:0; display:grid; gap:5px; }
+.settings-copy strong { font-weight:550; font-size:14px; line-height:1.35; }
+.settings-copy>span { color:var(--muted); font-size:12px; line-height:1.5; }
+.settings-value { color:var(--accent); font-size:12px; white-space:nowrap; }
+.settings-chevron { color:var(--muted); display:flex; }
+.settings-chevron svg { width:15px; height:15px; transform:rotate(180deg); }
+.settings-item select { width:auto; max-width:115px; margin:0; padding:8px 4px; border:0; background:transparent; color:var(--accent); font-size:13px; text-align:right; }
+.settings-notes { padding:5px 12px 0; }
+.settings-notes p { margin:8px 0 0; font-size:12px; line-height:1.6; color:var(--muted); }
+.settings-notes p:empty { display:none; }
+.settings-notes #ringing-status { color:var(--accent); }
+.settings-privacy { align-items:flex-start; }
+.settings-privacy .settings-copy>span { line-height:1.65; }
+.settings-remove { border:0; background:transparent; color:var(--danger); display:flex; align-items:center; gap:12px; text-align:left; font:inherit; font-size:12px; line-height:1.5; padding:18px 12px 0; width:100%; }
+.settings-remove svg { width:19px; height:19px; flex-shrink:0; }
+.timer-page .settings-header h2 { font-size:20px; }
+.timer-explanation { color:var(--muted); font-size:14px; line-height:1.65; margin:14px 4px 12px; }
+.timer-scope { font-size:12px; color:var(--accent); line-height:1.5; margin:0 4px 16px; }
+.timer-options { display:grid; gap:0; }
+.timer-option { margin:0; display:flex; align-items:center; gap:24px; min-height:58px; padding:12px 4px; cursor:pointer; color:var(--text); }
+.timer-option input { appearance:none; -webkit-appearance:none; width:24px; height:24px; min-width:24px; border-radius:50%; border:2px solid var(--muted); background:transparent; margin:0; padding:0; display:grid; place-items:center; }
+.timer-option input:checked { border-color:var(--accent); }
+.timer-option input:checked:after { content:''; width:12px; height:12px; border-radius:50%; background:var(--accent); }
+.timer-option input:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
+.timer-option>span { font-size:17px; line-height:1.4; }
+.timer-option-detail { display:block; font-size:12px; line-height:1.4; color:var(--muted); margin-top:3px; }
+.timer-footer { padding:12px 28px max(20px,env(safe-area-inset-bottom)); display:flex; justify-content:flex-end; flex-shrink:0; background:var(--bg); }
+.timer-save { min-width:88px; min-height:44px; border:0; background:var(--accent-soft); color:var(--text); border-radius:28px; font:inherit; font-size:16px; font-weight:600; padding:12px 24px; }
+.custom-time-dialog { padding:0; width:calc(100% - 48px); max-width:360px; border:0; border-radius:28px; background:var(--surface); color:var(--text); box-shadow:0 16px 60px #0004; }
+.custom-time-dialog::backdrop { background:#0006; backdrop-filter:none; }
+.custom-time-content { padding:25px 24px 20px; }
+.custom-time-content h2 { margin:0 0 26px; font-size:25px; font-weight:550; letter-spacing:-.5px; }
+.timer-wheels { display:flex; gap:20px; justify-content:center; margin:0 auto 27px; }
+.wheel-frame { position:relative; }
+.wheel-number { width:68px; }
+.wheel-unit { width:120px; }
+.wheel-frame:after { content:''; position:absolute; pointer-events:none; top:48px; height:48px; left:0; right:0; border-block:2px solid var(--text); }
+.timer-wheel { height:144px; overflow-y:auto; overflow-x:hidden; padding-block:48px; box-sizing:border-box; scroll-snap-type:y mandatory; overscroll-behavior:contain; scrollbar-width:none; touch-action:pan-y; mask-image:linear-gradient(transparent,#000 25%,#000 75%,transparent); -webkit-mask-image:linear-gradient(transparent,#000 25%,#000 75%,transparent); }
+.timer-wheel::-webkit-scrollbar { display:none; }
+.timer-wheel:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.wheel-option { height:48px; min-height:48px; display:grid; place-items:center; scroll-snap-align:center; color:var(--muted); font-size:20px; font-variant-numeric:tabular-nums; user-select:none; cursor:pointer; }
+.wheel-option.wheel-selected { color:var(--text); }
+.custom-time-actions { display:flex; justify-content:flex-end; gap:18px; }
+.custom-time-actions button { border:0; background:transparent; color:var(--accent); font:inherit; font-size:16px; font-weight:600; padding:12px 10px; min-height:44px; }
+@media(max-width:600px) {
+ :root dialog.settings-page { position:fixed; inset:0; margin:0; width:100%; height:100dvh; max-height:100dvh; border:0; border-radius:0; }
+ .settings-header { padding:calc(10px + env(safe-area-inset-top)) 12px 10px; gap:8px; }
+ .settings-body { padding:4px 16px 20px; }
+ .settings-item { gap:10px; padding:15px 12px; }
+ .settings-copy strong { font-size:14px; }
+ .settings-profile { padding:12px 6px 26px; }
+ .timer-page .settings-body { padding-inline:24px; }
+ .timer-page .settings-header { gap:4px; }
+ .timer-option { min-height:57px; }
+ .timer-footer { padding-top:8px; }
+}
+@media(max-width:350px) {
+ .settings-icon { width:30px; height:30px; flex-basis:30px; border-radius:10px; }
+ .settings-item { gap:8px; padding-inline:10px; }
+ .settings-copy strong { font-size:13px; }
+ .settings-value { font-size:11px; }
+ .settings-item select { max-width:98px; font-size:12px; }
+ .timer-page .settings-header h2 { font-size:18px; }
+ .custom-time-content { padding-inline:20px; }
+ .timer-wheels { gap:16px; }
+}

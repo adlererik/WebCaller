@@ -1,19 +1,24 @@
+import {ratchetStatement} from '../public/envelope-auth.js';
+import {registerViewTimer,visibleMessages,replayDeadline} from './message-retention.mjs';
+import {validLifetime,hasViewTimer} from '../public/message-lifetime.js';
 import http from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { randomBytes, randomUUID, createHash, createHmac, timingSafeEqual, createPublicKey } from 'node:crypto';
+import { randomBytes, randomUUID, createHash, createHmac, timingSafeEqual, createPublicKey, verify } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import webpush from 'web-push';
 import {gzipSync} from 'node:zlib';
 import { createStore } from './store.mjs';
 import {messageEventRoutes} from './message-events.mjs';
 import {attachmentRoutes} from './attachments.mjs';
+import {transferLimits} from './transfer-limits.mjs';
 import {CHUNK_SIZE} from '../public/attachments.js';
 import {validAttribution,defaultAttribution} from '../public/location.js';
 import {createCallAlerts,notificationPayload} from './call-alerts.mjs';
 import {ratchetRoutes} from './ratchet.mjs';
 import {ntfyAlerts} from './ntfy.mjs';
+import {dialing} from './dialing.mjs';
 
 const root = fileURLToPath(new URL('../public/', import.meta.url));
 const hash = (v) => createHash('sha256').update(v).digest('hex');
@@ -50,16 +55,19 @@ export function createApp(options = {}) {
   const mapImageSource=mapProvider.origin===origin?'':mapProvider.origin;
 
   const store = createStore(options.dataDir || env.DATA_DIR || './data');
+  const acquireTransfer=transferLimits();
   const sockets = new Map(), tickets = new Map(), calls = new Map(), rates = new Map(), disconnectTimers=new Map();
   const alertTests=new Map(),testTimers=new Set();
   const pushReady = Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY);
   if (pushReady) webpush.setVapidDetails(env.VAPID_SUBJECT || 'mailto:admin@example.com', env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
-  const contacts = (id) => store.all('SELECT users.* FROM users JOIN contacts ON contacts.b=users.id WHERE contacts.a=?', id).map(userView);
-  const related = (a, b) => !!store.get('SELECT 1 FROM contacts WHERE a=? AND b=?', a, b);
+  let directory;
+  const contacts = (id) => {const saved=store.all('SELECT users.* FROM users JOIN contacts ON contacts.b=users.id WHERE contacts.a=?', id).map(userView);return directory?directory.roster(id,saved):saved;};
+  const related = (a, b) => !directory?.blocked(a,b)&&!!store.get('SELECT 1 FROM contacts WHERE a=? AND b=?', a, b);
+  const canContact=(a,b)=>related(a,b)||!!directory?.pending(a,b);
   const handleAttachment=attachmentRoutes({store,related,validateEnvelope,fail,body,env,cancelled:a=>{emit(a.sender,{type:'transfer-ended',id:a.message_id});emit(a.recipient,{type:'transfer-ended',id:a.message_id});}});
   const emit = (id, event) => { for (const ws of sockets.get(id) || []) if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(event)); };
   const handleMessageEvents=messageEventRoutes({store,body,fail,validateEnvelope,emit});
-  const handleRatchet=ratchetRoutes({store,related,body,fail,emit});
+  const handleRatchet=ratchetRoutes({store,related:canContact,body,fail,emit});
   const auth = (req) => {
     const token = req.headers.authorization?.match(/^Bearer ([\w-]{43})$/)?.[1];
     const u = token && store.get('SELECT * FROM users WHERE token_hash=?', hash(token));
@@ -71,6 +79,7 @@ export function createApp(options = {}) {
     if (!r || r.until < now) rates.set(key, { count: 1, until: now + 60000 });
     else if (++r.count > limit) fail(429, 'Please wait a moment and try again');
   };
+  directory=dialing({store,body,fail,rate,emit,userView,validKeys,validName,hash,publicURL:publicURL.href,enabled:env.DIAL_CODES_ENABLED!=='false'});
   async function push(id, payload, ttl = 60, topic, endpoint) {
     if (!pushReady) return;
     const rows = endpoint?store.all('SELECT * FROM push WHERE owner=? AND endpoint=?',id,endpoint):store.all('SELECT * FROM push WHERE owner=?', id);
@@ -81,11 +90,15 @@ export function createApp(options = {}) {
   }
   const extraAlerts=ntfyAlerts({env,publicURL:publicURL.href,store,body,fail,rate,fetcher:options.ntfyFetch||fetch,testDelay:options.testAlertDelay??8000});
   const alerts=createCallAlerts({isWaiting:id=>{const c=calls.get(id);return !!c&&!c.answered&&c.expiresAt>Date.now();},
-    ...(options.alertTiming||{}),onStop:id=>extraAlerts.stop(id),send:(c,revision,expiresAt)=>Promise.allSettled([
-      push(c.to,notificationPayload({type:'call',callId:c.id,revision,url:publicURL.href.replace(/\/$/,'')+'/',expiresAt,callExpiresAt:c.expiresAt}),
-        Math.max(0,Math.floor((expiresAt-Date.now())/1000)),hash(c.id).slice(0,32)),
-      extraAlerts.call(c,revision,expiresAt)
-    ])});
+    ...(options.alertTiming||{}),onStop:id=>extraAlerts.stop(id),send:async(c,revision,expiresAt)=>{
+      if(c.alertTransport!=='web-push'&&await extraAlerts.call(c,revision,expiresAt))return;
+      // A failed publish can finish after answer/hang-up. Never send a fallback
+      // for an ended call, and keep this call's remaining reminders on web push.
+      if(calls.get(c.id)!==c||c.answered||c.expiresAt<=Date.now()||expiresAt<=Date.now())return;
+      c.alertTransport='web-push';
+      return push(c.to,notificationPayload({type:'call',callId:c.id,revision,url:publicURL.href.replace(/\/$/,'')+'/',expiresAt,callExpiresAt:c.expiresAt}),
+        Math.max(0,Math.floor((expiresAt-Date.now())/1000)),hash(c.id).slice(0,32));
+    }});
   async function ice(id) {
     if (env.CF_TURN_KEY_ID && env.CF_TURN_API_TOKEN) {
       const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(env.CF_TURN_KEY_ID)}/credentials/generate-ice-servers`, {
@@ -119,7 +132,8 @@ export function createApp(options = {}) {
       if (path.startsWith(`${base}/api/`)) {
         if (req.method !== 'GET' && req.headers.origin !== origin) fail(403, 'Unrecognized origin');
         const route = path.slice((base + '/api').length);
-        if (route === '/config' && req.method === 'GET') return json(200, { base, mapTileURL, mapAttribution, ntfyAvailable:extraAlerts.available, publicURL: publicURL.href.replace(/\/$/, ''), vapidPublicKey: env.VAPID_PUBLIC_KEY || null, bootstrap: !store.get('SELECT id FROM users LIMIT 1'), turnConfigured: Boolean((env.TURN_SECRET && env.TURN_URLS) || (env.CF_TURN_KEY_ID && env.CF_TURN_API_TOKEN)) });
+        if (route === '/config' && req.method === 'GET') return json(200, { base, mapTileURL, mapAttribution, ntfyAvailable:extraAlerts.available, dialCodes:env.DIAL_CODES_ENABLED!=='false', publicURL: publicURL.href.replace(/\/$/, ''), vapidPublicKey: env.VAPID_PUBLIC_KEY || null, bootstrap: !store.get('SELECT id FROM users LIMIT 1'), turnConfigured: Boolean((env.TURN_SECRET && env.TURN_URLS) || (env.CF_TURN_KEY_ID && env.CF_TURN_API_TOKEN)) });
+        if(route==='/dial/connect'&&req.method==='POST')return await directory.connect(req,json);
         if(route==='/invite-info'&&req.method==='POST'){
           rate(`invite-info:${req.socket.remoteAddress}`,30);const b=await body(req);
           if(typeof b.invite!=='string'||b.invite.length>100)fail(400,'Open the full invitation link');
@@ -151,6 +165,7 @@ export function createApp(options = {}) {
             const owner = store.get('SELECT * FROM users WHERE id=?', invite.owner);
             if (b.fingerprint !== hash(JSON.stringify(JSON.parse(owner.keys)))) fail(403, 'Invitation identity does not match');
             const id = existing?.id || randomUUID(), token = existing ? null : secret();
+            if(existing&&directory.blocked(id,invite.owner))fail(403,'This contact is blocked');
             if (!existing) store.run('INSERT INTO users VALUES(?,?,?,?)', id, b.name.trim(), JSON.stringify(b.keys), hash(token));
             store.run('INSERT OR IGNORE INTO contacts VALUES(?,?)', invite.owner, id);
             store.run('INSERT OR IGNORE INTO contacts VALUES(?,?)', id, invite.owner);
@@ -160,7 +175,11 @@ export function createApp(options = {}) {
           emit(result.contact.id, { type: 'contacts' });
           return json(201, result);
         }
-        const u = auth(req); rate(route.startsWith('/attachments')?'attachment:'+u.id:u.id,route.startsWith('/attachments')?600:120);
+        const u = auth(req);
+        if(route.startsWith('/attachments')){
+          const release=acquireTransfer(u.id);res.once('finish',release);res.once('close',release);
+        }else rate(u.id);
+        if(await directory.routes(req,route,u,json))return;
         if(await extraAlerts.routes(req,route,u,json))return;
         if(await handleRatchet(req,res,route,u,json))return;
         if(await handleAttachment(req,res,route,u,json))return;
@@ -169,15 +188,18 @@ export function createApp(options = {}) {
         const removeContact=route.match(/^\/contacts\/([a-f0-9-]{36})$/);
         if(removeContact&&req.method==='DELETE'){
           const peer=removeContact[1];if(peer===u.id)fail(400,'Choose a contact');store.purge();
+          const block=url.searchParams.get('block')==='1';if(block&&!store.get('SELECT 1 FROM users WHERE id=?',peer))fail(404,'Contact unavailable');
           // Deleted IDs remain until their original expiry, preventing late upload
           // commits/replays from restoring history, even after a fresh invitation.
           const deleted=store.transaction(()=>{
             const pair=[u.id,peer,peer,u.id];
             const rows=store.all('SELECT id,sender,recipient,expires FROM messages WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?) UNION SELECT message_id AS id,sender,recipient,expires FROM attachments WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?)',...pair,...pair);
-            for(const m of rows)store.run('INSERT OR IGNORE INTO message_deletions VALUES(?,?,?,?)',m.id,m.sender,m.recipient,m.expires);
+            for(const m of rows)store.run('INSERT OR IGNORE INTO message_deletions VALUES(?,?,?,?)',m.id,m.sender,m.recipient,replayDeadline(store,m.id,m.expires));
             store.run('DELETE FROM attachments WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?)',...pair);
             store.run('DELETE FROM messages WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?)',...pair);
             store.run('DELETE FROM contacts WHERE (a=? AND b=?) OR (a=? AND b=?)',...pair);
+            store.run('DELETE FROM contact_requests WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?)',...pair);
+            if(block)store.run('INSERT OR IGNORE INTO contact_blocks VALUES(?,?,?)',u.id,peer,Date.now());
             return store.all('SELECT id,expires FROM message_deletions WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?)',...pair);
           });
           for(const [id,c]of calls)if([c.from,c.to].includes(u.id)&&[c.from,c.to].includes(peer)){
@@ -201,7 +223,7 @@ export function createApp(options = {}) {
         }
         if (route === '/messages' && req.method === 'GET') {
           store.purge();
-          return json(200, store.all('SELECT envelope FROM messages WHERE (recipient=? OR sender=?) AND expires>? ORDER BY created DESC LIMIT 500', u.id, u.id, Date.now()).reverse().map(r => JSON.parse(r.envelope)));
+          return json(200, visibleMessages(store,u.id).reverse().map(r => JSON.parse(r.envelope)));
         }
         if(route==='/message-deletions'&&req.method==='GET'){
           store.purge();return json(200,store.all('SELECT id,expires FROM message_deletions WHERE sender=? OR recipient=?',u.id,u.id));
@@ -211,7 +233,7 @@ export function createApp(options = {}) {
           store.purge();const m=store.get('SELECT * FROM messages WHERE id=?',deletion[1])||store.get('SELECT * FROM message_deletions WHERE id=?',deletion[1]);
           if(!m||![m.sender,m.recipient].includes(u.id))fail(404,'Message unavailable');
           store.transaction(()=>{
-            store.run('INSERT OR IGNORE INTO message_deletions VALUES(?,?,?,?)',m.id,m.sender,m.recipient,m.expires);
+            store.run('INSERT OR IGNORE INTO message_deletions VALUES(?,?,?,?)',m.id,m.sender,m.recipient,replayDeadline(store,m.id,m.expires));
             store.run('DELETE FROM attachments WHERE message_id=?',m.id);
             store.run('DELETE FROM messages WHERE id=?',m.id);
           });
@@ -222,17 +244,22 @@ export function createApp(options = {}) {
           const b = await body(req),attachment=store.get('SELECT * FROM attachments WHERE message_id=?',b.id);
           // Reserved uploads were validated at creation; a slow upload can exceed five minutes.
           validateEnvelope(b,u.id,false,attachment?.sender===u.id);
+          if(b.v===3&&!hasViewTimer(b))fail(400,'Invalid message lifetime mode');
           if(store.get('SELECT id FROM message_deletions WHERE id=?',b.id))fail(410,'Message was deleted');
-          if (!related(u.id, b.to)) fail(403, 'Invite this person first');
+          if (!canContact(u.id, b.to)) fail(403, 'Connect with this person first');
           const prior = store.get('SELECT sender,envelope FROM messages WHERE id=?', b.id);
           if (prior) { if (prior.sender !== u.id || prior.envelope !== JSON.stringify(b)) fail(409, 'Message identifier conflict'); return json(200, { id: b.id }); }
+          directory.beforeMessage(u.id,b);
           if(attachment){
             if(attachment.sender!==u.id||attachment.envelope!==JSON.stringify(b))fail(409,'Attachment message does not match');
+            if(attachment.expires<=Date.now())fail(410,'Upload expired. Please send the file again.');
             if(store.get('SELECT COUNT(*) AS n FROM attachment_chunks WHERE attachment=?',attachment.id).n!==Math.ceil(attachment.size/CHUNK_SIZE))fail(409,'Finish uploading the file first');
           }
           store.transaction(()=>{
             store.run('INSERT INTO messages VALUES(?,?,?,?,?,?)', b.id, u.id, b.to, b.expiresAt, b.createdAt, JSON.stringify(b));
-            if(attachment)store.run('UPDATE attachments SET committed=1 WHERE id=?',attachment.id);
+            registerViewTimer(store,b);
+            directory.countMessage(u.id,b.to);
+            if(attachment)store.run('UPDATE attachments SET committed=1,expires=? WHERE id=?',b.expiresAt,attachment.id);
           });
           emit(b.to, { type: 'message', envelope: b }); emit(u.id, { type: 'message', envelope: b });
           void push(b.to, notificationPayload({type:'message',messageId:b.id,peerId:b.from,recipientId:b.to,url:publicURL.href.replace(/\/$/,'')+'/',expiresAt:b.expiresAt}), Math.max(0, Math.min(60, Math.floor((b.expiresAt-Date.now())/1000))));
@@ -280,7 +307,9 @@ export function createApp(options = {}) {
         if(callStatus&&req.method==='GET'){
           const c=calls.get(callStatus[1]);
           if(c&&![c.to,c.from].includes(u.id))fail(404,'Call unavailable');
-          return json(200,{state:!c||c.expiresAt<=Date.now()?'ended':c.answered?'answered':'ringing',canAnswer:!!c&&c.to===u.id&&!c.answered&&c.expiresAt>Date.now(),expiresAt:c?.expiresAt||null});
+          const canAnswer=!!c&&c.to===u.id&&!c.answered&&c.expiresAt>Date.now();
+          return json(200,{state:!c||c.expiresAt<=Date.now()?'ended':c.answered?'answered':'ringing',canAnswer,expiresAt:c?.expiresAt||null,
+            ...(canAnswer&&url.searchParams.get('offer')==='1'?{offer:{kind:'offer',callId:c.id,envelope:c.envelope}}:{})});
         }
         if (route === '/push' && req.method === 'DELETE') { store.run('DELETE FROM push WHERE owner=?', u.id); return json(200, { ok: true }); }
         if (route === '/device' && req.method === 'DELETE') {
@@ -319,7 +348,7 @@ export function createApp(options = {}) {
   });
   function validateEnvelope(b, sender, signaling = false, reservedUpload = false) {
     const now = Date.now();
-    if (![1,2].includes(b?.v) || b.from !== sender || typeof b.to !== 'string' || typeof b.id !== 'string' || !/^[a-f0-9-]{36}$/.test(b.id) || !Number.isSafeInteger(b.createdAt) || !Number.isSafeInteger(b.expiresAt) || b.createdAt > now + 30000 || (!reservedUpload && b.createdAt < now - 300000) || b.expiresAt <= now || b.expiresAt - b.createdAt > (signaling ? 120000 : 604800000) || b.expiresAt <= b.createdAt || typeof b.signature !== 'string' || !/^[A-Za-z0-9_-]{86}$/.test(b.signature)) fail(400, 'Invalid encrypted message');
+    if (![1,2,3].includes(b?.v) || b.from !== sender || typeof b.to !== 'string' || typeof b.id !== 'string' || !/^[a-f0-9-]{36}$/.test(b.id) || !Number.isSafeInteger(b.createdAt) || !Number.isSafeInteger(b.expiresAt) || b.createdAt > now + 30000 || (!reservedUpload && b.createdAt < now - 300000) || b.expiresAt <= now || !validLifetime(b,signaling) || b.expiresAt <= b.createdAt || typeof b.signature !== 'string' || !/^[A-Za-z0-9_-]{86}$/.test(b.signature)) fail(400, 'Invalid encrypted message');
     if(b.v===1){
       if(typeof b.ciphertext!=='string'||b.ciphertext.length>24000||typeof b.selfCiphertext!=='string'||b.selfCiphertext.length>24000||typeof b.iv!=='string'||b.iv.length!==16||!b.ephemeral?.x||!b.ephemeral?.y||b.ephemeral.d)fail(400,'Invalid encrypted message');
       if(store.get('SELECT owner FROM ratchet_accounts WHERE owner IN (?,?)',sender,b.to)&&!reservedUpload)fail(426,'Reopen WebCaller on both phones to update secure messaging.');
@@ -328,6 +357,11 @@ export function createApp(options = {}) {
       if(b.selfCiphertext!==undefined||b.ephemeral!==undefined||r?.protocol!=='olm-v2'||!['chat','events','signal','files','typing','transfer'].includes(r.lane)||typeof r.scope!=='string'||r.scope.length>100||![0,1].includes(r.type)||!key(r.sessionId)||!key(r.identity)||!key(r.recipientIdentity)||typeof r.data!=='string'||!/^[A-Za-z0-9_-]+$/.test(r.data)||r.data.length>24000||typeof r.prekeyId!=='string'||r.prekeyId.length>24)fail(400,'Invalid ratchet message');
       const from=store.get('SELECT identity FROM ratchet_accounts WHERE owner=?',sender),to=store.get('SELECT identity FROM ratchet_accounts WHERE owner=?',b.to);
       if(!from||!to||from.identity!==r.identity||to.identity!==r.recipientIdentity)fail(400,'Secure device identity does not match');
+      if(b.v===3){
+        const signer=store.get('SELECT keys FROM users WHERE id=?',sender);let authentic=false;
+        try{authentic=verify('sha256',Buffer.from(ratchetStatement(b)),{key:createPublicKey({key:JSON.parse(signer.keys).sign,format:'jwk'}),dsaEncoding:'ieee-p1363'},Buffer.from(b.signature,'base64url'));}catch{}
+        if(!authentic)fail(400,'Invalid signed message lifetime');
+      }
     }
   }
   const wss = new WebSocketServer({ noServer: true, maxPayload: 65536, perMessageDeflate: false });
@@ -341,8 +375,9 @@ export function createApp(options = {}) {
     const deadline = setTimeout(() => ws.close(4401, 'Authentication required'), 5000);
     ws.on('pong', () => { ws.isAlive = true; });
     ws.on('message', async raw => {
+      let b;
       try {
-        const b = JSON.parse(raw);
+        b = JSON.parse(raw);
         if (!ws.user) {
           const ticket = tickets.get(b.ticket); tickets.delete(b.ticket);
           if (b.type !== 'auth' || !ticket || ticket.expires < Date.now()) return ws.close(4401, 'Ticket expired');
@@ -373,11 +408,12 @@ export function createApp(options = {}) {
         }
         if (b.type !== 'signal' || !['offer','answer','ice','hangup','restart','video','sharing','receipt','sas'].includes(b.kind)) fail(400, 'Invalid signal');
         validateEnvelope(b.envelope, ws.user, true);
-        if (!related(ws.user, b.envelope.to)) fail(403, 'Unknown contact');
+        if (!canContact(ws.user, b.envelope.to)) fail(403, 'Unknown contact');
         if (!/^[a-f0-9-]{36}$/.test(b.callId)) fail(400, 'Invalid call');
         const target = b.envelope.to, active = calls.get(b.callId);
         if (b.kind === 'offer') {
           if (active) return;
+          if(!related(ws.user,target)){rate('request-call:'+ws.user+':'+target,3);rate('request-call-to:'+target,6);}
           if ([...calls.values()].some(c => [c.from,c.to].includes(ws.user) || [c.from,c.to].includes(target))) {
             ws.send(JSON.stringify({ type: 'busy', callId: b.callId })); return;
           }
@@ -388,11 +424,20 @@ export function createApp(options = {}) {
           return;
         }
         if (b.kind !== 'receipt' && (!active || ![active.from,active.to].includes(ws.user) || ![active.from,active.to].includes(target) || ws.user === target)) fail(403, 'Unknown call');
+        if(active?.answered&&ws.user===active.to&&active.answerSocket!==ws&&active.answerSocket?.readyState===1){ws.send(JSON.stringify({type:'call-answered',callId:b.callId}));return;}
         if(b.kind==='sas'){if(!active.answered)fail(403,'Call not answered');rate(`sas:${ws.user}`,50);}
-        if (b.kind === 'answer') { if(active.to!==ws.user)fail(403,'Only the recipient can answer');active.answered = true; active.expiresAt = Date.now()+14400000;alerts.stop(b.callId); }
-        if (b.kind === 'hangup') { alerts.stop(b.callId);calls.delete(b.callId); emit(ws.user, b); }
+        if (b.kind === 'answer') {
+          if(active.to!==ws.user)fail(403,'Only the recipient can answer');
+          if(active.answered){if(active.answerSocket!==ws)ws.send(JSON.stringify({type:'call-answered',callId:b.callId}));return;}
+          if(!related(active.to,active.from))directory.accept(active.to,active.from);
+          active.answered = true;active.answerSocket=ws;active.expiresAt = Date.now()+14400000;alerts.stop(b.callId);
+          // Sibling tabs share this device's identity and can all display the
+          // pending offer. Only the tab that answered should keep the call UI.
+          for(const sibling of sockets.get(ws.user)||[])if(sibling!==ws&&sibling.readyState===1)sibling.send(JSON.stringify({type:'call-answered',callId:b.callId}));
+        }
+        if (b.kind === 'hangup') { alerts.stop(b.callId);calls.delete(b.callId); emit(ws.user, {type:'call-ended',callId:b.callId}); }
         emit(target, b);
-      } catch (e) { ws.send(JSON.stringify({ type: 'error', error: e.status ? e.message : 'Invalid request' })); }
+      } catch (e) { ws.send(JSON.stringify({ type: 'error', error: e.status ? e.message : 'Invalid request',...(b?.type==='signal'&&/^[a-f0-9-]{36}$/.test(b.callId)?{callId:b.callId,kind:b.kind}:{}) })); }
     });
     ws.on('close', () => {
       clearTimeout(deadline);

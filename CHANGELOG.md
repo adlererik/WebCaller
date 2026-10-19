@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.17.0 — 2026-10-19
+
+- Raise the file/media limit to 200 MiB, extend encrypted chunk routing through index 3199 and use fresh 1 GiB per-sender / 4 GiB global reservation defaults. Existing explicit lower quotas remain an operator choice.
+- Replace sequential 4 KiB in-call throttling with up to four adaptive encrypted chunk workers, measured file-path probing and a healthy-link ceiling of 24 Mbps (2 Mbps on explicitly reported cellular/Save-Data). Unknown network types no longer impose the old 8 KB/s file limit.
+- Pause/abort file requests for weak or stale call health, resume cautiously after healthy samples, keep voice priority and temporarily reduce video. Replace the 600/minute attachment bottleneck with bounded concurrency and a replenishing request limit.
+- Cache complete ciphertext sets incrementally with additive IndexedDB migration, generation fencing, deletion/expiry cleanup and backward-compatible reads. Preserve AES-256-GCM file framing, Olm sessions, identity pins, call SAS and existing history.
+- Include the previously unreleased hardening, calling-code/onboarding fixes, modern home/settings screens, Off/four-week timers, independent sender/recipient expiry, full-frame orientation and handset icon described below.
+- Publish generic source and prebuilt amd64/arm64 Docker distributions, plain-language installation/update guides, full feature/security documentation, checksums and release-specific image digests. No live deployment configuration is included.
+
+## Included in 0.17.0 — Full-frame calls & independent message timers
+
+- Preserve the complete remote/self camera frame across portrait, landscape and desktop screens. Replace the chat-bubble app mark with a handset design across the home page, favicon and mobile icon assets.
+- Start the sender timer when sent and the recipient timer at first viewing for new timed text/media. Persist the first view across reloads, retry signed read-start acknowledgements, and retain encrypted unread copies until viewing/deletion. Existing messages, Off, identities, pins, Olm and call SAS keep their existing behavior.
+- Authenticate the new v3 application lifetime fields, filter message/media access by participant deadlines, shorten cached-media deadlines without redownloading, and prevent expired-copy replay. Document the longer unread retention and timing metadata.
+
+## Included in 0.17.0 — Settings & message timers
+
+- Redesign Settings as a mobile page with grouped controls, clear icons, large touch targets and light/dark themes; retain appearance, codes, contact naming, call alerts, optional ntfy, diagnostics and device removal.
+- Match the Signal-style disappearing-message list and custom number/unit wheels, with Cancel, Set and explicit Save. Add Off and timers through four weeks for new outgoing text/media without changing older messages. Keep timer semantics from send time.
+- Validate the new signed v2 lifetimes on both endpoints and server, preserve legacy bounds and signaling limits, retain current chat/update ratchets for late Off delivery, and bound uncommitted uploads to a renewable 24-hour lease. Document retained history/skipped-key tradeoffs and the need to refresh old clients.
+
+## Included in 0.17.0 — Vodozemac hardening
+
+- Prefer confirmed ntfy for call alerts without duplicate browser pushes; fall back on failed publishing and keep subsequent reminders on browser push for that call. Preserve text pushes, existing subscriptions and encrypted calling. Add an authenticated per-device switch and recipient-only opening of the exact waiting encrypted call; keep Answer explicit.
+
+- Show loading conversations instead of a false zero count during startup. An independent watchdog keeps download/startup errors visible and offers a page reload without clearing device identity, trust pins or messages.
+
+- Update the bundled Rust cryptographic core from Vodozemac 0.9.0 to 0.11.1 and retain the adapted Apache-2.0 browser binding source, exact dependency lock, pinned build tools and reproducible build script.
+- Propagate invalid Curve25519/session/encryption failures as JavaScript errors. Explicitly require full-authentication Olm V2 on inbound creation; do not accept the newer library's default V1 configuration. Preserve existing application encryption formats, identity pins and four-word call verification.
+- Exercise the actual previous engine against the new engine: bidirectional messages, saved accounts/sessions, unread prekeys, locally wrapped history and attachments, old open tabs and matching SAS. Add inbound/outbound/DH-ratchet invalid-key and truncated-authentication rejection tests.
+- Record source/artifact hashes and refreshed dependency licenses. Add a CI rebuild comparison. This is a source update, not an independent cryptographic audit or an automatic server deployment.
+
 ## 0.16.1 — 2026-10-18
 
 - Add a complete prebuilt Docker distribution alongside native and source-built installations, with native amd64/arm64 image builds, ready-made image publishing and small digest-pinned setup bundles.

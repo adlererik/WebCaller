@@ -8,7 +8,7 @@ Do not use this as a migration recipe for an existing Docker or native installat
 
 ## 1. Download the release
 
-Connect to the server as your regular user, then follow [Download WebCaller](INSTALL.md#2-download-webcaller-onto-the-debian-server), including the checksum. From inside the extracted `WebCaller-v0.16.1` folder:
+Connect to the server as your regular user, then follow [Download WebCaller](INSTALL.md#2-download-webcaller-onto-the-debian-server), including the checksum. From inside the extracted `WebCaller-v0.17.0` folder:
 
 ```sh
 sudo apt update

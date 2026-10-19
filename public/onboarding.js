@@ -6,10 +6,10 @@ export function readEntryFragment(hash) {
   const setupCode=!invitation&&rawSetup&&/^[A-Za-z0-9_-]{16,128}$/.test(rawSetup)?rawSetup:null;
   return {invitation,setupCode,name:setupCode?(params.get('name')||'').trim().slice(0,48):''};
 }
-export function clearEntryFragment(location,history,preserveInvitation=false) {
+export function clearEntryFragment(location,history,preserveInvitation=false,preserveDial=false) {
   const params=new URLSearchParams(location.hash.replace(/^#/,''));
-  if(params.has('invite')||params.has('setup')||params.has('alert-test')||params.has('ntfy-test')||params.has('incoming-call')||params.has('receiver')){
-    const fragment=preserveInvitation&&params.has('invite')?'#invite='+encodeURIComponent(params.get('invite')):'';
+  if(params.has('invite')||params.has('setup')||params.has('alert-test')||params.has('ntfy-test')||params.has('incoming-call')||params.has('receiver')||params.has('dial')){
+    const fragment=preserveInvitation&&params.has('invite')?'#invite='+encodeURIComponent(params.get('invite')):preserveDial&&/^[0-9]{4,12}$/.test(params.get('dial')||'')?'#dial='+params.get('dial'):'';
     history.replaceState(null,'',location.pathname+location.search+fragment);
   }
 }

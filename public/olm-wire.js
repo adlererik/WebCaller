@@ -19,7 +19,7 @@ export function olmFraming(r){
 export function orderedEnvelopes(envelopes){
   const groups=new Map();
   for(const e of envelopes){let key='legacy',index=e.createdAt;
-    if(e.v===2)try{const h=olmFraming(e.ratchet);key=e.from+'/'+e.ratchet.sessionId+'/'+h.key;index=h.index;}catch{key='invalid/'+e.id;}
+    if(e.v>=2)try{const h=olmFraming(e.ratchet);key=e.from+'/'+e.ratchet.sessionId+'/'+h.key;index=h.index;}catch{key='invalid/'+e.id;}
     if(!groups.has(key))groups.set(key,[]);groups.get(key).push({e,index});
   }
   return [...groups.values()].flatMap(group=>group.sort((a,b)=>a.index-b.index).map(row=>row.e));

@@ -1,0 +1,37 @@
+name: Rebuild pinned browser crypto
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'third_party/vodozemac-bindings/**'
+      - 'public/vendor/vodozemac/**'
+      - 'scripts/build-vodozemac.sh'
+      - 'scripts/vendor-vodozemac.py'
+      - '.github/workflows/crypto-build.yml'
+  pull_request:
+    paths:
+      - 'third_party/vodozemac-bindings/**'
+      - 'public/vendor/vodozemac/**'
+      - 'scripts/build-vodozemac.sh'
+      - 'scripts/vendor-vodozemac.py'
+      - '.github/workflows/crypto-build.yml'
+permissions:
+  contents: read
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - run: rustup toolchain install 1.90.0 --profile minimal --target wasm32-unknown-unknown
+      - run: cargo +1.90.0 install wasm-bindgen-cli --version 0.2.100 --locked
+      - run: rustup run 1.90.0 bash scripts/build-vodozemac.sh
+      - run: git diff --exit-code -- public/vendor/vodozemac third_party/vodozemac-bindings/Cargo.lock
+      - run: npm ci --ignore-scripts
+      - run: node --test tests/vodozemac-upgrade.test.mjs tests/ratchet.test.mjs tests/call-sas.test.mjs

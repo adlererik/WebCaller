@@ -8,7 +8,7 @@ Ask the other person to read all four words, in order, and compare them to yours
 
 ## Protocol v1
 
-Existing pinned identities and signed Olm v2 signaling remain mandatory. Both peers advertise `sasVersion: 1` in their authenticated offer/answer. The check starts after the media connection is connected.
+Existing pinned identities and signed libsignal session-v4 signaling remain mandatory. Both peers advertise `sasVersion: 1` in their authenticated offer/answer. The check starts after the media connection is connected.
 
 1. Both endpoints independently construct identical canonical JSON context: protocol domain, call ID, caller/callee user IDs, their existing public-identity fingerprints, and normalized/sorted SHA-256-or-stronger DTLS fingerprint sets from the accepted local/remote SDP. ICE addresses and codec preferences are excluded.
 2. The caller generates a fresh Vodozemac SAS X25519 key pair and random 32-byte nonce, then sends SHA-256 of `[domain, "commit", context, callerPublicKey, callerNonce]`. Only the commitment and context hash are revealed.
@@ -17,7 +17,7 @@ Existing pinned identities and signed Olm v2 signaling remain mandatory. Both pe
 5. The HKDF/HMAC info is canonical JSON `[domain, context, commitment, callerPublicKey, callerNonce, calleePublicKey, calleeNonce]`. Confirmation inputs are role specific. An independent `display-words` HMAC input supplies the first 44 bits for four 11-bit indices into the bundled 2048-word alphabet. These words are a public checksum, not an encryption key or account recovery phrase.
 6. Each endpoint displays words only after checking its counterpart's key confirmation. The callee's public confirmation can be retransmitted on an identical caller reveal. Private SAS and shared-secret objects are freed after completion; only the display and bounded public replay-response material remain for the current call.
 
-Frames use `kind: "sas"` within active-call Olm envelopes. They are not saved as local history, and no SAS private state, words or human-verification record is written to IndexedDB, localStorage, cookies, notifications or URLs. Existing ratchet state still commits atomically. Duplicates are handled at the call protocol layer with fresh encrypted envelopes for retries, avoiding replaying an already-consumed Olm message key.
+Frames use `kind: "sas"` within active-call Signal envelopes. They are not saved as local history, and no SAS private state, words or human-verification record is written to IndexedDB, localStorage, cookies, notifications or URLs. Existing ratchet state still commits atomically. Duplicates are handled at the call protocol layer with fresh encrypted envelopes for retries, avoiding replaying an already-consumed Signal message key.
 
 There is one round per media identity context, no unbounded automatic re-key attempts. Each outbound handshake stage has at most four transmissions, spaced by five seconds; the check has a 45-second deadline. Stale contexts/rounds are ignored. A call can continue without the check. Ordinary ICE handovers retain its words; changed media fingerprints clear them and start a new ephemeral check. At hang-up and page exit (`pagehide`), timers, references, pending frames, visible text, titles and accessibility labels are cleared. Deferred startup is checked against the current live media connection, and closing the helper prevents late words from reappearing. Browser/OS forensic erasure cannot be promised.
 
@@ -27,4 +27,10 @@ This application-specific integration has not had an independent security audit.
 
 References: [Matrix SAS](https://spec.matrix.org/latest/client-server-api/#short-authentication-string-sas-verification), [ZRTP commitment design](https://www.rfc-editor.org/rfc/rfc6189.html#section-4.4.1.1), [WebRTC media identities](https://www.rfc-editor.org/rfc/rfc8827.html#section-7.4). The word alphabet is MIT-licensed BIP-39 English; it is used only for display. See [its notice](../third_party/bip39/NOTICE.txt).
 
-The [source review](SECURITY_REVIEW.md) explains MITM, identity continuity and forward-secrecy limits; the [README](../README.md#webcaller-beside-signal) compares the design with Signal.
+The [source review](SECURITY_REVIEW.md) explains MITM, identity continuity and forward-secrecy limits; the [README](../README.md#how-it-compares-with-signal) compares the design with Signal.
+
+## Full identity fingerprint
+
+For a persistent identity check, open the chat and tap the contact's name/header. Compare **every group** of the displayed safety fingerprint in person or over an independent trusted channel. The display is SHA-256 of the sorted two application-identity fingerprints: 256 bits shown as grouped hexadecimal. It is WebCaller's pairwise format, not Signal's 60-digit safety number and not a display of a Signal root key. The signed prekey and persistent libsignal pin checks supply the additional binding. New browser/cleared storage may create a new identity; investigate key warnings rather than resetting pins to get past them.
+
+The maintainer deliberately chose human verification/pins instead of an external key-transparency service/auditor dependency. These do not supply directory-wide automatic transparency checks. Skipping SAS keeps calls usable but adds no human authentication. [Security tradeoffs](SECURITY.md#identity-verification-without-key-transparency).

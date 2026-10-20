@@ -18,6 +18,7 @@ certs/
 *.key
 __pycache__/
 *.pyc
+**/target/
 .DS_Store
 
 # Private prebuilt-Docker installation state

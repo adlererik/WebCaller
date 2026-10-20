@@ -1,5 +1,6 @@
-import {verify,createPublicKey} from 'node:crypto';
-const curveKey=s=>typeof s==='string'&&/^[A-Za-z0-9+/]{43}$/.test(s)&&Buffer.from(s,'base64').length===32;
+import {verifyApplicationSignature} from './application-signatures.mjs';
+const curveKey=s=>typeof s==='string'&&/^[A-Za-z0-9+/]{44}$/.test(s)&&Buffer.from(s,'base64').length===33&&Buffer.from(s,'base64')[0]===5;
+const prekeyBundle=(s,identity,id)=>{try{if(typeof s!=='string'||s.length>6000)return false;const b=JSON.parse(s),sig=x=>typeof x==='string'&&/^[A-Za-z0-9+/]{86}$/.test(x)&&Buffer.from(x,'base64').length===64;return b.identity===identity&&Number.isInteger(b.registration)&&b.registration>0&&b.registration<16380&&b.signed?.id===1&&curveKey(b.signed.key)&&sig(b.signed.signature)&&String(b.prekey?.id)===id&&curveKey(b.prekey.key)&&typeof b.prekey.kyber==='string'&&Buffer.from(b.prekey.kyber,'base64').length===1569&&sig(b.prekey.kyberSignature);}catch{return false;}};
 const identityStatement=(owner,identity)=>JSON.stringify({v:2,owner,identity});
 const prekeyStatement=(owner,identity,id,key)=>JSON.stringify({v:2,owner,identity,id,key});
 export function ratchetRoutes({store,related,body,fail,emit}){
@@ -9,24 +10,26 @@ export function ratchetRoutes({store,related,body,fail,emit}){
       json(200,{available:store.get('SELECT COUNT(*) n FROM ratchet_prekeys WHERE owner=? AND claimed=0',u.id).n});return true;
     }
     if(route==='/ratchet/publish'&&req.method==='POST'){
-      const b=await body(req),publicKey=createPublicKey({key:JSON.parse(u.keys).sign,format:'jwk'});
-      const authentic=(statement,signature)=>typeof signature==='string'&&signature.length<=128&&verify('sha256',Buffer.from(statement),{key:publicKey,dsaEncoding:'ieee-p1363'},Buffer.from(signature,'base64url'));
+      const b=await body(req),root=JSON.parse(u.keys).sign;
+      const authentic=(statement,signature)=>verifyApplicationSignature(root,u.id,statement,signature);
       if(b.v!==2||!curveKey(b.identity)||!Array.isArray(b.keys)||b.keys.length>50||!authentic(identityStatement(u.id,b.identity),b.signature))fail(400,'Invalid signed secure identity');
       const seen=new Set();
       for(const k of b.keys){
-        if(!k||typeof k.id!=='string'||!/^[A-Za-z0-9+/]{1,24}$/.test(k.id)||seen.has(k.id)||!curveKey(k.key)||!authentic(prekeyStatement(u.id,b.identity,k.id,k.key),k.signature))fail(400,'Invalid signed one-time key');seen.add(k.id);
+        if(!k||typeof k.id!=='string'||!/^[A-Za-z0-9+/]{1,24}$/.test(k.id)||seen.has(k.id)||!prekeyBundle(k.key,b.identity,k.id)||!authentic(prekeyStatement(u.id,b.identity,k.id,k.key),k.signature))fail(400,'Invalid signed one-time key');seen.add(k.id);
       }
       const prior=store.get('SELECT * FROM ratchet_accounts WHERE owner=?',u.id);
       if(prior&&prior.identity!==b.identity)fail(409,'This device’s secure storage changed. Set up the device again rather than replacing its trusted identity.');
       store.transaction(()=>{
         store.run('INSERT OR IGNORE INTO ratchet_accounts VALUES(?,?,?)',u.id,b.identity,b.signature);
+        if(b.signature.startsWith('ed25519-v1.'))store.run('UPDATE ratchet_accounts SET signature=? WHERE owner=? AND identity=?',b.signature,u.id,b.identity);
         for(const k of b.keys){const existing=store.get('SELECT * FROM ratchet_prekeys WHERE owner=? AND id=?',u.id,k.id);
           if(existing&&(existing.key!==k.key||existing.signature!==k.signature)){
-            // ECDSA signatures are randomized; the same public key may be re-signed on retry.
+            // Older ECDSA signatures may differ on retry. Only the key is immutable.
             if(existing.key!==k.key)fail(409,'One-time key identifier conflict');
           }
           // Keep claimed IDs: a retried publication must never resurrect a used key.
           store.run('INSERT OR IGNORE INTO ratchet_prekeys VALUES(?,?,?,?,0)',u.id,k.id,k.key,k.signature);
+          if(k.signature.startsWith('ed25519-v1.'))store.run('UPDATE ratchet_prekeys SET signature=? WHERE owner=? AND id=? AND key=?',k.signature,u.id,k.id,k.key);
         }
       });
       // A migration snapshot is safe to retry: v1 writes to/from activated devices

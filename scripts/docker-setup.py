@@ -1,6 +1,6 @@
 """First-run configuration, private QR and reviewed bundle updates. Runs inside Docker."""
 import argparse,contextlib,getpass,hashlib,ipaddress,json,os,pathlib,re,secrets,shutil,subprocess,sys,tarfile,tempfile,urllib.parse,urllib.request
-FILES={'compose.yaml','images.env','webcaller','README.md','VERSION','LICENSE'}
+FILES={'compose.yaml','images.env','webcaller','README.md','VERSION','LICENSE','LICENSE-MIT','LICENSING.md','THIRD_PARTY_NOTICES.md'}
 def hostname(value):
  value=value.lower().strip()
  if not re.fullmatch(r'(?=.{1,253}$)[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?',value) or '.' not in value or '..' in value:raise ValueError('Use a domain name without a scheme, port or path.')
@@ -46,7 +46,7 @@ def install(settings,bundle,vapid=None):
  if s.get('ntfy'):profiles.append('ntfy')
  secret=s.get('turnSecret') if s['relay']=='existing' else secrets.token_hex(32)
  urls=s.get('turnURLs','') if s['relay']=='existing' else (f"turn:{s['publicIP']}:3478?transport=udp,turn:{s['publicIP']}:3478?transport=tcp" if s['relay']=='self' else '')
- app={'PUBLIC_URL':'https://'+s['host']+'/calls','BOOTSTRAP_TOKEN':secrets.token_urlsafe(24),'VAPID_PUBLIC_KEY':vapid['publicKey'],'VAPID_PRIVATE_KEY':vapid['privateKey'],'VAPID_SUBJECT':'https://'+s['host'],'TURN_URLS':urls,'TURN_SECRET':secret}
+ app={'WEBCALLER_CRYPTO_ENGINE':'libsignal-pqxdh-v1','PUBLIC_URL':'https://'+s['host']+'/calls','BOOTSTRAP_TOKEN':secrets.token_urlsafe(24),'VAPID_PUBLIC_KEY':vapid['publicKey'],'VAPID_PRIVATE_KEY':vapid['privateKey'],'VAPID_SUBJECT':'https://'+s['host'],'TURN_URLS':urls,'TURN_SECRET':secret}
  if s.get('ntfy'):app.update(NTFY_PUBLIC_URL='https://'+s['ntfyHost'],NTFY_PUBLISH_URL='http://ntfy:8094',NTFY_PUBLISH_TOKEN_FILE='/run/webcaller-ntfy/publisher.token',NTFY_ALLOW_DOCKER_HTTP='true',NTFY_IOS_UPSTREAM=str(bool(s.get('ios'))).lower())
  config=pathlib.Path(tempfile.mkdtemp(prefix='.setup-',dir=bundle));config.chmod(0o700)
  try:
@@ -90,6 +90,7 @@ def qr(bundle):
 def prepare_update(bundle,version):
  if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+',version):raise ValueError('Use an explicit release such as v0.17.1.')
  current=(bundle/'VERSION').read_text().strip()
+ if tuple(map(int,current.split('.')))<(0,18,0):raise ValueError('Olm installations require the explicit migration guide, not an automatic libsignal update.')
  if tuple(map(int,version[1:].split('.')))<=tuple(map(int,current.split('.'))):raise ValueError('Choose a newer release; downgrades need manual migration review.')
  name='WebCaller-Docker-'+version;url='https://github.com/adlererik/WebCaller/releases/download/'+version+'/'
  with urllib.request.urlopen(url+'SHA256SUMS.txt',timeout=30) as r:sums=r.read(65536).decode()
@@ -113,7 +114,7 @@ def prepare_update(bundle,version):
  images=dict(line.split('=',1) for line in (stage/'images.env').read_text().splitlines() if '=' in line and not line.startswith('#'))
  for key in ['WEBCALLER_IMAGE','SETUP_IMAGE','TURN_IMAGE']:
   if not re.fullmatch(r'ghcr\.io/adlererik/webcaller:[a-zA-Z0-9_.-]+@sha256:[a-f0-9]{64}',images.get(key,'')):raise ValueError('Update images must have the expected namespace and release digest.')
- if images.get('BUNDLE_FORMAT')!='1':raise ValueError('This release needs a different installer; follow its migration guide.')
+ if images.get('BUNDLE_FORMAT')!='2':raise ValueError('This release needs a different installer; follow its migration guide.')
  for key,prefix in [('NTFY_IMAGE','binwiederhier/ntfy:'),('CADDY_IMAGE','caddy:'),('TUNNEL_IMAGE','cloudflare/cloudflared:')]:
   if not re.fullmatch(re.escape(prefix)+r'[A-Za-z0-9_.-]+@sha256:[a-f0-9]{64}',images.get(key,'')):raise ValueError('Unexpected supporting image reference.')
  write(stage/'.verified',json.dumps({'from':current,'files':{f:hashlib.sha256((stage/f).read_bytes()).hexdigest() for f in FILES}}))

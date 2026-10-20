@@ -1,6 +1,6 @@
 {
   "name": "webcaller",
-  "version": "0.17.1",
+  "version": "0.18.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -12,14 +12,18 @@
     "test": "node --test --test-concurrency=4 tests/*.test.mjs",
     "check": "node scripts/check.mjs",
     "setup": "node scripts/setup.mjs",
-    "audit:source": "node scripts/audit-source.mjs"
+    "audit:source": "node scripts/audit-source.mjs",
+    "verify:signal": "python3 scripts/verify-signal-source.py",
+    "build:signal": "python3 third_party/libsignal/build-signal.py",
+    "test:signal": "node --test third_party/libsignal/oracle/interop.test.mjs",
+    "prepare:source": "node scripts/audit-source.mjs && python3 scripts/package-experimental-source.py"
   },
   "dependencies": {
     "web-push": "3.6.7",
     "ws": "8.21.0"
   },
-  "description": "Web-only adaptive audio/video calls and encrypted disappearing messages",
-  "license": "MIT",
+  "description": "Signal-like self-hosted WebRTC phone with libsignal PQXDH/Triple Ratchet, adaptive calls, encrypted chat and optional SAS",
+  "license": "AGPL-3.0-only",
   "devDependencies": {
     "fake-indexeddb": "6.2.5",
     "vodozemac-legacy-test": "npm:@towns-protocol/vodozemac@0.1.0"

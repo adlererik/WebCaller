@@ -1,62 +1,85 @@
-# Operations
+# Operations, updates and recovery
 
-For the ready-made image distribution, use the [prebuilt Docker guide](../docker/README.md): `./webcaller status`, `./webcaller stop`, `./webcaller start`, and `./webcaller update vX.Y.Z`. Its update command checks an explicit newer bundle, downloads images before replacing public files and waits for startup/health. Keep `.env`, `config/` and named volumes. It does not automatically back up conversation history or roll back database migrations. The older source-build and native workflows are below.
+## Keep the parts separate
 
-Run commands from the installed project directory. The first sections describe **Docker**; native systemd commands are below. Keep your chosen installation method when updating. Use the same Compose profiles selected during setup.
+A phone's private identity, ratchets and readable local history live in its browser profile. The server holds public identity/contact metadata and queued encrypted content. TURN is a media relay; ntfy is an optional notification service. Changing one component is not a reason to regenerate another component's secrets.
 
-```sh
-sudo docker compose ps
-sudo docker compose logs --tail=100 webcaller
-sudo docker compose --profile https --profile turn up -d
-```
+Use [the native guide](INSTALL_NATIVE.md) or [Docker guide](../docker/README.md) consistently. Keep configuration private. Preserve owner token, VAPID key pair, TURN secret, ntfy publisher credential and browser site data during ordinary updates. Changing hostname/profile can create a different browser storage context; a path on the same origin is not a separate security boundary.
 
-Only include profiles you actually use. Recreating selected containers loads changed `.env` values. Avoid posting logs without reviewing metadata. App logs do not intentionally include message bodies or invite fragments; infrastructure logs are outside this guarantee.
+## Back up before an update
 
-## Updates
+Finish active calls. Save the exact source/tag, dependency lock/runtime or image digests, private configuration, service/proxy configuration, a **consistent** SQLite snapshot and any required ntfy state. These are sensitive backups; keep them access restricted. A raw copy of a live SQLite file without its WAL is not a dependable backup. Stop the app for the copy or use SQLite's backup API.
 
-Back up configuration and data first. Download and verify the new release using the [installation guide](INSTALL.md#2-download-webcaller-onto-the-debian-server), but do not run its first-install command again. Keep your installation path, `.env`, certificates and `.runtime/compose-profiles`; copy only the reviewed source into that directory. Do not copy a new example over `.env`. Keep the same Compose project name `webcaller` so named data volumes are reused. Then:
+For a native installation at `/opt/webcaller`:
 
 ```sh
-sudo docker compose build webcaller
-sudo docker compose --profile https --profile turn up -d --build
+sudo systemctl stop webcaller.service
+mkdir -m 700 -p "$HOME/webcaller-backups"
+cp -a /opt/webcaller/.env "$HOME/webcaller-backups/app.env"
+cp -a /opt/webcaller/data "$HOME/webcaller-backups/data"
+sudo systemctl start webcaller.service
 ```
 
-Use only your chosen profiles. Wait for `sudo docker compose ps` to show the app healthy, then test the public page and a real call. Do not delete the data volume, rename the Compose project or regenerate secrets. v0.16.0 adds an alternative prebuilt distribution and restricted ntfy secret-file/private-network configuration; it does not change the database schema or encryption protocols. Earlier previews include additive schema and security migrations; always read [release notes](../CHANGELOG.md), especially when skipping versions. This preview does not provide account recovery/export or browser identity synchronization.
+Use a **new dated backup directory** for each real backup, not a repeatedly overwritten example. Adapt the service/root to your own installation. Save source/runtime/units separately too. Server backups do not contain phone-held private keys. Browser-profile backups, where available, are separate and highly sensitive; a copied database alone is not a portable device export.
 
-## Backups and disappearing messages
+## Native libsignal updates
 
-Back up `.env` and certs privately, encrypted and outside Git. Backing up SQLite retains ciphertext past its normal expiry and may conflict with your disappearing-message policy. Decide that policy first. Stop the app before making a consistent database copy; never use `down -v` to stop for a backup.
+For a Git installation, review the release, stop the service, make the backup, then fetch the chosen tag and its pinned submodule. Keep `.env`/data/runtime. From the project with its Node runtime in PATH:
 
-## Start after reboot
+```sh
+git fetch --tags origin
+git switch --detach vX.Y.Z
+git submodule update --init --recursive
+npm ci --ignore-scripts
+npm run verify:signal
+npm run prepare:source
+sudo systemctl restart webcaller.service
+```
 
-The installer enables Docker. Containers use `restart: unless-stopped`, so they restart after reboot unless deliberately stopped. This differs from a guarantee that your router, ISP or certificate provider stays reachable. Check `docker compose ps` and test a cross-network call after a real reboot.
+Replace the version placeholder with a reviewed actual tag. Preserve any local modifications before switching. Rebuild the source offer after local code edits. Do not deploy an arbitrary branch automatically or run `npm audit fix --force` against the pinned protocol/oracle just to remove a warning. Restore the matching earlier code/config/database with the service stopped if a migration failed. New messages created after an old snapshot may be lost on a database rollback.
 
-## TLS renewal and IP changes
+For Docker, use its explicit-version updater and [volume/config backup guidance](../docker/README.md). The new bundle format deliberately blocks the old Olm updater from blindly applying this protocol change. `down -v` deletes volumes; do not use it as a restart command.
 
-Caddy renews its web certificate automatically. Coturn domain certificates mounted in `certs/` need your own renewal/reload process. A changed home public IP requires DNS and TURN_PUBLIC_IP/TURN_URLS updates; the beginner Docker recipe does not automatically discover/forward router changes. The separate native maintenance helper can do this only after its explicit LAN/runtime/unit setup. Keep user/private data out of Git and releases.
+## Olm to libsignal is a migration
 
-## Stop or remove
+v0.17.1 and earlier use a different message transport. Read [Approved cutover](APPROVED_CUTOVER.md). Stage/rehearse on a copied database, preserve device identities/contacts/alert registrations and networking secrets, explicitly remove incompatible mailbox/session data while stopped, and keep a tested rollback. Both peers must reload the new client. This is not an automatic import of Olm sessions/history and must not be hidden inside a normal image pull.
 
-`sudo docker compose --profile https --profile turn down` stops/removes containers while retaining named volumes. Remove your router/firewall forwarding if no longer needed. Deleting named volumes with `down -v` permanently removes server data and Caddy state; do so only intentionally after deciding whether you need recovery. Remove private .env/certs yourself when finished. Existing external provider records, client storage and recipient copies are separate.
+## Verify after changing anything
 
-After an update, refresh each phone in its usual browser or Home Screen icon **without clearing site data**. Clearing storage removes the identity and local history. Existing users can open **Settings → Set up call alerts**; new invitees see the guide automatically. Preserve the VAPID key pair so current subscriptions remain valid. Server restart clears pending calls and unfinished ten-minute sound tests; send a fresh test afterward. Notification delivery needs server HTTPS outbound access to the selected browser push provider, in addition to normal web signaling and TURN. No new inbound port is needed.
+- Check app HTTPS health and WebSocket upgrade through the actual public proxy, not just loopback.
+- Confirm existing identity/contacts, send/reload messages, call both directions, compare SAS and transfer media while talking.
+- Test relay allocation **and** a real different-network call; test Wi-Fi/cellular handover and phone audio routes.
+- Test locked-screen browser/ntfy notifications and opening the right profile/chat/call.
+- Inspect service restarts/errors privately; do not paste credentials or personal logs into public issues.
 
-## Native systemd updates
+A green health check, a TURN candidate or a passing synthetic test does not certify physical-phone sound or every route. [Verification](VERIFICATION.md).
 
-For the [native installation](INSTALL_NATIVE.md), keep the original installation directory and regular service account. The generic path below is `/opt/webcaller`; substitute your own if different. Schedule a short interruption: restarting ends active calls and pending sound tests.
+## Troubleshooting without resetting identities
 
-1. Download the new release and verify its checksum as in the installation guide. Review its release notes. Do not re-run first-owner setup.
-2. Stop the app with `sudo systemctl stop webcaller.service`. Make a private backup of `.env` and the complete `data` directory while stopped, including SQLite sidecar files if present. Backups retain ciphertext past disappearance; keep them encrypted/outside Git and follow your retention policy.
-3. Copy the reviewed release's source into the **existing** installation directory as its regular owner. Preserve `.env`, `data/`, `certs/`, `.runtime/` and other private configuration. Do not delete these directories, use a mirror/delete option, or replace the whole folder. Release archives contain no private configuration. Run commands from the original directory, not the extracted download.
-4. Run `npm ci --ignore-scripts` and `npm run check` as the regular owner. Do not use sudo for npm or rotate keys. This update needs no change to the existing systemd unit.
-5. Run `sudo systemctl start webcaller.service`, then `sudo systemctl status webcaller.service --no-pager` and `curl -fsS http://127.0.0.1:8080/calls/health`. Adjust port/path only if your private config differs. Test the HTTPS page, both call directions and alerts. If startup fails, inspect local journal output before sharing anything.
+If Connecting persists, check HTTPS/WS routing, service health and both clients' versions. Keep browser storage. A key/signature warning is not a generic network error: verify the contact through a trusted channel, never bypass pin checks. If an iPhone ntfy link opens a different profile, use the usual Home Screen icon. If media fails across networks, verify TURN/ports/TLS/credentials; a working Tunnel alone is insufficient.
 
-On both phones, reopen/refresh the usual browser or Home Screen icon **without clearing site data**. Preserve the VAPID pair, database, identity pins and ratchet state. If dependencies or startup fail, keep the app stopped while restoring the prior source and its dependencies; a database migration may also require its matching backup. Read release-specific rollback notes rather than opening a migrated database with arbitrary old code.
+For a native installation, `sudo systemctl status webcaller.service --no-pager` and `sudo journalctl -u webcaller.service -n 50 --no-pager` are local diagnostics. `node scripts/verify-public.mjs YOUR_HTTPS_APP_URL` checks public serving/WS. Settings contains a relay allocation check. [Networking](NETWORKING.md) · [Alerts](CALL_ALERTS.md).
 
-The optional `webcaller-ntfy.service` is separate. This source update does not reinstall its binary, alter its private ACL database or rewrite its tunnel route. Keep that service's private configuration and state too. A full server restart restarts enabled systemd services; confirm health and a locked-phone sound test afterward. The ntfy installer intentionally refuses an already configured installation.
+## Same-origin path changes
 
-## Updating to v0.17.1
+Back up source/private configuration/database, finish calls and update both the application and HTTP/WS proxy. A gradual move can keep aliases:
 
-Use the same installation method and preserve your private configuration, data volume/database and phone origin. Existing identities, contacts, Olm sessions, unread history, pins and SAS are retained. Refresh both phones after updating; older clients reject files above their old limit. Keep the existing iPhone Home Screen app and browser storage. The media cache upgrades additively and keeps old encrypted entries.
+```dotenv
+PUBLIC_URL=https://phone.example.com/new-path
+APP_PATH_ALIASES=/calls
+APP_MANIFEST_ID=/calls/
+```
 
-The default file reservations increase to 1024 MiB per sender and 4096 MiB globally, with a 200 MiB per-file limit. Explicit old/lower quota settings are preserved; adjust only those fields if needed, following [Configuration](CONFIGURATION.md#file-limit-and-storage-upgrades). Leave all owner, push and relay credentials intact. Ensure enough free disk for database/journal overhead and any private backups. A restart/update can interrupt calls. Native installations remain native; this release does not require or automatically perform a Docker migration.
+`APP_MANIFEST_ID` is an internal installed-web-app identifier, not a promise the old route remains served. The Archive bridge reads the app's `.env` beside its own module; restart it and the app after editing. A whole-host Tunnel route needs no path edit; path-specific routes must cover the new prefix. TURN and a separate ntfy hostname are independent.
+
+To **retire** old URLs, clear aliases and put them in `APP_RETIRED_PATHS`. The bridge returns 404 before website visitor logging, rejects old WS upgrades and never redirects to disclose the replacement. Share the new address privately. Future invites/ntfy links use it automatically, while old delivered notices/invites/bookmarks do not rewrite themselves.
+
+Open the new address on each phone in the same profile. With existing notification permission, the app first registers/accepts a replacement push subscription, then removes only owned retired endpoints/workers. Failure keeps prior registrations for retry; unrelated workers/accounts are untouched. iPhone Home Screen identities/permissions require device testing. Update saved entries and retest alerts without clearing site data.
+
+A randomly generated path reduces blind discovery, not endpoint/traffic exposure. Keep private paths out of source, robots files and sitemaps. `noindex`/`no-referrer` cannot erase browser/OS history. [Browser privacy](BROWSER_PRIVACY.md).
+
+## Retention and resource use
+
+New conversation defaults are one-hour disappearing messages; Off retains until deletion. Sender countdown starts at send, recipient countdown at first view, so unread encrypted recipient copies can remain longer. Cached ciphertext is reused until its participant deadline/deletion or browser eviction. The server applies quotas and expiration; phones physically purge only when running. Downloads/screenshots/backups remain outside recall.
+
+Keep only installations you need enabled. Stopping an optional test service does not require deleting its data or changing production routes. Do not run native and Docker instances against the same SQLite path/port, or restore state while a process still uses it.

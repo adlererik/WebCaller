@@ -1,5 +1,7 @@
 # Hear incoming calls
 
+This release uses libsignal/PQXDH with Ed25519 application signatures. [Install](INSTALL.md) · [Security](SECURITY.md) · [Olm upgrade planning](APPROVED_CUTOVER.md).
+
 ## Send an easy invitation
 
 1. Tap **Invite someone**.

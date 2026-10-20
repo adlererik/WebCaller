@@ -17,3 +17,7 @@
 !deploy/Dockerfile.setup
 !docker/
 !docker/VERSION
+!LICENSE
+!LICENSE-MIT
+!LICENSING.md
+!THIRD_PARTY_NOTICES.md

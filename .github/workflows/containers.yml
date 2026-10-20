@@ -13,6 +13,7 @@ permissions:
   contents: read
 jobs:
   build:
+    if: github.ref == 'refs/heads/main'
     strategy:
       fail-fast: false
       matrix:
@@ -30,6 +31,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          submodules: recursive
           ref: ${{ inputs.version && format('v{0}', inputs.version) || github.ref }}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
@@ -37,6 +39,7 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm run check && npm test && npm run audit:source
+      - run: npm run prepare:source
       - name: Validate selected version
         if: github.event_name == 'workflow_dispatch'
         env:
@@ -62,7 +65,7 @@ jobs:
           docker push "ghcr.io/adlererik/webcaller:$VERSION-setup-$ARCH"
           docker push "ghcr.io/adlererik/webcaller:$VERSION-turn-$ARCH"
   manifests:
-    if: github.event_name == 'workflow_dispatch' && github.repository == 'adlererik/WebCaller'
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'adlererik/WebCaller' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     permissions:

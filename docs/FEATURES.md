@@ -1,128 +1,81 @@
-# Features and media behavior
+# WebCaller feature reference — v0.18.0
 
-## Adaptive audio/video
+A browser phone for one-to-one calls and conversations on Android, iPhone and desktop. The UI follows familiar Signal-style patterns; it is not an official Signal client. [User guide](USER_GUIDE.md) · [Security](SECURITY.md).
 
-| Profile | Mono Opus payload ceiling | Video ceiling | Encoder bounding box |
-|---|---:|---:|---|
-| Wi-Fi | 48 kb/s | 900 kb/s | 960×540, 24 fps |
-| Cellular / unknown network / remote saver | 20 kb/s | 120 kb/s | 320×180, 12 fps |
-| Weak | 12 kb/s | 45 kb/s | 240×135, 6 fps |
-| Critical | 8 kb/s | Paused | Audio continues if transport permits |
+## Getting connected
 
-These are sender payload caps, not total network usage or guaranteed output rates. RTP, SRTP, IP, TURN, retransmissions and FEC add overhead. Browsers can control/ignore unsupported parameters. No arbitrary minimum bandwidth guarantees intelligible speech.
+- Private owner setup QR, one-use invitations, verified inviter preview, optional prefilled recipient name and iPhone Home Screen guidance.
+- Optional unique 4–12 digit calling codes: choose/disable your code in Settings, dial another person, call or message without an invitation, then return to the same browser identity/contact/history later.
+- Calling-code request acceptance, initial message/media limits, rate limiting and identity blocking. Codes are public addresses, not passwords or identity proofs.
+- Remembered contacts, local contact renaming, rename reset and long-press/right-click contact options. Contact removal deletes the mutual connection/shared mailbox and ends calls between that pair; independent identity pins survive.
+- Clear startup/loading/failure status instead of displaying a misleading empty contact list while synchronization is pending.
 
-Stats are sampled every second. Packet loss in received audio and sender RTCP reports, round-trip delay, jitter and available outgoing bitrate can trigger a downgrade. Recovery from weak/critical requires five healthy samples to avoid oscillation. Severe congestion disables outgoing video encodings while leaving audio enabled. Camera-off stops its track; camera-on requests it again. Link capacity can reduce the caps further; video gets the remaining budget after reserving voice and overhead. Persistent CPU pressure reduces capture load.
+## Calling and display
 
-Connection preference is always Automatic. Saved manual settings no longer affect calls. Timer and quality remain at the top; central details fade once video connects. Switching front/back cameras releases only the video device before requesting the other lens, replaces its sender track without SDP renegotiation, and attempts restoration if a lens is unavailable.
+- Video calls by default, explicit voice-only option, full-duplex voice, mute, camera on/off, front/back camera switch and chat/media sharing during calls.
+- Browser-supported output switching: voice prefers an exposed receiver/headset; video requests an exposed speaker. Unavailable system routes are not simulated by a fake toggle. A browser cannot force an earpiece it does not expose.
+- Upright immersive remote video; largest-fitting square when either peer is landscape; stable capture geometry avoids repeated crop/resize oscillation. Display fitting can crop edges; transmitted camera frames are not redrawn/cropped by the UI.
+- Transparent video control tray, large touch targets, cog settings, idle fade/tap-to-show. Codec rows fade with controls; centered SAS, quality, elapsed time and the fixed-size draggable/keyboard-movable self preview remain visible.
+- Actual negotiated voice/video codecs and their separate upload-plus-download payload rates in aligned kbps/Mbps rows. Per-direction details in the tooltip; these are not available link speed or carrier billing totals.
+- Repeating page ringtone when browser audio is unlocked, incoming Answer/Decline controls, duplicate-offer handling, stale-call isolation and answering-tab ownership.
 
-## Opus and microphone processing
+## Sound, video, files and changing networks
 
-Capture requests mono, 48 kHz input, acoustic echo cancellation (AEC), noise suppression (NS) and automatic gain control (AGC). Opus is preferred. SDP preserves existing parameters and requests in-band forward error correction (FEC), discontinuous transmission (DTX/VAD), mono and a maximum average bitrate. Sender caps adapt separately. Full-duplex means both people may speak simultaneously.
+- Opus conversation audio with requested echo cancellation, noise suppression, automatic gain control, in-band FEC and DTX. Browser loss concealment, jitter buffer, negotiated repair, retransmission and congestion control remain active where available.
+- Conditional video efficiency preference AV1 → H.265/HEVC → VP9 → H.264 → VP8, with mutual smooth/power-efficient encode **and** decode capability reports. Hardware use is ultimately controlled by browser/OS; unknown support keeps compatible fallbacks.
+- Automatic voice-first bitrate/resolution/frame-rate adaptation. Wi-Fi ceiling: 900 kbps video and 48 kbps voice per direction. Cellular/unknown ceiling: 500 kbps video and 20 kbps voice per direction. Weak/critical profiles reduce further.
+- Tiny usable video can continue at 160×90/2 fps. If it must pause, healthy-audio-gated 6 kbps probes periodically test recovery with bounded growth/backoff. Missing/poor audio and CPU pressure prevent aggressive probes.
+- Acknowledged signaling heartbeats detect a dead OPEN socket. Bounded reconnect/authentication deadlines, same-page answered-call recovery and fresh, correlated ICE generations improve Wi-Fi/cellular handovers. Call negotiation resumes before bulk history sync.
+- Original caller creates ICE restart offers to avoid glare; stale answers/candidates are rejected, repeated offers reuse cached answers, TURN credentials refresh. Complete outages/OS suspension can still interrupt sound or end a call.
+- File/media limit **200 MiB (209,715,200 bytes)** each. Up to four bounded encrypted chunk workers on healthy links, smaller weak-link parts, retry/cancellation and byte-based spinner/percentage placeholders at both connected ends.
+- Sharing pauses/aborts requests when audio health is poor or the call reconnects, then probes recovery. Video yields capacity during a network transfer; voice ceilings are not raised for sharing. Explicitly reported cellular file traffic has its own 2 Mbps ceiling; healthy Wi-Fi/unclassified file traffic can rise to 24 Mbps. These are ceilings, not promises.
 
-Packet loss concealment (PLC), jitter buffering, voice activity behavior, loss-driven FEC, codec mode and actual AEC/NS/AGC are browser internals. JavaScript cannot force every feature or certify sound quality. Optional sender/network priorities favor audio, with fallback to core parameters. [Opus RTP specification](https://www.rfc-editor.org/rfc/rfc7587), [capture constraints](https://www.w3.org/TR/mediacapture-streams/) and [optional priority](https://www.w3.org/TR/webrtc-priority/).
+See [Call networking](CALL_NETWORK.md) for exact policies, diagnostics and real-phone testing.
 
-## Connections and signaling
+## Chat, media and message actions
 
-WebSocket messages route encrypted offers, answers and ICE only between contacts. Short-lived single-use tickets are sent in the first frame rather than URL parameters. Heartbeats/reconnect backoff maintain signaling through a proxy/Tunnel. Offline incoming offers are temporarily held in memory for 90 seconds. Candidate buffering/generation checks and replay handle invitation/offline timing. ICE restart fetches new relay addresses and credentials on both peers; hourly caller restart refreshes allocations for long calls. Temporary TURN credentials last two hours.
+- End-to-end encrypted text, blue/gray rounded bubbles, emoji composer with skin tones, signed encrypted typing dots and delivered/read receipts with overlapping green checks/timestamps.
+- Tap/long-press/right-click a message for reactions, reply, sender-only edit, forward, copy, select, information, pin and delete for both. Only the original sender can edit; only the recipient can acknowledge delivery/viewing.
+- A read receipt reflects visible app content, not proof a person read/understood it. Reactions/receipts do not generate a new push for every update.
+- Inline pictures, video and audio on both ends; captions; full-screen viewer/player with close; attachment/gallery/file picker; recent loaded chat media; front/back camera capture; voice-note recording/preview.
+- Capture during calls clones live media tracks where possible and stops its own clones, preserving call capture. The recent-media strip does not scan the phone's camera roll.
+- Current-location action requests a fresh high-accuracy fix with OS permission, builds a pin/map preview and sends coordinates/accuracy/capture time/attribution inside encrypted media. Google Maps links on Android and Apple Maps links on Apple devices. No live tracking or reverse geocoder. Tile/map providers can see their own requests.
+- Encrypted local media cache avoids another transfer after closing/reopening a chat, subject to expiry/deletion, integrity checks and storage quotas/eviction. Attachment keys/filenames/plaintext are not added to the chunk cache; retained message records still contain the necessary file key.
 
-## Text and notifications
+## Timers and deletion
 
-Signed encrypted envelopes have expiry, sender/recipient, IDs and ciphertext. The encrypted mailbox is idempotent. Expiry is checked server-side and client-side; stored ciphertext is purged once per second and on startup/read. Optional push is generic and short-lived. No service worker fetch cache is created. Browser keys, tokens and contacts persist so the device can be used again.
+New conversations default to **one hour**. Options include Off, presets and custom number/unit wheels for seconds, minutes, hours, days and weeks, up to **four weeks**. Existing messages keep their own lifetime rules.
 
-## Encrypted attachments
+The sender countdown starts at send; the recipient's starts at first actual viewing. An unread copy can remain after the sender's visible copy disappears. Per-message countdowns, first-view state and pending read-start updates survive refresh/reconnection. Off retains messages until deletion. Pins never extend lifetime.
 
-A signed encrypted message carries a random per-file AES-256-GCM key and nonce prefix. Each 64 KB plaintext chunk is encrypted with a distinct indexed nonce; authenticated data binds the file ID, chunk order, size and expiry. Contents are uploaded with bounded parallel workers to an authenticated contact-only mailbox and cannot be announced until all expected chunks exist. Filename/type/key stay inside the message envelope. Quotas limit pending and completed uploads. Chat sync fetches metadata; visible open conversations then automatically decrypt photos/video/audio sequentially. General files require a user action. Transfers during calls use paced encrypted parts that wait on weak connections, preserving voice priority. Files expire alongside their messages and are removed with device deletion. Downloads and screenshots cannot be erased outside the app.
+Either participant can delete a message for both. Server ciphertext/chunks and client app/cache records are removed, and bounded tombstones prevent late uploads/replay from resurrecting it. An offline client learns deletion on synchronization. Closed browsers cannot run physical cleanup immediately. Screenshots, downloads, recipients' external copies, browser/OS traces and backups cannot be erased by the app.
 
-## Chat controls
+## Security and verification
 
-Rounded blue/gray bubbles, media captions, searchable self-hosted Unicode emoji with skin tones, front/back photo capture, previewable voice recording, automatic media previews and a full-screen image/video/audio viewer are included. Voice notes use browser-negotiated MP4/AAC or WebM/Ogg Opus at a requested mono 32 kbps. Both participants can delete any message; encrypted attachment chunks are removed transactionally and expiring deletion markers prevent replay/offline resurrection. Signed encrypted typing updates are ephemeral and never include draft text.
+- Official pinned libsignal 0.105.1 Rust core through WASM; strict PQXDH v4 (X25519/Kyber-1024), Double Ratchet + SPQR/Triple Ratchet (ML-KEM-768), upstream AES-256-CBC/HMAC/HKDF and separate application Ed25519 signatures.
+- Fresh AES-256-GCM per-file keys, authenticated indexed chunks and ratcheted manifests. Atomic AES-GCM local records, nonextractable CryptoKeys, cross-tab fencing and explicit corruption/identity-change errors.
+- Persistent application/libsignal identity pins, trusted-invite fingerprints and grouped 256-bit pairwise safety fingerprint: open chat, tap contact name/header, compare all groups through a trusted channel.
+- Optional fresh four-word, 44-bit committed X25519/HKDF/HMAC SAS bound to accepted media fingerprints/identities. It stays local to the UI, uses no exported Signal root secret, survives ordinary ICE changes and clears at call end. Calls continue if comparison is skipped.
+- No mandatory external key-transparency service. This avoids that dependency but lacks automatic directory-wide consistency verification. No Sealed Sender, traffic anonymity or audited-equivalence claim.
+- HTTPS/WSS delivery, authenticated one-use WS tickets, signed encrypted offer/answer/ICE/control, strict origin checks, bounded uploads and authenticated expiring TURN credentials.
 
-## Deliberately absent
+Live media remains DTLS-SRTP and is not made post-quantum by message encryption. Browser-delivered code, endpoint compromise, retained history and metadata are material limits. [Complete explanation](SECURITY.md).
 
-No native mobile app, SIM/phone-number registration, group calls/chats, federation, Signal wire compatibility, post-quantum encryption, audited security claim or guaranteed background ringing. This version is one-to-one calling, text and attachments. See [Verification](VERIFICATION.md).
+## Alerts and everyday settings
 
-## Call alerts and invitations
+- Neutral New message notices open the intended conversation using a short-lived identity-bound intent rather than putting contact/message IDs in the URL.
+- Web Push requests sound/vibration and Answer/Decline actions where supported. Answer hands a one-use call-bound choice to the foreground page; microphone permission is still required. High urgency cannot force sound or bypass Focus/Silent/battery policy.
+- Optional self-hosted ntfy priority-5 generic call alerts, per-phone enrollment/test and confirmed preference. Confirmed ntfy suppresses duplicate browser **call** pushes; publish failures fall back for that call. Text-message pushes continue normally.
+- Android one-tap ntfy subscription; guided iPhone fields/test and usual-phone-icon fallback for Safari/Home Screen profile differences. Stock iPhone wake-up optionally uses ntfy.sh plus Apple push metadata delivery.
+- System theme detection plus Light/Dark overrides; local Page title setting; Automatic connection mode and page ringing default; grouped settings, diagnostics, relay allocation check and explicit device removal.
+- Print/background privacy cleanup and neutral notifications, without claiming universal screenshot blocking or invisible browser history.
 
-Inviters can prefill the recipient’s name. Invitation preview verifies the inviter fingerprint without consuming the link. iPhone/iPad guides Home Screen setup before enrollment; Android goes directly to acceptance and alerts. Permission requests follow an explicit tap. A test is sent after eight seconds to this browser’s subscription only; readiness is recorded only when its owner confirms hearing it, never inferred from delivery.
+## Hosting and installation
 
-Pending calls send an initial generic push plus reminders at 15 and 35 seconds, with at most twenty seconds of push-provider queue life per attempt. A per-call topic coalesces undelivered pushes. Answer, decline, hangup, expiry and device removal cancel remaining timers. An unopened recipient’s offer remains available up to the original 90-second deadline.
+Native Debian/Node.js/SQLite, source-built Docker and release-matched prebuilt amd64/arm64 Docker bundles. Optional Caddy, coturn, ntfy and Cloudflare connector. Private first-run credential generation, QR onboarding, digest-pinned prebuilt bundles, explicit updates and backup instructions.
 
-The service worker checks authenticated call state before sounding an alert, replaces earlier notifications for the call, and avoids a duplicate ding when a visible page confirms it is already audibly ringing. Stale alerts still show a silent generic notification to respect Apple’s user-visible push requirement. Declarative Web Push with `mutable:true` allows supported Apple browsers to display a generic fallback if the worker cannot run. Already delivered notifications and in-flight pushes cannot always be recalled, and the OS may quiet repeated alerts. The repeating dual-tone ringtone requires an active page and browser sound permission. See [Call alerts](CALL_ALERTS.md).
+STUN/ICE selects direct media when possible; TURN carries encrypted media when needed. A Cloudflare HTTP Tunnel carries the site/signaling, not TURN/RTP. Public IPv4/CGNAT/router/firewall/TLS guidance is included. Paths are configurable; aliases support gradual moves, retired routes return 404 without disclosing the replacement, and owned Web Push registrations can migrate after a phone opens the new path. A hidden path is not origin isolation or authentication.
 
-## Location and output controls (v0.5.0)
+## Not included
 
-The Gallery/File/Location sheet offers only those three actions. Recent media comes from loaded, unexpired chat blobs in memory, excluding location cards. Expiry, deletion, backgrounding and dialog closure release thumbnails/references; there is no camera-roll scanner or persistent decrypted recent-media list.
-
-Location automatically starts a one-shot geolocation request after the Location action. It requests enableHighAccuracy with maximumAge 0. Closing/changing contacts/backgrounding cancels the preview pipeline and ignores late position callbacks. Four to six viewport tiles at zoom 15 are rasterized to a 384×288 PNG with a pin and attribution. Tiles use normal browser HTTP caching, an anonymous CORS image and origin-only referrer. The overall application retains no-referrer elsewhere. Failed tile loading produces an explicitly labelled pin/coordinate preview. Coordinates, label, capture time, accuracy and preview attribution stay inside the signed encrypted attachment envelope; the image uses existing AES-GCM chunks. The server stores ciphertext and routing/size/expiry metadata. There is no plaintext location endpoint, reverse geocoder or live tracking.
-
-Audio output uses HTMLMediaElement.setSinkId and the authorized audiooutput devices exposed by enumerateDevices. Voice calls reset to an exposed receiver/earpiece or headset, with system default as the fallback when neither can be controlled. Video selects a detected speaker and restores the prior voice sink after video stops. Device changes handle disconnected outputs; ending a call cancels pending routing and resets the media element. A failed switch preserves the last successful selection. The microphone and Opus processing are unaffected. An unexposed system route is labelled Audio output and has no on/off state claiming earpiece selection. Supported devices use the native picker or verified speaker/receiver switch. Browsers without routing explain that this website cannot force the built-in earpiece; a headset is a practical private-call option. See [W3C output API](https://www.w3.org/TR/audio-output/) and [Safari output support](https://webkit.org/blog/16574/webkit-features-in-safari-18-4/) (the documented addition was for macOS).
-
-
-## Message actions and acknowledgements (v0.6.0)
-
-Signed encrypted message-state envelopes carry edits, reactions, pins and delivery/read timestamps. Routing includes a target ID and kind; clients verify those again against the authenticated encrypted payload. Only the original sender can edit and only the recipient can acknowledge delivery/viewing. Both participants can react, pin and delete. The SQLite message_events table keeps the latest encrypted envelope per actor/kind, with separate delivery and read kinds to preserve seen state across late delivery updates. Parent deletion cascades; expiry is bounded by the original message’s timer. There is no new push notification for each reaction or receipt. Receipt requests are batched, up to 20 updates per request.
-
-A viewed mark requires the visible bubble in the active chat for at least 300 ms, while the app is visible and no app dialog/call screen covers the chat. It indicates app visibility, not proof a person read the text. Replies reference the parent ID instead of copying its text. Forwarding creates a new encrypted message/file for the chosen contact. Pins cannot extend message expiry. Latest-state version checks stop delayed older edits/reactions from replacing newer state. Plaintext actions/drafts are held in memory and cleared when the app backgrounds.
-
-Appearance defaults to the phone setting, with persistent Light and Dark overrides in Settings and matching browser theme-color tags. Map links use the viewing device’s platform, while the encrypted raster thumbnail continues to use the configured tile provider (OpenStreetMap by default). This does not require paid Google/Apple map imagery keys.
-
-
-## Encrypted local media retention and live call metrics (v0.7.0)
-
-Sent and verified received media is retained as complete encrypted chunk sets in IndexedDB, scoped to the local identity and message/attachment ID and bound to the original size/expiry. No attachment keys, filenames, MIME types or plaintext are added to that cache. Reopening uses authenticated local decryption instead of another media transfer. Deletion transactions remove bytes and store an expiring ID-only tombstone so a late transfer cannot restore them. Corrupt cached chunks are discarded and fetched again once. Expiry is enforced on every read/write and purge runs on startup, return to foreground and every minute while the page executes; closed browsers cannot physically purge until they run again. Forget this device clears the cache. Storage failure leaves messaging/calling usable and reports that reopening may download again. Browser storage remains subject to quota/eviction.
-
-Negotiated video and voice codecs and their separate measured rates appear in two aligned rows near the top, with connection quality and the timer underneath. The video controls use a transparent tray. The rate samples cumulative bytes using statistics timestamps, counts bundled transports once, falls back to RTP counters, and skips invalid/reset baselines. Codec IDs are resolved from active stream reports; repair codecs are not presented as the picture codec. [WebRTC statistics specification](https://www.w3.org/TR/webrtc-stats/).
-
-## Call sharing, codec efficiency and handovers (v0.8.0)
-
-See [Call networking](CALL_NETWORK.md) for the full policy, budgets, browser limitations and testing steps. During calls the + sheet, location, local camera snapshots and voice notes remain available. Camera/microphone capture clones live call tracks when available and stops only its own clones; call video lens selection remains on the call screen. Encrypted files up to 200 MiB use up to four parallel 64 KiB chunk workers on healthy links and small 4 KiB parts while probing after poor conditions. Sharing pauses and outstanding file requests are aborted when audio health deteriorates or media reconnects; healthy samples restart probing. Unknown network types can use measured file-path capacity without lifting conservative unknown-network video limits. Recognized cellular/Save-Data file traffic has its own lower ceiling. The server bounds active requests, request rate, pending reservations and stored bytes. Original ciphertext, authorization, indexed nonces and authenticated expiry are unchanged. Cache writers commit complete generation-bound ciphertext sets incrementally; old cached files remain readable. Closing/backgrounding still cancels transfers. See [Call networking](CALL_NETWORK.md).
-
-Both phones exchange signed encrypted codec efficiency summaries and network modes. Only variants reported smooth and efficient for both encoding and decoding on both phones receive the strongest preference: AV1, H.265, VP9, H.264, VP8. Unsupported/unknown efficiency leaves conservative compatible fallbacks; all repair codec capabilities remain available. Power-efficient does not prove hardware acceleration. Video adapts bitrate, frame rate and resolution without changing codecs on every speed fluctuation; a proven efficient alternative can be negotiated after sustained CPU limits.
-
-The header shows separate Voice/Video codec and combined send-plus-receive payload rates. Per-media rates use primary RTP counters, including retransmitted primary payload where reported, avoiding separate RTX double counting; bundled transport totals remain available in diagnostics. They exclude network headers, TURN overhead and chat/file traffic. A rate starts only after two valid statistics samples.
-
-
-## Contact removal (v0.9.0)
-
-Press and hold a contact, right-click, or use Shift+F10 / Context Menu to open a confirmation dialog. Movement, scrolling, cancellation and removed rows cancel a pending hold. Confirmation removes the mutual connection and this pair’s entire shared mailbox, including unfinished uploads and all message updates. Other contacts, histories and identities are preserved. Ringing or answered calls between this pair end, and outstanding reminders stop. Closed browsers learn the change on resync. Deletion markers protect against late commits and replay until original expiry, even after a new invitation.
-
-The browser clears this contact’s drafts, open media, decrypted messages, cached ciphertext, full contact entry, unread/typing state and conversation timer. Browser tests also caught and corrected whole-chunk downloads arriving in the wrong buffer form for ciphertext caching; both whole chunks and paced parts now retain downloaded media until deletion or expiry, subject to browser storage limits.
-
-## Actionable background call alerts
-
-Incoming call notifications request sound, vibration, persistence and Answer/Decline actions where supported. Answer carries a short-lived, one-use identity/call-bound decision into the foreground page and verifies the signed offer and authenticated waiting state before capture. A body tap opens the normal Answer screen. Decline uses a recipient-only authenticated API; network failure leaves an explicit fallback notice. High push urgency is a delivery hint, not a way to force a sleeping phone to ring or override user notification settings. iPhone background alerts still require the website’s Home Screen icon. See [Call alerts](CALL_ALERTS.md).
-
-During network sharing, both video encoders temporarily yield capacity using an expiring encrypted activity signal. Voice settings are preserved; weak/reconnecting calls pause file pieces. Video resumes automatically afterward at its current connection budget. Opening a cached attachment avoids this sharing reduction. See [Call networking](CALL_NETWORK.md).
-
-## Message notification routing and live chat status
-
-Generic **New message** push payloads contain only opaque message, sender and recipient IDs plus expiry; names/content remain absent. A notification tap creates a one-use identity-bound chat target, valid for at most two minutes. The foreground app consumes it, synchronizes the authenticated mailbox, opens the pinned contact and scrolls to the verified message. Expired/deleted messages are not restored. Routing IDs never enter the notification’s app URL, browser history or referrer. There is no chat URL navigation for ordinary conversation selection.
-
-Countdown spans use original message expiry and update separately from keyed message/media rows. Short timers tick each second; long timers use compact day/hour/minute units. File/media upload placeholders show a spinner and byte-based percentage on both connected participants. Progress envelopes are signed/encrypted, bound to a reserved upload and its original deadline, rate limited, never stored/replayed by the server and expire within 20 seconds. Completed/deleted messages reject late progress. Cancellation emits a participant-only cleanup event; placeholders cannot be selected, edited, replied to or treated as delivered/read messages. Reduced-motion devices retain percentage without spinner animation.
-
-Privacy remains bounded by browser/OS capabilities, durable identity/media storage, notifications and provider metadata. See [Browser privacy](BROWSER_PRIVACY.md).
-
-### v0.12.0 call header and background alert repair
-
-- Voice/video numeric speeds and units align across stacked rows. The current header places quality/timer underneath, the video name at the left, and call words at screen center.
-- Every live call push requests sound independently of a page's reported audio state. Three bounded attempts request a fresh alert: supporting browsers replace one notification with renotify; other browsers receive fresh reminder tags with cleanup after display.
-- Device storage and server lookup have a total deadline so a sleeping worker can still show the notification. Ended/answered and expired calls remain silent; the original call deadline determines whether a delayed wake-up is still timely.
-- Worker updates bypass the import cache. Locked-phone sound remains a physical-device check subject to the phone's notification settings.
-
-Current v2 transport uses the Olm Double Ratchet. Minimal identity verification records survive contact/history removal. Four per-call words provide an optional human comparison bound to the media connection; the video name is upper left, the words centered in that row, and quality below the aligned codecs. See [call verification](CALL_VERIFICATION.md) and [security review](SECURITY_REVIEW.md).
-
-## Optional extra ringing
-
-A self-hosted ntfy server can send generic, maximum-priority (5) incoming-call alerts to the optional Android/iPhone ntfy app. Confirmed ntfy replaces browser call pushes for that phone; publishing failures fall back to Web Push. The alert method can be switched without reconnecting ntfy. Text-message pushes and encrypted calling continue normally. Setup offers Android one-tap subscription, guided iPhone copy buttons, and a locked-phone sound/opening-link test. See [Extra ringing](EXTRA_RINGING.md) for installation, credentials, retention and the iPhone upstream wake-up limitation.
-
-## Personal calling codes
-
-Optional, unique 4–12 digit codes let a new visitor call, video-call or message without an invitation. The first visit saves its own browser identity; later dialing reopens the same contact/history. Existing users stay unlisted until they opt in. A keypad, optional name, random-code chooser, shareable calling link, code disabling, pending requests, explicit acceptance, reply/answer acceptance, five-message limits, media restrictions and identity blocking are included. Existing invitations, encryption, SAS and disappearing timers remain. See [Calling codes](CALLING_CODES.md) for security and iPhone setup limits.
-
-Contact options include a locally saved name label and restoration of the original name. Labels are kept with this browser identity and used in contact search/list, chat/call headers, typing indicators and forwarding choices; they do not change another person’s account name or identity pins. The keypad uses a keyboard icon and neutral number placeholder. Code dialing defaults to video, with an explicit audio-only option.
-
-## Full camera frame and independent message countdowns
-
-Remote video and the self preview use contain fitting, keeping the whole picture across portrait/landscape combinations. Camera constraints avoid a forced landscape height/aspect ratio and request no browser cropping. Orientation-aware width ideals can still improve native capture quality as a connection recovers. The sender downscales the entire frame into the current encoder budget, swaps the bounding box for portrait, and preserves native 4:3 or other aspect ratios. Frame-rate, bitrate, congestion and audio-priority policies remain active; browsers without explicit sender scaling fall back to their own resolution control while retaining bitrate/frame-rate settings.
-
-New timed text/media starts the sender’s countdown when sent and the recipient’s countdown at first actual viewing. First-view state persists across refresh and tabs. Encrypted unread recipient copies stay available after sender expiry; delayed read-start acknowledgements retry after reconnection. Off and older messages retain their original rules. Cached media gets the recipient’s deadline without redownloading; manual deletion still removes both copies. See USER_GUIDE.md and SECURITY.md for retention, replay metadata and browser-cleanup limits.
+Groups/federation, native mobile call integration, calls to Signal/WhatsApp accounts, compulsory phone numbers, automatic key transparency, Sealed Sender, traffic-analysis anonymity, guaranteed background ringing, universal earpiece/screenshot control, guaranteed zero traces or independent security certification. This is a one-to-one self-hosted browser phone. [Verification](VERIFICATION.md).

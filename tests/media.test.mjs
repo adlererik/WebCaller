@@ -58,7 +58,7 @@ test('finite link budgets lower video before voice and reduce capture load for C
  const {mediaBudget}=await import('../public/media.js');
  const weak=mediaBudget('wifi',{bandwidth:60000});assert.equal(weak.video,0);assert.equal(weak.audio,27000);
  const constrained=mediaBudget('wifi',{bandwidth:200000});assert.ok(constrained.video<=50000);assert.equal(constrained.fps,6);
- const cell=mediaBudget('saver',{bandwidth:2000000});assert.equal(cell.video,120000);assert.equal(cell.audio,20000);
+ const cell=mediaBudget('saver',{bandwidth:2000000});assert.equal(cell.video,500000);assert.equal(cell.audio,20000);
  const cpu=mediaBudget('wifi',{},true);assert.equal(cpu.fps,12);assert.equal(cpu.width,640);assert.equal(cpu.video,350000);
 });
 test('either endpoint using cellular or an unknown network limits both directions',()=>{

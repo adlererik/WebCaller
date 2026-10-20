@@ -26,13 +26,31 @@ async function fixture(push=false,extra={},options={}){
     const b=await newIdentity();const joined=await request('/join',{method:'POST',body:{name:'Bob',keys:b.keys,invite,fingerprint:fp}});
     assert.equal(joined.status,201);return {bob:{...joined.body,identity:b},invite,fp};
   }
-  async function socket(user){
+  async function socket(user,clientId){
     const {body:{ticket}}=await request('/ticket',{method:'POST',body:{},token:user.token});
     const socket=new WebSocket(url.replace('http','ws')+'/calls/ws',{origin});await once(socket,'open');
-    const ready=once(socket,'message');socket.send(JSON.stringify({type:'auth',ticket}));assert.equal(JSON.parse((await ready)[0]).type,'ready');return socket;
+    const ready=once(socket,'message');socket.send(JSON.stringify({type:'auth',ticket,...(clientId?{clientId}:{})}));assert.equal(JSON.parse((await ready)[0]).type,'ready');return socket;
   }
   return {app,request,alice,pair,socket,url,origin};
 }
+test('push path migration atomically replaces only owned endpoints and preserves limits',async t=>{
+  const f=await fixture(true);t.after(()=>f.app.close());const {bob}=await f.pair(),keys={auth:'a',p256dh:'b'};
+  const send=(user,endpoint,replaces)=>f.request('/push',{method:'POST',token:user.token,body:{endpoint,keys,...(replaces===undefined?{}:{replaces})}});
+  const old=Array.from({length:5},(_,i)=>'https://fcm.googleapis.com/old-'+i),next='https://fcm.googleapis.com/new',foreign='https://fcm.googleapis.com/foreign';
+  for(const endpoint of old)assert.equal((await send(f.alice,endpoint)).status,200);
+  assert.equal((await send(bob,foreign)).status,200);
+  assert.equal((await send(f.alice,next)).status,429);
+  assert.equal((await send(f.alice,next,[old[0],foreign])).status,409);
+  assert.equal(f.app.store.get('SELECT count(*) n FROM push').n,6);
+  assert.equal((await send(f.alice,next,[old[0],old[0]])).status,200);
+  assert.equal(f.app.store.get('SELECT 1 FROM push WHERE endpoint=?',old[0]),undefined);
+  assert.equal(f.app.store.get('SELECT count(*) n FROM push').n,6);
+  assert.equal(f.app.store.get('SELECT confirmed FROM push WHERE endpoint=?',next).confirmed,0);
+  assert.equal((await send(f.alice,next,'invalid')).status,400);
+  assert.equal((await send(f.alice,'http://localhost:22',[next])).status,400);
+  assert.equal(f.app.store.get('SELECT owner FROM push WHERE endpoint=?',next).owner,f.alice.user.id);
+  assert.equal(f.app.store.get('SELECT owner FROM push WHERE endpoint=?',foreign).owner,bob.user.id);
+});
 test('contact removal clears both histories, events and complete/partial media, with durable replay protection',async t=>{
   const f=await fixture();t.after(()=>f.app.close());const {bob}=await f.pair(),{bob:other}=await f.pair();
   const peer={id:bob.user.id,keys:bob.identity.keys};
@@ -406,13 +424,13 @@ test('paced encrypted parts authenticate, reject replacement, assemble legacy ch
  f.app.store.purge(e2.expiresAt+1);assert.equal(f.app.store.get('SELECT COUNT(*) AS n FROM attachment_parts').n,0);
 });
 test('answered call survives a signaling reconnection and stale disconnect timers are cancelled',{timeout:10000},async t=>{
- const f=await fixture(false,{}, {disconnectGraceMs:250});t.after(()=>f.app.close());const {bob}=await f.pair();
+ const scheduled=new Set();const f=await fixture(false,{}, {disconnectGraceMs:250,scheduleDisconnect:(fn,ms)=>{const timer={fn,ms,unref(){}};scheduled.add(timer);return timer;},cancelDisconnect:timer=>scheduled.delete(timer)});t.after(()=>f.app.close());const {bob}=await f.pair();
  const a=await f.socket(f.alice),b=await f.socket(bob),id=randomUUID(),signal=async(socket,user,peer,kind)=>{
   const envelope=await seal(user.identity,user.user.id,{id:peer.user.id,keys:peer.identity.keys},{kind,callId:id,description:{type:kind,sdp:'fixture'}},90);socket.send(JSON.stringify({type:'signal',kind,callId:id,envelope}));
  };
  let pending=once(b,'message');await signal(a,f.alice,bob,'offer');await pending;pending=once(a,'message');await signal(b,bob,f.alice,'answer');await pending;
  const expired=[];a.on('message',raw=>{if(JSON.parse(raw).type==='call-expired')expired.push(true);});b.close();await once(b,'close');
- await new Promise(r=>setTimeout(r,50));const restored=await f.socket(bob);await new Promise(r=>setTimeout(r,280));assert.equal(expired.length,0);
+ assert.equal(scheduled.size,1);const restored=await f.socket(bob);assert.equal(scheduled.size,0);for(const timer of [...scheduled])timer.fn();assert.equal(expired.length,0);
  pending=once(a,'message');await signal(restored,bob,f.alice,'restart');assert.equal(JSON.parse((await pending)[0]).kind,'restart');a.close();restored.close();
 });
 test('background notification decline is recipient-only, origin checked, idempotent and cannot end an answered call',async t=>{
@@ -544,4 +562,18 @@ test('notification call opening returns only the waiting recipient encrypted off
  assert.equal(info.state,'ringing');assert.equal(info.canAnswer,true);assert.deepEqual(info.offer,{kind:'offer',callId:c.id,envelope:c.envelope});
  assert.equal((await open(f.bob.identity,f.bob.user.id,{id:f.alice.user.id,keys:f.alice.identity.keys},info.offer.envelope)).description.sdp,'Synthetic encrypted SDP');
  await f.decline(c.id);const ended=(await f.request(path,{token:f.bob.token})).body;assert.equal(ended.canAnswer,false);assert.equal(ended.offer,undefined);
+});
+
+
+test('a reconnected answering page keeps ownership even while its previous socket was OPEN', {timeout:10000},async t=>{
+ const f=await fixture();t.after(()=>f.app.close());const {bob}=await f.pair(),tabId=randomUUID(),a=await f.socket(f.alice),old=await f.socket(bob,tabId),callId=randomUUID();
+ const peer={id:bob.user.id,keys:bob.identity.keys},back={id:f.alice.user.id,keys:f.alice.identity.keys};
+ let arrived=once(old,'message');a.send(JSON.stringify({type:'signal',kind:'offer',callId,envelope:await seal(f.alice.identity,f.alice.user.id,peer,{kind:'offer',callId},90)}));await arrived;
+ arrived=once(a,'message');old.send(JSON.stringify({type:'signal',kind:'answer',callId,envelope:await seal(bob.identity,bob.user.id,back,{kind:'answer',callId},90)}));await arrived;
+ const closed=once(old,'close'),fresh=await f.socket(bob,tabId);await closed;
+ arrived=once(a,'message');fresh.send(JSON.stringify({type:'signal',kind:'restart',callId,envelope:await seal(bob.identity,bob.user.id,back,{kind:'restart',callId,request:true},90)}));assert.equal(JSON.parse((await arrived)[0]).kind,'restart');
+ fresh.close();await once(fresh,'close');const resumed=await f.socket(bob,tabId);
+ const differentTab=await f.socket(bob,randomUUID());arrived=once(differentTab,'message');differentTab.send(JSON.stringify({type:'signal',kind:'restart',callId,envelope:await seal(bob.identity,bob.user.id,back,{kind:'restart',callId,request:true},90)}));
+ const denied=JSON.parse((await arrived)[0]);assert.equal(denied.type,'call-answered');assert.equal(denied.callId,callId);
+ const pong=once(resumed,'message');resumed.send(JSON.stringify({type:'ping',nonce:'synthetic-current-link'}));assert.deepEqual(JSON.parse((await pong)[0]),{type:'pong',nonce:'synthetic-current-link'});
 });

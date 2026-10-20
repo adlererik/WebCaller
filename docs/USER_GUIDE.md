@@ -1,5 +1,7 @@
 # Using WebCaller
 
+This release uses libsignal/PQXDH with Ed25519 application signatures. [Install](INSTALL.md) · [Security](SECURITY.md) · [Olm upgrade planning](APPROVED_CUTOVER.md).
+
 ## Your browser is your device
 
 The first browser uses the owner's private setup QR/link. Other people accept an invitation or dial an optional personal calling code. Device keys and your access token stay in that browser's IndexedDB. Use the same browser for later calls. Clearing site storage or changing browsers creates a new device; there is no password-based recovery or multi-device identity synchronization.
@@ -8,7 +10,7 @@ The first browser uses the owner's private setup QR/link. Other people accept an
 
 **Invite someone** lets you enter the recipient’s name (optional), then **Create invitation** creates a link for one person. **Share invitation** opens the device's normal share sheet when supported; **Copy link** copies it. A recipient opens the full link, optionally enters a name and presses **Accept invitation**. The recipient’s name is already filled in if supplied. On iPhone/iPad, the link first explains how to add the website to the Home Screen, then accept from its icon. After acceptance, a short call-alert setup asks for notification permission and a locked-phone sound test. The link is single use and expires after 24 hours. Share it privately; its fragment contains the invite secret and inviter identity fingerprint.
 
-The left conversation list shows your contacts and unread indicators. **Search people** filters it locally. Tap a person to open their conversation. On narrow screens the back arrow returns to the list. Calling codes can also create a limited contact request; accepting, replying or answering saves the connection.
+The left conversation list shows your contacts and unread indicators. Tap a person to open their conversation. On narrow screens the back arrow returns to the list. Calling codes can also create a limited contact request; accepting, replying or answering saves the connection.
 
 Press and hold a person in the conversation list for about a second, then choose **Delete contact and history**. On a computer you can right-click; keyboard users can use Shift+F10 or the Context Menu key. The dialog explains the effect before you confirm. Cancel keeps everything.
 
@@ -20,6 +22,8 @@ The phone icon starts an audio-only call; the camera icon starts video. Allow th
 
 During a call: **Mute microphone** toggles outgoing voice; **Turn camera on/off** stops/restarts the camera or upgrades audio to video; **Switch to back/front camera** changes the lens while keeping the microphone running; **End call** hangs up. The duration and quality stay at the top. Central caller details fade after video connects and return when reconnecting. If autoplay is blocked, tap **Tap to hear the call**. Use **More call options** or the top settings cog for settings. The top back arrow returns to chat while the call continues; **Return to call** brings back the controls.
 
+When both phones are upright, video fills the call screen. Turn either phone sideways for a square picture; the self preview also becomes square. The display trims the frame to fit, while the transmitted video remains unchanged. Buttons fade after four seconds during a connected video call: tap the picture to show them again. The codecs and data rates fade with the buttons. Your security words stay centered at the top, with quality to their left and the call timer to their right. Your self preview stays visible: drag it to move it, or focus it and use the arrow keys on a computer. Its size is fixed; moving it does not change the transmitted video. Voice calls, incoming calls and reconnection keep their controls visible. Browser address/status bars are controlled by the browser; opening the saved Home Screen icon provides the app's standalone view.
+
 Voice calls use a plain dark screen with a central initials avatar and a bottom tray. **Speaker / audio output** switches to an exposed speaker when available, or opens output choices/help. Each voice call starts on a detected earpiece/receiver or headset when the browser exposes one. Speaker activates when you tap its button; switching it off returns to that receiver/headset. When no such output is exposed, the browser/system default is used and the OS may still route through a speaker. Android/iPhone browsers may not expose a built-in earpiece/speaker choice. Use the phone’s own audio controls in that case. Video hides the speaker button and requests a speaker when the browser exposes one; hardware routing remains controlled by the browser/OS.
 
 WebCaller uses full-duplex voice. On weak connections it reduces video first and may pause it completely. You can still talk while video is paused, if sufficient usable bandwidth remains. Reconnection attempts refresh ICE/TURN information. Long outages eventually end the call rather than leaving a false connected state.
@@ -28,7 +32,7 @@ WebCaller uses full-duplex voice. On weak connections it reduces video first and
 
 Type a message and use the send button. Text is encrypted for sender and recipient device identities. Delivery to an offline recipient is queued as ciphertext until its expiry. There is no persistent plaintext browser outbox or offline cache: sending needs a working connection. The UI clears displayed plaintext when backgrounded and loads/decrypts available unexpired messages again on return.
 
-Open a chat, tap its **Settings** cog, then **Disappearing messages**. Choose **Off**, **4 weeks**, **1 week**, **1 day** (the default), **8 hours**, **1 hour**, **5 minutes**, or **30 seconds**, then **Save**. For an exact time, tap **Custom time**, scroll the left wheel to a number and the right wheel to seconds, minutes, hours, days or weeks, tap **Set**, then **Save**. **Cancel** leaves the custom choice unchanged; going back without Save discards the draft. The longest timer is four weeks.
+Open a chat, tap its **Settings** cog, then **Disappearing messages**. Choose **Off**, **4 weeks**, **1 week**, **1 day**, **8 hours**, **1 hour** (the default), **5 minutes**, or **30 seconds**, then **Save**. New chats default to disappearing messages after one hour; explicitly saved timer choices remain in effect. For an exact time, tap **Custom time**, scroll the left wheel to a number and the right wheel to seconds, minutes, hours, days or weeks, tap **Set**, then **Save**. **Cancel** leaves the custom choice unchanged; going back without Save discards the draft. The longest timer is four weeks.
 
 This applies only to new messages you send in that conversation. Your countdown starts **when sent**. On the recipient’s phone, the full countdown starts **when they view the message in the chat**, even if your own copy has already disappeared. First viewing is remembered on that device: closing or refreshing the chat does not restart it. Visible messages are marked viewed after a brief on-screen check; opening a message’s actions or its media also counts. This applies to new timed text and media after this update. Older messages keep their original shared expiry.
 
@@ -65,6 +69,8 @@ A website cannot reliably prevent operating-system screenshots or another camera
 Three animated dots show when the other person types. Only a signed encrypted typing/not-typing status is sent; the draft itself is never sent. Updates are throttled, expire within eight seconds and are never stored or replayed by the server. Dots clear after sending, leaving the field, switching conversations, hiding the page or inactivity. Delivery needs both pages connected.
 
 ## Settings
+
+**Page title:** choose a name for the browser tab under **Settings → Your phone → Page title**. The default is **Home**. This preference stays in this browser; it does not rename your identity, contact list or server. It does not erase earlier history or rename an existing Home Screen icon.
 
 **Connection · Automatic:** always used. It selects Wi-Fi quality only if the browser explicitly reports Wi-Fi/Ethernet. Unknown networks, including Safari, use data saver. Video still adapts under congestion. Older saved manual modes are ignored.
 
@@ -141,7 +147,7 @@ During a connected voice/video call, four small words appear at the top. In vide
 
 Reading the words is optional: the call works without confirmation, including a child’s call. Skipping them gives no additional human verification. Matching words check this call’s connection under trusted software; they do not defeat malicious website code or prove the security of all earlier messages. They are not a password/recovery phrase and are cleared on hang-up/page exit. [How it works](CALL_VERIFICATION.md).
 
-Messages and files are end-to-end encrypted, but local readable history, metadata and browser/device traces have separate risks. Deleting a contact preserves minimal verification pins to resist identity replacement. Clearing site storage loses keys/history and those pins. See [security](SECURITY.md), [review](SECURITY_REVIEW.md) and [Signal comparison](../README.md#webcaller-beside-signal).
+Messages and files are end-to-end encrypted, but local readable history, metadata and browser/device traces have separate risks. Deleting a contact preserves minimal verification pins to resist identity replacement. Clearing site storage loses keys/history and those pins. See [security](SECURITY.md), [review](SECURITY_REVIEW.md) and [Signal comparison](../README.md#how-it-compares-with-signal).
 
 ## Optional extra ringing
 
@@ -173,7 +179,7 @@ Tap the cog on the home screen for phone settings, or the cog in an open chat fo
 
 ### Video orientation and app icon
 
-Calls show the complete camera frame when one person uses portrait and the other uses landscape or a desktop. Space beside or above the picture is expected when the shapes differ; rotate naturally without asking the other person to match you. The new handset mark appears in the browser, home screen metadata and notification icon. Existing Home Screen icons may remain cached. Keep your existing shortcut and site data; do not remove and reinstall the shortcut just to refresh its artwork, because some phones store that web app’s identity separately.
+Calls fill the upright screen when both people are upright. If either screen is landscape, the picture becomes a square on both sides; it reaches the side edges in portrait and the top/bottom edges in landscape. The self preview also becomes square. Fitting may trim the picture's edges, while transmitted frames and adaptive data savings remain unchanged. The handset mark appears in the browser, home screen metadata and notification icon. Existing Home Screen icons may remain cached. Keep your existing shortcut and site data; do not remove and reinstall the shortcut just to refresh its artwork, because some phones store that web app’s identity separately.
 
 ## Sending a photo or large file while talking
 
@@ -182,3 +188,13 @@ Tap the call's back arrow to open your chat, then **+ → Gallery** for a photo/
 A strong connection can send much faster than earlier releases. Voice still takes priority: video temporarily reduces, and sharing may say **Waiting for connection · voice first** when the call needs the link. Leave the page visible; it resumes automatically when the call improves. Closing/backgrounding cancels the transfer, so choose it again when ready. Short disappearing timers may expire before a large file finishes; choose a longer timer or Off first.
 
 Verified encrypted media stays in this browser's cache until its local timer ends or it is deleted, subject to storage limits/eviction. Reopening the chat should use those bytes without downloading them again. A new browser/device has a separate cache. Very large files need enough phone memory/storage; failure to keep a local copy is reported and may require another download later.
+
+## Check the identity and live call
+
+In the chat, tap the contact's **name/header** to open the full safety fingerprint. Compare every group through a separate trusted channel or in person. It is a 256-bit pairwise hexadecimal identity check, not a password. During a call, compare **all four security words in order**. Matching words check the accepted call connection under the documented assumptions; skipping them does not interrupt the call and adds no manual verification. If words/fingerprint differ, stop sharing sensitive information and verify the real person elsewhere. The app deliberately does not depend on a third-party key-transparency service; manual checks/pins have different limits. [Security](SECURITY.md) · [SAS details](CALL_VERIFICATION.md).
+
+## Call screen and picture quality
+
+Video fills an upright call screen when both peers are upright; if either screen is sideways, both views use square fitting. Some edges can be cropped by display fitting. Controls and codec/rate rows fade after inactivity and return on a tap; the SAS, quality and elapsed time remain. Drag the small self preview to move it. The codec rows show measured voice/video **upload plus download payload rates**, not your internet plan's speed.
+
+Automatic mode uses the conservative cellular/unknown budget whenever either phone cannot confirm Wi-Fi. Healthy video can use up to 500 kbps each way there; voice stays first. Poor conditions lower quality, may pause video/files, and cautiously resume after improvement. A temporary radio gap is possible when walking between Wi-Fi/cellular. [Detailed policies](CALL_NETWORK.md).

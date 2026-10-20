@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "WebCaller Calls",
-  "short_name": "WebCaller Calls",
+  "name": "Home",
+  "short_name": "Home",
   "scope": "./",
   "display": "standalone",
   "background_color": "#ffffff",

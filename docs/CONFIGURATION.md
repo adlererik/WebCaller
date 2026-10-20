@@ -1,12 +1,19 @@
 # Configuration reference
 
+Use [native installation](INSTALL_NATIVE.md), the release-matched [Docker bundle](../docker/README.md), or a source build. Fresh setups select `WEBCALLER_CRYPTO_ENGINE=libsignal-pqxdh-v1`; there is no runtime switch back to Olm. Existing Olm data requires an explicit backed-up migration.
+
 Copy `.env.example` or use the installer/setup command. `.env` is private, ignored by Git and never copied into the image/release. Values are plain `KEY=value`; use single-line values without surrounding quotes in the supplied helpers. Never paste the file into an issue.
 
 | Variable | Purpose |
 |---|---|
 | HOST | Native HTTP bind, default loopback. Compose overrides to 0.0.0.0 inside the container |
-| PORT | Native HTTP port, default 8080; Compose uses internal 8080 |
+| PORT | `.env.example` uses separate native port 8088; Compose uses internal 8080 |
+| WEBCALLER_CRYPTO_ENGINE | Explicit libsignal-pqxdh-v1 transport selection, set by new setup/Docker defaults; do not silently reuse Olm state |
+| WEBCALLER_TEST_INSTANCE | Legacy isolated preview startup flag libsignal-preview-v1; accepted for existing previews, not needed for a new release installation |
 | PUBLIC_URL | Canonical full HTTPS origin/path, e.g. https://calls.example.com/calls with your own domain substituted; determines allowed Origin and path |
+| APP_PATH_ALIASES | Optional comma-separated previous paths on the same origin, e.g. /calls when PUBLIC_URL ends in /com; share the existing accounts and service |
+| APP_RETIRED_PATHS | Optional comma-separated removed paths, disjoint from active paths. The website bridge returns 404 without revealing the replacement. Open the new address on each phone so it can migrate permitted browser alerts. |
+| APP_MANIFEST_ID | Optional original absolute app directory, e.g. /calls/, retained during a path move so the installed web app keeps its manifest identity |
 | DATA_DIR | SQLite directory; Compose overrides to /app/data in its named volume |
 | BOOTSTRAP_TOKEN | Generated 24-byte random first-owner bearer secret; private QR hides typing, not its sensitivity |
 | VAPID_PUBLIC_KEY | Generated public browser push key |
@@ -46,7 +53,7 @@ Map configuration is public through `/api/config`; never put secret keys in thes
 
 Leave `NTFY_PUBLIC_URL`, `NTFY_PUBLISH_URL` and `NTFY_PUBLISH_TOKEN` all empty to use only normal Web Push. Enabling ntfy requires all three together; a partial configuration fails startup. `NTFY_IOS_UPSTREAM` describes the ntfy server's actual upstream setup rather than configuring it. Phone subscriptions have their own random read-only addresses, not the publisher token or a shared password. See [Extra ringing](EXTRA_RINGING.md) for setup, isolation, retention and the iPhone wake-up limitation.
 
-## Prebuilt Docker files
+## Prebuilt Docker reference
 
 The [Docker bundle](../docker/README.md) separates release-pinned `images.env` from private `.env` installation choices and `config/app.env`, `config/turn.env`, ntfy/proxy configuration and a private optional connector-token file. App data, ntfy auth state and its publisher credential use separate persistent volumes; ntfy never mounts the app database or app environment. Use the supplied wrapper so both environment files are loaded. The setup wizard refuses existing configuration; upgrades preserve it.
 

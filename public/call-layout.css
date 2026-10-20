@@ -1,7 +1,89 @@
-/* Preserve the complete camera frame across mixed device orientations. */
+/* Display crops only. The transmitted frame and adaptive encoder are unchanged. */
+:root:has(.call-screen:not(.hidden)),body:has(.call-screen:not(.hidden)) { overflow:hidden; }
 .call-screen #remote-media,.call-screen #local-media { object-fit:contain; object-position:center; }
 .call-screen #remote-media { background:#11141b; opacity:1; }
 .call-screen #local-media { background:#11141b; }
+.call-screen.has-video #remote-media { object-fit:cover; object-position:50% 42%; }
+.call-screen.has-video.square-video #remote-media {
+  inset:0; margin:auto; width:min(100vw,100dvh); height:min(100vw,100dvh);
+  max-width:100%; max-height:100%; border-radius:0;
+}
+.call-screen.has-video #local-media {
+  --self-width:clamp(76px,22vw,130px); width:var(--self-width);
+  height:calc(var(--self-width) * 4 / 3); object-fit:cover; object-position:50% 42%;
+  right:max(12px,env(safe-area-inset-right));
+}
+.call-screen.has-video.square-video #local-media { height:var(--self-width); }
+/* Fade without reflow: call words and the metrics keep their exact positions. */
+.call-screen.has-video.call-connected .active-actions,
+.call-screen.has-video.call-connected #call-back,
+.call-screen.has-video.call-connected #call-settings,
+.call-screen.has-video.call-connected #call-peer-top,
+.call-screen.has-video.call-connected #call-warning {
+  transition:opacity .25s ease,visibility .25s;
+}
+.call-screen.has-video.call-connected.controls-hidden .active-actions,
+.call-screen.has-video.call-connected.controls-hidden #call-back,
+.call-screen.has-video.call-connected.controls-hidden #call-settings,
+.call-screen.has-video.call-connected.controls-hidden #call-peer-top,
+.call-screen.has-video.call-connected.controls-hidden #call-warning {
+  opacity:0; visibility:hidden; pointer-events:none;
+}
+.call-screen:focus { outline:none; }
+@media(prefers-reduced-motion:reduce){
+  .call-screen.has-video.call-connected .active-actions,
+  .call-screen.has-video.call-connected #call-back,
+  .call-screen.has-video.call-connected #call-settings,
+  .call-screen.has-video.call-connected #call-peer-top,
+  .call-screen.has-video.call-connected #call-warning { transition:none; }
+}
 .brand-icon .brand-mark { display:block; width:100%; height:100%; border-radius:inherit; }
 
 :root .sidebar .brand-icon.app-brand { background:transparent; box-shadow:none; }
+
+/* One centered word column with equal wings across the entire phone screen. */
+.call-screen.has-video .call-top {
+  display:grid; grid-template-columns:38px minmax(0,1fr) max-content minmax(0,1fr) 38px;
+  grid-template-rows:minmax(38px,auto) auto auto; gap:4px 6px; max-width:none;
+  padding-left:max(12px,env(safe-area-inset-left)); padding-right:max(12px,env(safe-area-inset-right));
+}
+.call-screen.has-video .call-heading,
+.call-screen.has-video .call-title,
+.call-screen.has-video .call-quality-row { display:contents; }
+.call-screen.has-video #call-back { grid-area:1/1; }
+.call-screen.has-video #call-peer-top { grid-area:1/2; align-self:center; }
+.call-screen.has-video #call-sas { grid-area:1/3; align-self:center; }
+.call-screen.has-video #call-settings { grid-area:1/5; }
+.call-screen.has-video .call-metrics { grid-area:2/2/3/5; margin:0; }
+.call-screen.has-video #call-quality {
+  grid-area:3/2/4/4; align-self:center; min-width:0; max-width:100%;
+  margin-left:18px; text-overflow:ellipsis;
+}
+.call-screen.has-video #call-duration { grid-area:3/4; align-self:center; justify-self:end; }
+.call-screen.has-video.controls-hidden #call-quality {
+  grid-area:1/1/2/3; margin:0; justify-self:center; text-align:center;
+}
+.call-screen.has-video.controls-hidden #call-duration {
+  grid-area:1/4/2/6; justify-self:center; text-align:center;
+}
+.call-screen.has-video .call-sas,
+.call-screen.has-video #call-duration,
+.call-screen.has-video #call-quality { text-shadow:0 1px 4px #000,0 0 12px #0008; }
+.call-screen.has-video.call-connected .call-metrics,
+.call-screen.has-video.call-connected .call-bottom { transition:opacity .25s ease,visibility .25s; }
+.call-screen.has-video.call-connected.controls-hidden .call-metrics,
+.call-screen.has-video.call-connected.controls-hidden .call-bottom { opacity:0;visibility:hidden;pointer-events:none; }
+.call-screen.has-video #local-media {
+  pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;
+}
+.call-screen.has-video #local-media.dragging { cursor:grabbing; }
+.call-screen #local-media:focus-visible { outline:2px solid #dce7ff;outline-offset:3px; }
+@media(max-width:760px){
+  .call-screen.has-video .call-top { grid-template-columns:34px minmax(0,1fr) max-content minmax(0,1fr) 34px;grid-template-rows:minmax(34px,auto) auto auto; }
+  .call-screen.has-video #call-quality { margin-left:16px; }
+  .call-screen.has-video.controls-hidden #call-quality { margin-left:0; }
+}
+@media(prefers-reduced-motion:reduce){
+  .call-screen.has-video.call-connected .call-metrics,
+  .call-screen.has-video.call-connected .call-bottom { transition:none; }
+}

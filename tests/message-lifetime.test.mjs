@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {NO_EXPIRY,MAX_MESSAGE_SECONDS,timerValue,timerLabel,messageExpiry,validLifetime,expiryAlarm} from '../public/message-lifetime.js';
+import {NO_EXPIRY,MAX_MESSAGE_SECONDS,DEFAULT_MESSAGE_SECONDS,timerValue,timerLabel,messageExpiry,validLifetime,expiryAlarm} from '../public/message-lifetime.js';
 import {customSeconds,splitTimer} from '../public/message-timer.js';
 import {remainingTime} from '../public/message-expiry.js';
 import {secureMessaging} from '../public/secure-messaging.js';
@@ -9,7 +9,9 @@ import {fixture} from './helpers/ratchet-fixture.mjs';
 const DAY=86400000;
 test('Off is retained as zero and invalid saved timer choices cannot become permanent',()=>{
   assert.equal(timerValue(0),0);assert.equal(timerValue('0'),0);assert.equal(timerValue(MAX_MESSAGE_SECONDS),MAX_MESSAGE_SECONDS);
-  for(const value of [null,undefined,false,true,NaN,-1,Infinity,'',{},'wat',MAX_MESSAGE_SECONDS+1,1.5])assert.equal(timerValue(value),86400);
+  assert.equal(DEFAULT_MESSAGE_SECONDS,3600);
+  for(const value of [null,undefined,false,true,NaN,-1,Infinity,'',{},'wat',MAX_MESSAGE_SECONDS+1,1.5])assert.equal(timerValue(value),3600);
+  for(const saved of [30,3600,86400,604800,MAX_MESSAGE_SECONDS])assert.equal(timerValue(saved),saved);
   assert.equal(timerLabel(0),'Off');assert.equal(timerLabel(MAX_MESSAGE_SECONDS),'4 weeks');assert.equal(timerLabel(120),'2 minutes');assert.equal(timerLabel(3600),'1 hour');assert.equal(remainingTime(NO_EXPIRY),'');
 });
 test('custom wheel units cover seconds through four weeks without exceeding the chosen unit',()=>{

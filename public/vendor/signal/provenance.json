@@ -1,0 +1,17 @@
+{
+  "repository": "https://github.com/signalapp/libsignal",
+  "commit": "1738ead8a12ffe539f6309958123dadb16dc3b95",
+  "packageVersion": "0.105.1",
+  "oracleIntegrity": "sha512-EQRQp76gXce7RNCz1emRlDAGlKmuSWfHYhyEz9buR9FHGIvXEdhL4PH2lt+nT5FYzGEFvfu/P4X0dhtrDhkb6g==",
+  "wasmSha256": "b00f26c02a1ddebd3eb903da1360f11b97257ad7691f11b2fa7832745dc16fdf",
+  "wasmBytes": 1078988,
+  "rust": "1.98.1",
+  "wasmBindgen": "0.2.100",
+  "experimental": true,
+  "officialProtocolSourceModified": false,
+  "bindingSourceSha256": "fe7e1c8189620389bca6eefd222e80aee114c8482438eeed42c07bb9ced0fd58",
+  "bindingLockSha256": "9f6424e4ed44bcc8531609e1a88ac8a2e3d628ad0dd09729e804e55490240a31",
+  "privateSourcePathsRemapped": true,
+  "upstreamReleaseTag": "v0.105.1",
+  "strictPqxdhVersion": 4
+}

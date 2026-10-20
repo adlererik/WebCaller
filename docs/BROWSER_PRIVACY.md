@@ -1,5 +1,7 @@
 # What this web phone can keep private
 
+This release uses libsignal/PQXDH with Ed25519 application signatures. [Install](INSTALL.md) · [Security](SECURITY.md) · [Olm upgrade planning](APPROVED_CUTOVER.md).
+
 The app minimizes traces it creates, but it cannot make use of a website invisible to someone inspecting an unlocked phone or browser.
 
 ## What the app does
@@ -18,6 +20,8 @@ The browser can retain the base site address, visit times, tab titles, synced hi
 The [standard History interface](https://html.spec.whatwg.org/multipage/nav-history-apis.html#the-history-interface) manipulates page navigation; it does not expose a website operation to erase global browsing history. Chrome’s separate [history deletion API](https://developer.chrome.com/docs/extensions/reference/api/history) requires a browser extension and explicit history permission. This project remains an ordinary web app and does not install such an extension.
 
 ## Practical choices
+
+**Settings → Page title** changes the tab name on this device, with a neutral default of **Home**. An operator can also choose an inconspicuous app path such as `/com`. These reduce descriptive labels; they do not hide a visit, erase older history or conceal website storage from somebody inspecting an unlocked browser. Existing Home Screen labels are managed by the phone.
 
 Keep the phone locked with a passcode and use the phone’s notification privacy controls when other people can see its screen. To remove a saved site address from ordinary browsing history, use the browser’s own history controls. Deleting only a history entry is different from clearing all website data: clearing site data can lose this phone’s identity, contacts and cached media and require a new invitation.
 

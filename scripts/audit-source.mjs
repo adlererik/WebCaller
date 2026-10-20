@@ -25,6 +25,12 @@ export function audit(ref, cwd=process.cwd()) {
   if (!files.length) throw new Error('No tracked source. Stage the reviewed source before auditing.');
   const failures=[];
   for (const file of files) {
+    if(file==='third_party/libsignal/upstream'){
+      const entry=execFileSync('git',ref?['ls-tree',ref,'--',file]:['ls-files','--stage','--',file],{cwd}).toString().trim().split(/\s+/);
+      const url=execFileSync('git',ref?['config','--blob',`${ref}:.gitmodules`,'--get','submodule.third_party/libsignal/upstream.url']:['config','-f','.gitmodules','--get','submodule.third_party/libsignal/upstream.url'],{cwd}).toString().trim();
+      if(entry[0]!=='160000'||!entry.includes('1738ead8a12ffe539f6309958123dadb16dc3b95')||url!=='https://github.com/signalapp/libsignal.git')failures.push('Unexpected upstream libsignal gitlink or URL');
+      continue;
+    }
     const data=ref?execFileSync('git',['show',`${ref}:${file}`],{cwd,maxBuffer:20*1024*1024}):readFileSync(`${cwd}/${file}`);
     for (const issue of problems(file,data)) failures.push(`${file}: ${issue}`);
   }

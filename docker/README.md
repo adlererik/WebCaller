@@ -1,52 +1,56 @@
-# WebCaller: the easy Docker installation
+# Guided Docker installation — WebCaller v0.18.0
 
-This runs the same Signal-like WebRTC phone, encrypted chat and optional ntfy alerts using ready-made images. **The person running the server follows this guide once. People receiving invitations just open their link.** No Node.js, npm, Python or systemd app service needs installing on the server.
+This small download installs the **libsignal/PQXDH v0.18.0** application. It pulls matching prebuilt images from GitHub Container Registry (GHCR); you do not need Node, npm or Rust on the host. Native amd64/arm64 images support Linux servers, including common x86 VPSs and 64-bit ARM servers.
 
-This is the **v0.17.1 release**, for Linux **amd64** (Intel/AMD) and **arm64** servers. Docker selects the right image. Docker Engine and a recent Compose plugin (2.24 or newer) must already work. [Install Docker on Debian](https://docs.docker.com/engine/install/debian/). Windows/macOS Docker Desktop, rootless Docker and other architectures are not certified for this complete host-networked TURN stack.
+The bundle includes the phone, setup wizard/private QR and optional coturn, ntfy, Caddy HTTPS and Cloudflare connector. You still supply a server, domain, network access and any required router/DNS configuration. It does not register domains or replace another website automatically.
 
-Use this for a **new installation**. If you already have WebCaller, keep using its current update method until you plan a migration. This package uses its own Compose project and volumes; it does not import a native database or the old source-built Docker volume automatically. Starting a new empty database under an existing phone URL would strand existing browser identities.
+**Existing Olm v0.17.x or earlier:** use [upgrade planning](../docs/APPROVED_CUTOVER.md). This protocol boundary is bundle format 2; do not point it at old volumes or bypass an updater's migration refusal. New installations use a fresh empty folder. This does not change a separate native installation.
 
-## 1. Have your addresses ready
+## 1. Install Docker
 
-You need a domain you control, such as `calls.example.com`, and optionally another subdomain, `ntfy.example.com`. **Replace example.com with your own domain.** A subdomain is not another domain registration. Docker does not configure DNS, router forwarding or Cloudflare routes for you.
-
-Choose one website connection:
-
-- **Automatic HTTPS with Caddy:** point both selected hostnames at the server/router public IP. Allow/forward TCP 80 and 443 to this server. These ports must be free; preserve an existing website and use a proxy/Tunnel instead if occupied. Caddy obtains and renews the website certificates.
-- **Existing HTTPS proxy or Cloudflare Tunnel:** keep its current installation and routes. Forward the calls hostname to `http://127.0.0.1:8080` and the optional ntfy hostname to `http://127.0.0.1:8094`. WebSocket upgrades and streaming must pass through. These are loopback listeners, not public HTTP ports.
-- **Containerized Cloudflare connector:** create/select your tunnel in Cloudflare and use its connector token in the private setup wizard. The tunnel runs in this bundle, without installing cloudflared on the host. Its published application routes must target **`http://webcaller:8080`** for calls and **`http://ntfy:8094`** for ntfy, because loopback inside this connector means the connector itself. Leave the route Path empty for separate hostnames and keep other routes. [Cloudflare route instructions](https://developers.cloudflare.com/tunnel/get-started/#publish-an-application).
-
-For home-hosted coturn, the server/router needs a **public IPv4**. Give the server a fixed LAN address, then forward TCP/UDP 3478 and UDP 49160–49260 to it. On a public VPS, allow those ports in its firewall and leave the wizard's LAN field empty. CGNAT needs an external reachable relay or an ISP public-IP option; a Tunnel alone cannot carry TURN media. [Networking guide](https://github.com/adlererik/WebCaller/blob/v0.17.1/docs/NETWORKING.md).
-
-## 2. Download the small setup bundle
-
-On the server, download these files from the [v0.17.1 release](https://github.com/adlererik/WebCaller/releases/tag/v0.17.1). If using a terminal:
+Use the official [Docker Engine on Debian](https://docs.docker.com/engine/install/debian/) guide (or your distribution's supported instructions), including the **Docker Compose plugin**. Check:
 
 ```sh
-curl -fL https://github.com/adlererik/WebCaller/releases/download/v0.17.1/WebCaller-Docker-v0.17.1.tar.gz -o WebCaller-Docker-v0.17.1.tar.gz
-curl -fL https://github.com/adlererik/WebCaller/releases/download/v0.17.1/SHA256SUMS.txt -o SHA256SUMS.txt
-grep 'WebCaller-Docker-v0.17.1.tar.gz$' SHA256SUMS.txt | sha256sum -c -
+docker --version
+docker compose version
 ```
 
-Continue only after `OK`. Then:
+If your account is not allowed to use Docker, follow the vendor's instructions or use `sudo` consistently for these commands. Docker access grants substantial host privileges; keep its socket private. Preserve any existing containers/volumes.
+
+## 2. Download and check the bundle
+
+On the server, in a new empty directory:
 
 ```sh
-tar -xzf WebCaller-Docker-v0.17.1.tar.gz
-cd WebCaller-Docker-v0.17.1
+mkdir WebCaller-install
+cd WebCaller-install
+curl -fLO https://github.com/adlererik/WebCaller/releases/download/v0.18.0/WebCaller-Docker-v0.18.0.tar.gz
+curl -fLO https://github.com/adlererik/WebCaller/releases/download/v0.18.0/SHA256SUMS.txt
+sha256sum --ignore-missing -c SHA256SUMS.txt
+```
+
+Continue only when the Docker archive reports **OK**. The checksum file also lists source assets, which are intentionally absent here. The download is a small installation bundle, not an offline copy of all images. Image references in the uploaded bundle are versioned **and digest-pinned**; `docker/images.env` in source is the editable build reference.
+
+```sh
+tar -xzf WebCaller-Docker-v0.18.0.tar.gz
+cd WebCaller-Docker-v0.18.0
 ./webcaller setup
 ```
 
-If your account cannot use Docker, run the commands with `sudo`, consistently from then on. The bundle needs only Docker and ordinary Linux shell tools; curl/tar are for downloading/extracting, not app runtimes. Public images require no GitHub login.
+## 3. Answer the setup questions
 
-## 3. Answer the short setup questions
+- **Hostname:** your own HTTPS hostname, for example `phone.example.com`. The initial app URL is `https://phone.example.com/calls/`.
+- **HTTPS:** choose automatic Caddy only if ports 80/443 are available and reach this server. If another website/proxy or Tunnel already runs here, choose the existing proxy/Tunnel option and add a route to the selected loopback app port. Keep other routes.
+- **TURN:** self-host if the relay/router has a publicly reachable IPv4 and you can open its ports; otherwise supply an existing TURN REST relay. Behind CGNAT, use a public relay elsewhere. Configure-later is useful for setup, but not reliable cross-network calling.
+- **Optional ntfy:** choose it only if you want extra ringing for people who can install its app. Give it a separate hostname. The iPhone option uses the described ntfy.sh wake-up metadata relay; encrypted conversations remain in WebCaller.
 
-Enter your calls hostname, choose your website connection above, and choose self-hosted TURN, an existing REST-credential relay, or configure later. Self-hosting asks for the relay public IPv4 and, at home, the server LAN IPv4. Configure-later cannot ensure cross-network calls.
+The wizard creates private `config/` files and credentials, plus persistent Docker volumes. It will not overwrite an existing setup. Do not publish `config/`, `.env`, tunnel tokens, private QR output or volume backups. Do not use `docker compose down -v` on a real installation: it removes persistent data.
 
-Optional extra ringing asks for the separate ntfy hostname. Choose iPhone support if any recipient might use the stock iPhone ntfy app: it requires the ntfy.sh wake-up metadata relay. Actual generic alerts remain on your ntfy server; Apple/Firebase/upstream infrastructure still participates in waking iPhones. This is not an entirely offline push system.
+For a home relay forward **TCP/UDP 3478** and **UDP 49160–49260** to it; public VPS firewalls need equivalent rules. HTTPS Caddy needs TCP80/443 separately. TURN-TLS/certificate setup is additional; a Cloudflare HTTP Tunnel does not relay TURN media. [Networking and CGNAT](../docs/NETWORKING.md).
 
-The wizard generates fresh owner, browser-push and TURN secrets. Tunnel/relay secrets are entered privately with hidden input. It writes private **`.env` and `config/`** files and refuses to overwrite an existing setup. Do not upload them, the terminal QR or your generated settings to GitHub. Do not run setup again as an upgrade.
+For an existing proxy/Tunnel, target the app's selected port on loopback (default `127.0.0.1:8080`) and preserve WebSocket upgrades. With the containerized Tunnel option, the connector uses Docker-network service names such as `webcaller:8080`; its loopback is not the host's loopback. A separate ntfy route targets its chosen loopback port or `ntfy:8094` inside that Docker network. No Cloudflare account/domain is created by the wizard.
 
-## 4. Start and set up your first phone
+## 4. Start and enroll the first phone
 
 ```sh
 ./webcaller start
@@ -54,49 +58,35 @@ The wizard generates fresh owner, browser-push and TURN secrets. Tunnel/relay se
 ./webcaller qr
 ```
 
-The first start downloads the selected images and waits for services to start/become healthy. The QR is intentionally **private**: scan it with your phone Camera and finish first-phone setup. Nobody needs to type a long setup code. Other phones use **Invite someone → Create invitation → Share invitation**.
+The services should report running/healthy. Scan the private first-phone QR with the phone camera and choose a display name. **Invite someone** connects other people; they do not need owner/server credentials. Keep the first-phone QR private. iPhone users follow Add to Home Screen and use that icon for calls/alerts. [Phone instructions](../docs/USER_GUIDE.md).
 
-For the first iPhone, the simplest route is to register your own computer using the private setup link first, then invite the iPhone. Invitations guide **Share → Add to Home Screen → Add** before acceptance; the owner QR does not perform that handoff. Alternatively, add the site to the Home Screen before registration, open its icon and privately paste the owner code there. Existing Safari identities do not automatically move into a Home Screen app. [First-phone instructions](https://github.com/adlererik/WebCaller/blob/v0.17.1/docs/INSTALL.md#4-set-up-your-first-phone-by-qr).
-
-Allow microphone/camera when making or answering a call. Enable browser alerts and complete the locked-phone sound test. iPhone users should keep using the saved Home Screen icon. Do not clear site storage: that removes the phone's keys and local history.
-
-Test calls **in both directions on different networks**, not only on your Wi-Fi. Check Settings → **Check calling connection**. A relay candidate proves allocation, not every possible media path.
-
-## 5. Optional ntfy on each phone
-
-If enabled, open **Settings → Extra ringing · ntfy**. Android has a connect button after installing the free ntfy app. On iPhone, paste this phone's long `wc_` subscription into **Topic name**, enable **Use another server**, paste **Server** into **Service URL**, then Subscribe. “Incoming calls” is only a friendly name. No subscription username/password or server publishing credential is needed.
-
-Return to WebCaller, use **Test the sound**, lock the phone and confirm only after hearing it. If a notification opens another browser, use the explicit usual-phone-icon fallback. Alerts use ntfy priority **5 / Max / urgent**. Sound/channel instructions, DNS/login help and iPhone limits are in [Extra ringing](https://github.com/adlererik/WebCaller/blob/v0.17.1/docs/EXTRA_RINGING.md). A website or Docker image cannot force a sleeping phone to override its sound settings.
+Test messages, calls both ways, four matching SAS words, a photo while talking, different networks, locked-screen sound and Wi-Fi/cellular recovery. Settings → Check calling connection only proves relay allocation, not complete media delivery. Alert delivery depends on phone permissions and OS policy.
 
 ## Everyday commands
 
-| Command | What it does |
-|---|---|
-| `./webcaller start` | Start selected services and check startup/health |
-| `./webcaller status` | Show container state |
-| `./webcaller qr` | Show the private first-owner QR; use invitations after setup |
-| `./webcaller logs` | Show recent logs; review/redact them before sharing |
-| `./webcaller stop` | Stop services while keeping configuration and data |
-| `./webcaller update vX.Y.Z` | Download/check a specific newer Docker bundle, pull its images and restart |
+```sh
+./webcaller status
+./webcaller logs
+./webcaller stop
+./webcaller start
+```
 
-Use the same folder and account for later commands. Editing `config/app.env` requires `./webcaller start` to recreate the app with new environment values. Never regenerate the owner/VAPID/TURN keys to troubleshoot connectivity. Public ports belong to the chosen proxy/TURN; the phone and ntfy HTTP ports bind only to loopback.
+Logs are diagnostics, not material to post publicly without checking for identifiers. The generated configuration and named volumes preserve identity/mailbox/ntfy state across normal restart. Phone private keys are held by the browser, not recoverable from a server backup.
 
-## Updates, backups and removal
+## Update and recovery
 
-Read the new release notes first. When nobody is calling, run `./webcaller update vX.Y.Z`, substituting an actual newer version. It asks for confirmation locally, checks the bundle's HTTPS-downloaded checksum, requires approved image namespaces/digests, pulls images before replacing the public bundle files, and waits for startup/health. `.env`, `config/`, browser identities and existing named volumes remain. It rejects downgrades. `--yes` skips only the local confirmation; no unattended update schedule is installed.
+Read release notes first, finish calls and make a consistent private backup of the installation/configuration and persistent volumes. Use an explicit newer **libsignal** version:
 
-A restart can interrupt calls. Health checks prove startup, not voice quality, migration correctness or locked-phone sound. If checks fail, keep the configuration/volumes and inspect status/logs. Previous public bundle files are retained under `.updates/previous`; this is **not a database backup or automatic database rollback**. Follow release-specific migration/rollback instructions before reverting an app image.
+```sh
+./webcaller update vX.Y.Z
+```
 
-Make any private backups you need before updating, using Docker's [volume backup instructions](https://docs.docker.com/engine/storage/volumes/#back-up-restore-or-migrate-data-volumes). Stop the services for a consistent SQLite copy. Back up `.env`, `config/`, app data, ntfy state and publisher volumes together; preserve Caddy volumes if used. Keep backups private/encrypted. Backups can retain ciphertext after a disappearing timer; choose their retention deliberately. The updater does not automatically archive conversation history.
+Replace `vX.Y.Z` with the actual release. The updater checks bundle checksum, allowed files, version order and image namespace/digests, pulls before replacement, preserves private configuration/volumes and checks startup. Updates are deliberate, not unattended. Existing explicit configuration wins over new defaults. A protocol/database migration is not an ordinary update; downgrades and Olm cutovers require manual review. Source-only package changes do not alter a running native service.
 
-`./webcaller stop` preserves everything. To permanently remove the installation, stop it and intentionally remove its containers, named volumes and private folder after deciding whether you need recovery. **Do not use `docker compose down -v` during ordinary updates**: it deletes data. Server removal does not erase recipients' devices, screenshots, browser/OS history or external records.
+The updater is not an automatic database rollback mechanism. Keep a matching prior bundle/images/configuration/database backup until tested, and restore with services stopped. Do not restore a database over a running application or clear phones' browser data to repair connectivity. [Operations and backups](../docs/OPERATIONS.md).
 
-## What is inside
+## What is downloaded and licensed
 
-Version/digest-pinned images run WebCaller, a one-shot setup tool, optional coturn, optional ntfy, and either optional Caddy or a Cloudflare connector. Project images come from `ghcr.io/adlererik/webcaller`; third-party images come from their official registries and are pinned by digest. Source ZIP/tar downloads and native/source-built Docker installs remain available. There is no universal `latest` auto-upgrade.
+The application/setup/relay images are published under `ghcr.io/adlererik/webcaller`, with release-specific app, `-setup` and `-turn` tags plus amd64/arm64 variants. Supporting ntfy/Caddy/cloudflared images are separately pinned. Download size varies by architecture and registry layer cache; this bundle is only the launcher, not an offline appliance.
 
-WebCaller uses its existing Olm Double Ratchet, signed/pinned identities, AES-GCM attachments, media-bound optional four-word SAS and WebRTC DTLS-SRTP. Docker changes deployment, not those protocols. ntfy has its own state and a write-only server publisher credential; it cannot read app files or authenticate a caller. Publishing uses the exact `http://ntfy:8094` destination on a private Docker network with an explicit server-only opt-in. The alert publisher token crosses that same-host network in plaintext, rather than TLS; this does not carry chat, call media or encryption keys. External phone access stays HTTPS. Ordinary native configuration still rejects non-loopback HTTP.
-
-The app never receives the Docker socket. One-shot ntfy initialization has limited volume-management capabilities and no network; runtime ntfy is unprivileged and has no app-data mount. Adding containers does not protect against a compromised host, browser-delivered malicious code or an owned phone. [Security model](https://github.com/adlererik/WebCaller/blob/v0.17.1/docs/SECURITY.md).
-
-TURN-TLS is optional: place your relay's valid `fullchain.pem` and `privkey.pem` privately in `config/certs/`, add its `turns:` URL to `config/app.env`, and forward/allow TCP 5349. Arrange certificate renewal and restart the relay after renewal. Caddy's website certificates are separate; this bundle does not automatically issue TURN/IP certificates or change existing TCP 443 forwarding. See Networking for restricted networks.
+The combined application links AGPL-3.0-only libsignal. The app image includes notices and the matching corresponding-source download; release source archives include full pinned upstream source. Preserve that source offer if you modify or host it. [Licensing](../LICENSING.md) · [Security](../docs/SECURITY.md).

@@ -3,7 +3,7 @@
 import {b64,unb64} from './crypto.js';
 const enc=new TextEncoder(),dec=new TextDecoder();
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-export function secureStore({indexedDB=globalThis.indexedDB,name='webcaller-secure',now=Date.now}={}){
+export function secureStore({indexedDB=globalThis.indexedDB,name='webcaller-signal-secure-v1',now=Date.now}={}){
   let database;
   const connect=()=>database ||= new Promise((resolve,reject)=>{
     if(!indexedDB)return reject(new Error('Secure browser storage is unavailable.'));

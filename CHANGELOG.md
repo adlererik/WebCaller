@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.18.0 — 2026-10-20
+
+- Promote official libsignal 0.105.1/PQXDH v4 and Double/Triple Ratchet/SPQR to the main release, with Ed25519 application signatures, persistent identity pins and existing media-bound four-word SAS. Keep the custom browser integration explicitly unaudited; live media remains DTLS-SRTP. Old Olm installations require an explicit backed-up migration.
+- Raise cellular/unknown video to 500 kbps per direction, preserve voice ceilings, retain tiny video, pause when required and add bounded healthy-audio recovery probes. Harden dead-socket detection, same-page answered-call ownership, fresh correlated ICE generations and delayed-answer/candidate rejection during network handovers.
+- Add immersive portrait/square landscape call views, fading controls/codec rows, aligned rates, persistent SAS/quality/timer and draggable self preview. Fix dark captions and default new conversations to one-hour disappearing messages.
+- Add local page-title configuration and same-origin route aliases/retirement without disclosure redirects; migrate only authenticated owned browser push subscriptions after replacement succeeds. Keep invitations, calling codes, ntfy and relay configuration independent of route choice.
+- Publish release-matched libsignal native/source/prebuilt Docker instructions and amd64/arm64 images, complete upstream source archives, source offer, checksums and digest-pinned setup bundle. Bundle format 2 prevents an old Olm updater from silently crossing the protocol boundary.
+- Rewrite security, encryption inventory, forward secrecy/PQ/recovery limits, SAS/full fingerprint instructions, no-third-party-transparency rationale, Signal comparison, features and beginner installation/operations guides. Public examples contain no deployment credentials or personal addresses.
+
+## 0.18.0-experimental.1 — libsignal/PQXDH branch, 2026-10-19
+
+- Add official libsignal v0.105.1 at 1738ead8a12ffe539f6309958123dadb16dc3b95 through a custom browser WASM/storage adapter. Require v4 PQXDH with X25519/Kyber-1024; retain upstream Double/Triple Ratchet/SPQR. Stable Olm accounts are not imported.
+- Use Web Crypto Ed25519 application signatures. Earlier libsignal test P-256 identities keep pins/history through certified nonextractable signers, strict framing, old signature verification and bounded prekey batches.
+- Retain the media-bound optional four-word SAS, AES-GCM files/local records, adaptive calls, chat, timers, codes, cache and alert workflows. Live media remains DTLS-SRTP, not post-quantum media.
+- Include pinned upstream source, binding/locks/build/oracle, AGPL source offer, MIT/dependency notices and complete branch-specific documentation. No private deployment credentials/state are included.
+- Label the integration unaudited. Block the stable prebuilt launcher here and restrict stable registry publishing. No experimental prebuilt image or stable release is published by this branch.
+
+Entries below describe historical stable releases, not this branch's current encryption or migration support.
+
 ## 0.17.1 — 2026-10-19
 
 - Publish the complete adaptive-sharing / 200 MiB release below with source archives, digest-pinned Docker setup bundles and native amd64/arm64 images.

@@ -2,7 +2,7 @@
 // a safe integer preserves existing envelope framing and SQLite comparisons.
 export const NO_EXPIRY = 8_640_000_000_000_000;
 export const MAX_MESSAGE_SECONDS = 28 * 86400;
-export const DEFAULT_MESSAGE_SECONDS = 86400;
+export const DEFAULT_MESSAGE_SECONDS = 3600;
 export const isPermanent = expiresAt => expiresAt === NO_EXPIRY;
 export const persistentLane = lane => ['chat', 'events', 'files'].includes(lane);
 export function timerValue(value) {

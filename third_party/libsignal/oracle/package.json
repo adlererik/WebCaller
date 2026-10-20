@@ -1,0 +1,8 @@
+{
+  "name": "webcaller-official-signal-oracle",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@signalapp/libsignal-client": "0.105.1"
+  }
+}

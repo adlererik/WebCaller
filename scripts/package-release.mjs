@@ -13,7 +13,9 @@ const base=`WebCaller-${tag}`;
 const files=[];
 for (const [format,suffix] of [['tar.gz','tar.gz'],['zip','zip']]) {
   const name=`${base}.${suffix}`;
-  execFileSync('git',['archive',`--format=${format}`,`--prefix=${base}/`,`--output=${out}/${name}`,tag]);
+  // Expand the pinned upstream gitlink: git archive/GitHub's automatic source
+  // downloads omit it and are not the complete corresponding-source offer.
+  if(format==='tar.gz')execFileSync('python3',['scripts/package-source-release.py',tag,base,out]);
   files.push(createHash('sha256').update(readFileSync(`${out}/${name}`)).digest('hex')+'  '+name);
 }
 // A small optional deployment bundle, independent of source/runtime directories.
@@ -23,7 +25,9 @@ if(digestFile){
   const dir=mkdtempSync(out+'/bundle-'),prefix=`WebCaller-Docker-${tag}`;mkdirSync(`${dir}/${prefix}`);
   try{
     for(const name of ['compose.yaml','images.env','webcaller','README.md','VERSION'])writeFileSync(`${dir}/${prefix}/${name}`,execFileSync('git',['show',`${tag}:docker/${name}`]),{mode:name==='webcaller'?0o755:0o644});
-    writeFileSync(`${dir}/${prefix}/LICENSE`,execFileSync('git',['show',`${tag}:LICENSE`]));
+    for(const name of ['LICENSE','LICENSE-MIT','LICENSING.md','THIRD_PARTY_NOTICES.md'])writeFileSync(`${dir}/${prefix}/${name}`,execFileSync('git',['show',`${tag}:${name}`]));
+    const readme=readFileSync(`${dir}/${prefix}/README.md`,'utf8').replaceAll('](../',`](https://github.com/adlererik/WebCaller/blob/${tag}/`);
+    writeFileSync(`${dir}/${prefix}/README.md`,readme);
     let env=readFileSync(`${dir}/${prefix}/images.env`,'utf8');
     for(const key of ['WEBCALLER_IMAGE','SETUP_IMAGE','TURN_IMAGE']){
       if(!/^sha256:[a-f0-9]{64}$/.test(digests[key]||''))throw new Error('Missing reviewed image digest: '+key);

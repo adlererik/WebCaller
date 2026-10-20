@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import {randomBytes,generateKeyPairSync} from 'node:crypto';
 import {WebSocket} from 'ws';
 const dir=mkdtempSync(join(tmpdir(),'webcaller-container-'));
-for(const file of ['compose.yaml','images.env','webcaller','README.md','VERSION'])copyFileSync('docker/'+file,join(dir,file));copyFileSync('LICENSE',join(dir,'LICENSE'));
+for(const file of ['compose.yaml','images.env','webcaller','README.md','VERSION'])copyFileSync('docker/'+file,join(dir,file));for(const file of ['LICENSE','LICENSE-MIT','LICENSING.md','THIRD_PARTY_NOTICES.md'])copyFileSync(file,join(dir,file));
 let images=readFileSync(join(dir,'images.env'),'utf8');for(const [key,value]of Object.entries({WEBCALLER_IMAGE:'webcaller-ci:app',SETUP_IMAGE:'webcaller-ci:setup',TURN_IMAGE:'webcaller-ci:turn'}))images=images.replace(new RegExp('^'+key+'=.*$','m'),key+'='+value);writeFileSync(join(dir,'images.env'),images);
 const project='webcaller-ci-'+randomBytes(6).toString('hex');
 const docker=(...args)=>execFileSync('docker',args,{cwd:dir,encoding:'utf8',maxBuffer:8*1024*1024,timeout:240000});

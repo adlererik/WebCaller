@@ -1,5 +1,7 @@
 # Networking, TURN, HTTPS and CGNAT
 
+This release uses libsignal/PQXDH with Ed25519 application signatures. [Install](INSTALL.md) · [Security](SECURITY.md) · [Olm upgrade planning](APPROVED_CUTOVER.md).
+
 ## Two separate paths
 
 HTTPS/WebSocket carries the page, authentication and encrypted signaling. DTLS-SRTP carries media directly between browsers or through TURN. A working page does not prove a working call. Cloudflare Tunnel's HTTP application route does not carry browser TURN/RTP. WebSocket upgrades must reach the app. [Cloudflare WebSockets](https://developers.cloudflare.com/network/websockets/).
@@ -7,6 +9,32 @@ HTTPS/WebSocket carries the page, authentication and encrypted signaling. DTLS-S
 ## Direct public VPS
 
 The easiest free relay path is coturn on a VPS with a public IPv4. Set `TURN_PUBLIC_IP`, leave `TURN_LAN_IP` empty, use the `turn` Compose profile and allow TCP/UDP 3478 plus UDP 49160–49260 in the VPS firewall/security group. The Compose relay uses Linux host networking. Port 8080 for the web app is published on loopback only. Docker-published ports can bypass ufw rules; manage exposure using Docker/provider rules. See [Docker firewall notes](https://docs.docker.com/engine/install/debian/#firewall-limitations).
+
+## Native coturn on a fresh Debian relay
+
+This is for a fresh relay with no existing coturn configuration/users. Preserve/reuse an existing relay instead of replacing its config. On the WebCaller server, set your real `TURN_PUBLIC_IP`, optional `TURN_LAN_IP` and `TURN_URLS` in private `.env`. For example, URLs may be `turn:turn.example.com:3478?transport=udp,turn:turn.example.com:3478?transport=tcp`; the relay DNS record must resolve directly to its public IP, not through an HTTP proxy. Setup already generated `TURN_SECRET`; keep that same secret at both ends.
+
+```sh
+sudo apt update
+sudo apt install -y coturn
+cd /opt/webcaller
+export PATH="$PWD/.runtime/node/bin:$PATH"
+node --env-file=.env --input-type=module <<'JS'
+import {writeFileSync} from 'node:fs';
+import {isIP} from 'node:net';
+const {TURN_PUBLIC_IP:pub,TURN_LAN_IP:lan,TURN_SECRET:secret}=process.env;
+if(isIP(pub)!==4||(lan&&isIP(lan)!==4)||!secret||!/^[A-Za-z0-9_-]{32,}$/.test(secret))throw Error('Set relay IP and generated REST secret privately in .env first');
+const lines=['listening-port=3478','listening-ip=0.0.0.0','external-ip='+pub+(lan?'/'+lan:''),'realm=webcaller','fingerprint','use-auth-secret','static-auth-secret='+secret,'min-port=49160','max-port=49260','no-cli','no-loopback-peers','no-multicast-peers','no-tls','no-dtls'];
+writeFileSync('.runtime/coturn.conf',lines.join('\n')+'\n',{mode:0o600});
+JS
+sudo cp -an /etc/turnserver.conf /etc/turnserver.conf.before-webcaller
+sudo install -o root -g turnserver -m 640 .runtime/coturn.conf /etc/turnserver.conf
+sudo systemctl enable --now coturn
+sudo systemctl restart coturn
+sudo systemctl restart webcaller.service
+```
+
+Continue only if each command succeeds. The private staged config/backup contains a relay secret: never upload either. Open/forward TCP+UDP3478 and UDP49160–49260 as below, then test externally. Initial config is UDP/TCP TURN; add valid relay certificates and remove `no-tls`/configure 5349 when following the TLS section. The generated Node app credentials are time-limited, so never put a permanent TURN username/password into public JavaScript.
 
 ## Home router
 
@@ -32,7 +60,7 @@ Advanced native-runtime scripts can obtain Let's Encrypt short-lived **IP** cert
 
 ## Managed Cloudflare TURN
 
-Set `CF_TURN_KEY_ID` and `CF_TURN_API_TOKEN` privately. This backend takes precedence over `TURN_URLS` and returns short-lived credentials; it is separate from Tunnel. The first 1,000 GB/month of TURN/SFU egress is currently free, then $0.05/GB; verify pricing and billing before enabling. [Official pricing](https://developers.cloudflare.com/realtime/sfu/platform/pricing/), [credentials API](https://developers.cloudflare.com/realtime/turn/generate-credentials/).
+Set `CF_TURN_KEY_ID` and `CF_TURN_API_TOKEN` privately. This backend takes precedence over `TURN_URLS` and returns short-lived credentials; it is separate from Tunnel. Managed TURN can have quotas/charges; check current pricing and billing before enabling. [Official pricing](https://developers.cloudflare.com/realtime/sfu/platform/pricing/), [credentials API](https://developers.cloudflare.com/realtime/turn/generate-credentials/).
 
 ## Verify real connectivity
 

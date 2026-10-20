@@ -24,9 +24,11 @@ flowchart LR
 | server/dialing.mjs | Opt-in code reservation, bounded guest enrollment, pending requests, acceptance and identity blocking |
 | public/theme.js, contact-names.js | Local appearance selection and per-device contact labels; no account/key changes |
 | public/crypto.js | Existing identity/vault, safety numbers and legacy envelope verification |
-| public/secure-messaging.js, secure-store.js, contact-trust.js, olm-wire.js | Signed Olm Double Ratchet integration, encrypted history, atomic cross-tab state, persistent identity verification and ordered hydration |
+| public/secure-messaging.js, secure-store.js, contact-trust.js, signal-wire.js | Signed libsignal PQXDH/Triple Ratchet integration, encrypted history, atomic cross-tab state, persistent identity verification and ordered hydration |
 | public/call-sas.js, sas-words.js | Ephemeral media-bound X25519 commit/reveal SAS, local 44-bit word display, retry/cleanup |
-| public/vendor/vodozemac | Pinned WASM ratchet core/bindings, provenance and license notices |
+| public/vendor/vodozemac | Independent SAS primitive and legacy regression core; no new Olm transport |
+| public/signal-core.js, vendor/signal; third_party/libsignal | Serialized-store adapter, hash-checked official WASM, pinned upstream/binding/locks and native oracle |
+| public/application-signatures.js, server/application-signatures.mjs | Direct/certified Ed25519 signatures, account-bound continuity and historical P-256 verification |
 | server/ratchet.mjs | Signed public prekey publication/one-use claims and legacy migration snapshot |
 | public/attachments.js | Per-file keys, validated manifests, indexed chunk encryption/decryption and size limits |
 | server/attachments.mjs | Authenticated chunk upload/download, pending transfer cleanup and storage quotas |
@@ -40,7 +42,7 @@ flowchart LR
 | public/message-expiry.js | Compact expiry formatting and isolated countdown DOM updates |
 | public/transfer-state.js | Validation, version ordering and expiry of transient encrypted upload placeholders |
 | public/call-intents.js | Atomic one-use notification answer decision store, scoped to device/call with a 30-second validity limit |
-| public/sw.js | Call-state checks, generic notifications, foreground-ring coordination, notification actions and taps; no fetch cache |
+| public/sw.js | Bounded call-state checks, generic notifications, independent sound requests, notification actions and taps; no fetch cache |
 | public/call-setup.js | Phone detection, Home Screen guidance, notification permission and heard-alert verification |
 | public/manifest.webmanifest | Stable web app identity/scope, Home Screen display and icons; document URL is the launch fallback |
 | server/call-alerts.mjs | Bounded cancellable reminder scheduler and declarative push payloads |
@@ -103,20 +105,26 @@ Upload progress uses authenticated WebSocket `{type:"transfer", messageId, envel
 
 ## Security boundaries
 
-The Olm ratchet encrypts signaling, while the browser’s separate DTLS-SRTP connection encrypts audio/video. The call SAS binds accepted certificate fingerprints to fresh contributions and authenticated contact identities. Retained browser history is independently wrapped under a same-origin AES-256-GCM key; it remains readable after transport keys are discarded. Ratchet lanes/call scopes are independent, so post-compromise healing must occur in the affected stream. A path is not origin isolation. See [security review](SECURITY_REVIEW.md).
+The libsignal ratchet encrypts signaling, while the browser’s separate DTLS-SRTP connection encrypts audio/video. The call SAS binds accepted certificate fingerprints to fresh contributions and authenticated contact identities. Retained browser history is independently wrapped under a same-origin AES-256-GCM key; it remains readable after transport keys are discarded. Ratchet lanes/call scopes are independent, so post-compromise healing must occur in the affected stream. A path is not origin isolation. See [security review](SECURITY_REVIEW.md).
 
 ## Calling-code enrollment
 
 Calling codes are optional public addresses, separate from authentication and encryption. Existing identities are unlisted. A fresh browser atomically saves its own identity and a random access token before first enrollment; retries reuse them. A code lookup adds a pending relationship, not unrestricted contact access. Answering, replying or explicit recipient acceptance promotes it to a normal mutual contact. Pending peers can exchange authenticated encrypted call signaling and at most five initial chat packets; attachments and typing require acceptance. The client withholds receipts until acceptance.
 
-The additive `dial_codes`, `contact_requests` and `contact_blocks` tables contain directory/contact metadata. Codes remain reserved to their owner while the identity exists. Returning clients remember code-to-contact bindings and retain the existing public-key and Olm identity pins. First contact by code still depends on the initial directory mapping; compare the live SAS as explained in [Calling codes](CALLING_CODES.md).
+The additive `dial_codes`, `contact_requests` and `contact_blocks` tables contain directory/contact metadata. Codes remain reserved to their owner while the identity exists. Returning clients remember code-to-contact bindings and retain the existing public-key and libsignal identity pins. First contact by code still depends on the initial directory mapping; compare the live SAS as explained in [Calling codes](CALLING_CODES.md).
 
 ## Per-view lifetimes and camera framing
 
-`public/envelope-auth.js` preserves v2 canonical framing and adds authenticated v3 lifetime metadata. `public/view-state.js` seals per-device first-view/deadline records and an encrypted read-start retry outbox under the existing storage key. `server/message-retention.mjs` owns the additive `message_views` table rules, participant visibility and immutable read-start handling. Existing accounts, identities, ratchets and call SAS are not recreated. `public/media-cache.js` separates local cleanup time from immutable attachment AAD. `public/call-layout.css` fits complete video frames; orientation-aware capture ideals and sender downscaling in `public/media.js` preserve field of view across adaptive profiles.
+`public/envelope-auth.js` preserves v2 canonical framing and adds authenticated v3 lifetime metadata. `public/view-state.js` seals per-device first-view/deadline records and an encrypted read-start retry outbox under the existing storage key. `server/message-retention.mjs` owns the additive `message_views` table rules, participant visibility and immutable read-start handling. Existing accounts, identities, ratchets and call SAS are not recreated. `public/media-cache.js` separates local cleanup time from immutable attachment AAD. `public/call-layout.css` selects immersive portrait or landscape square display fitting; orientation-aware capture ideals and sender downscaling in `public/media.js` preserve field of view across adaptive profiles.
 
 ## Larger attachments and adaptive sharing
 
 `public/transfer-policy.js` controls healthy-link probing, metered ceilings, stale/poor-stat pauses and a four-worker pool. `public/app.js` cancels in-flight file HTTP requests on poor call health, streams encryption/decryption and records monotonic acknowledged progress. `server/transfer-limits.mjs` bounds active attachment requests and token-bucket rate separately from chat/signaling. `server/attachments.mjs` accepts up to 200 MiB and chunk indices through 3199. The 64 KiB AES-GCM wire format is unchanged.
 
 The encrypted media cache adds `chunks` and `pending` object stores in an additive version-2 IndexedDB upgrade, preserving existing `files`/`deleted` records. A random generation owns each staged set; only complete sets become visible. Aborts, deletion and replacement invalidate late writers. Temporary chunks have at most a 24-hour staging deadline; committed chunks use the local message deadline. Cache failure does not stop calling or delivery and is reported. Display/download Blobs still need browser resources.
+
+## Network recovery and route retirement
+
+`public/signaling-link.js` owns ticket/authentication deadlines, acknowledged liveness probes, bounded reconnect backoff and generation-safe callbacks. `public/media.js` coordinates ICE restart generations/correlations and media health. `public/video-recovery.js` provides bounded tiny-video probes/backoff while preserving voice settings. `server/index.mjs` can rebind an answered call only within the authenticated account and the same memory-only page ID.
+
+`server/app-paths.mjs` validates canonical, alias and retired paths. `deploy/archive-proxy.mjs` reads private app configuration independently of the surrounding website and intercepts retired routes before visitor logging; it returns 404 without a replacement redirect. `public/call-setup.js` replaces only authenticated owned retired push endpoints after registering the new worker/subscription, preserving unrelated workers and leaving prior subscriptions intact on failure. No private deployment path belongs in source.

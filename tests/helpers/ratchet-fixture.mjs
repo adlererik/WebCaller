@@ -5,16 +5,16 @@ import {secureStore} from '../../public/secure-store.js';
 import {secureMessaging} from '../../public/secure-messaging.js';
 import {WebSocket} from 'ws';
 import {once} from 'node:events';
-export async function fixture(t,{before,clock=Date.now,olmA,olmB}={}){
+export async function fixture(t,{before,clock=Date.now,olmA,olmB,identityA,identityB}={}){
   const app=createApp({dataDir:':memory:',env:{PUBLIC_URL:'https://example.com/calls',BOOTSTRAP_TOKEN:'synthetic-owner-code'}});await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
   t.after(()=>app.close());const url='http://127.0.0.1:'+app.server.address().port+'/calls/api';
   async function request(path,method='GET',body,token){
     const response=await fetch(url+path,{method,headers:{Origin:'https://example.com',...(token?{Authorization:'Bearer '+token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});const value=await response.json();
     if(!response.ok)throw Object.assign(new Error(value.error),{status:response.status});return value;
   }
-  const aliceIdentity=await newIdentity(),alice=await request('/register','POST',{name:'Synthetic Alice',keys:aliceIdentity.keys,setupCode:'synthetic-owner-code'});
+  const aliceIdentity=identityA||await newIdentity(),alice=await request('/register','POST',{name:'Synthetic Alice',keys:aliceIdentity.keys,setupCode:'synthetic-owner-code'});
   const invitation=await request('/invite','POST',{},alice.token),[invite,fingerprint]=new URL(invitation.url).hash.slice(8).split('.');
-  const bobIdentity=await newIdentity(),bob=await request('/join','POST',{name:'Synthetic Bob',keys:bobIdentity.keys,invite,fingerprint});
+  const bobIdentity=identityB||await newIdentity(),bob=await request('/join','POST',{name:'Synthetic Bob',keys:bobIdentity.keys,invite,fingerprint});
   alice.identity=aliceIdentity;bob.identity=bobIdentity;alice.pins={[bob.user.id]:bob.user};bob.pins={[alice.user.id]:alice.user};
   const apiA=(p,m,b)=>request(p,m,b,alice.token),apiB=(p,m,b)=>request(p,m,b,bob.token),idbA=new IDBFactory(),idbB=new IDBFactory();
   const optionsA={api:apiA,store:secureStore({indexedDB:idbA,name:'synthetic-a',now:clock}),now:clock,olm:olmA},optionsB={api:apiB,store:secureStore({indexedDB:idbB,name:'synthetic-b',now:clock}),now:clock,olm:olmB};

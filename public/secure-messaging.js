@@ -3,8 +3,9 @@ import {viewState} from './view-state.js';
 import {fingerprint,b64,unb64,open as openLegacy} from './crypto.js';
 import {secureStore} from './secure-store.js';
 import {checkContactTrust} from './contact-trust.js';
-import {loadOlm} from './vendor/vodozemac/load.js';
-import {olmFraming} from './olm-wire.js';
+import {loadSignal} from './signal-core.js';
+import {signalFraming} from './signal-wire.js';
+import {prepareApplicationSigner,signApplication,verifyApplicationSignature} from './application-signatures.js';
 import {NO_EXPIRY,validLifetime,messageExpiry,hasViewTimer,isViewReceipt} from './message-lifetime.js';
 const enc=new TextEncoder();
 const digest=async value=>b64(await crypto.subtle.digest('SHA-256',enc.encode(JSON.stringify(value))));
@@ -17,16 +18,17 @@ const scopeFor=(p,e)=>p.kind==='attachment'?e.id:p.kind==='transfer'?p.target:p.
 // The optional call check has no saved transcript or verification record.
 // Ratchet state still advances atomically; normal signaling keeps its reload copy.
 const persistent=payload=>payload.kind!=='sas';
-function pack(value){const key=crypto.getRandomValues(new Uint8Array(32));try{return {pickle:value.pickle(key),key:b64(key)};}finally{key.fill(0);}}
-function unpack(Type,data){const key=unb64(data.key);try{return Type.from_pickle(data.pickle,key);}finally{key.fill(0);}}
+// These snapshots are committed only through the AES-256-GCM secure store.
+function pack(value){return {signal:value.snapshot};}
+function unpack(Type,data,account){if(!data?.signal)throw Error('Missing test Signal state');return Type.from_state(data.signal,account);}
 function validate(e,self,peer,now){
   if(!e||![1,2,3].includes(e.v)||e.expiresAt<=now)throw new Error('Expired or unsupported encrypted message.');
   if(!Number.isSafeInteger(e.createdAt)||!Number.isSafeInteger(e.expiresAt)||e.createdAt>now+30000||e.expiresAt<=e.createdAt||!validLifetime(e))throw new Error('Invalid message lifetime.');
   if((e.from===self&&e.to!==peer.id)||(e.from!==self&&(e.from!==peer.id||e.to!==self)))throw new Error('Wrong recipient.');
-  if(e.v>=2){const r=e.ratchet;if(r?.protocol!=='olm-v2'||!['chat','events','signal','files','typing','transfer'].includes(r.lane)||typeof r.scope!=='string'||r.scope.length>100||![0,1].includes(r.type)||typeof r.data!=='string'||r.data.length>24000||!r.sessionId||!r.identity||!r.recipientIdentity)throw new Error('Invalid ratchet message.');}
+  if(e.v>=2){const r=e.ratchet;if(r?.protocol!=='signal-pqxdh-v1'||!['chat','events','signal','files','typing','transfer'].includes(r.lane)||typeof r.scope!=='string'||r.scope.length>100||![2,3].includes(r.type)||typeof r.data!=='string'||r.data.length>24000||!r.sessionId||!r.identity||!r.recipientIdentity)throw new Error('Invalid ratchet message.');}
 }
-export function secureMessaging({api,store=secureStore(),now=Date.now,olm=loadOlm}={}){
-  let device,O,initializing,replenishTimer;
+export function secureMessaging({api,store=secureStore(),now=Date.now,olm=loadSignal}={}){
+  let device,O,initializing,replenishTimer,applicationSigner;
   function replenish(){
     if(replenishTimer)return;replenishTimer=setTimeout(()=>{replenishTimer=null;if(device)void publish().catch(()=>{});},200);
   }
@@ -34,11 +36,10 @@ export function secureMessaging({api,store=secureStore(),now=Date.now,olm=loadOl
   const views=viewState({store,owner,now,digest});
   const sessionDeadline=lane=>['chat','events'].includes(lane)?NO_EXPIRY:now()+604800000;
   async function trust(peer){return checkContactTrust(store,owner(),peer,device.pins?.[peer.id]);}
-  async function verify(key,text,signature){
-    const pub=await crypto.subtle.importKey('jwk',key,{name:'ECDSA',namedCurve:'P-256'},false,['verify']);
-    if(!await crypto.subtle.verify({name:'ECDSA',hash:'SHA-256'},pub,unb64(signature),enc.encode(text)))throw new Error('Invalid signature.');
+  async function verify(key,owner,text,signature){
+    if(!await verifyApplicationSignature(key,owner,text,signature))throw new Error('Invalid signature.');
   }
-  const sign=text=>crypto.subtle.sign({name:'ECDSA',hash:'SHA-256'},device.identity.sign,enc.encode(text)).then(b64);
+  const sign=text=>signApplication(applicationSigner,text);
   async function peerIdentity(db,peer,value){
     const suffix='ratchet-peer/'+peer.id,prior=await db.read(suffix);
     if(prior&&prior.identity!==value)throw new Error(`Secure identity changed for ${peer.name||'this contact'}. Verify the new device before continuing.`);
@@ -54,11 +55,13 @@ export function secureMessaging({api,store=secureStore(),now=Date.now,olm=loadOl
         const identity=await fingerprint(device.identity.keys);
         if(db.meta.identity&&db.meta.identity!==identity)throw new Error('Secure storage belongs to another device.');
         db.meta.identity=identity;
+        applicationSigner=await prepareApplicationSigner(device.identity,owner(),db.meta.applicationSigner);
+        if(applicationSigner.publicKey)db.meta.applicationSigner=applicationSigner;
         if(!await db.read('account')){
           const account=new O.Account();try{
-            account.generate_one_time_keys(24);
+            account.generate_one_time_keys(16);
             const keys=Object.fromEntries(account.one_time_keys);
-            await db.commit([db.meta,await db.record('account',{...pack(account),keys,pending:keys},{kind:'account'})]);
+            await db.commit([db.meta,await db.record('account',{...pack(account),keys:Object.fromEntries(Object.keys(keys).map(id=>[id,true])),pending:keys},{kind:'account'})]);
           }finally{account.free();}
         }else await db.commit([db.meta]);
       });
@@ -91,8 +94,8 @@ export function secureMessaging({api,store=secureStore(),now=Date.now,olm=loadOl
         const data=await db.read('account'),account=unpack(O.Account,data);
         try{
           if(status.available<8&&Object.keys(data.keys).length<account.max_number_of_one_time_keys){
-            account.generate_one_time_keys(Math.min(16,account.max_number_of_one_time_keys-Object.keys(data.keys).length));
-            const extra=Object.fromEntries(account.one_time_keys);Object.assign(data.keys,extra);Object.assign(data.pending,extra);
+            account.generate_one_time_keys(Math.min(8,account.max_number_of_one_time_keys-Object.keys(data.keys).length));
+            const extra=Object.fromEntries(account.one_time_keys);Object.assign(data.keys,Object.fromEntries(Object.keys(extra).map(id=>[id,true])));Object.assign(data.pending,extra);
           }
           Object.assign(data,pack(account));await db.commit([await db.record('account',data,{kind:'account'})]);
           return {identity:account.curve25519_key,keys:data.pending};
@@ -100,7 +103,11 @@ export function secureMessaging({api,store=secureStore(),now=Date.now,olm=loadOl
       });
       const keys=[];
       for(const [id,key]of Object.entries(prepared.keys))keys.push({id,key,signature:await sign(prekeyStatement(owner(),prepared.identity,id,key))});
-      const response=await api('/ratchet/publish','POST',{v:2,identity:prepared.identity,signature:await sign(identityStatement(owner(),prepared.identity)),keys});
+      const identitySignature=await sign(identityStatement(owner(),prepared.identity));
+      // Hybrid bundles plus a continuity certificate must fit the existing 64 KiB
+      // request bound. Commit each successful batch; a later retry is idempotent.
+      for(let offset=0;offset<Math.max(1,keys.length);offset+=8){
+      const batch=keys.slice(offset,offset+8),response=await api('/ratchet/publish','POST',{v:2,identity:prepared.identity,signature:identitySignature,keys:batch});
       await store.lock(owner(),async db=>{
         const puts=[];
         if(!db.meta.legacyImported){
@@ -110,10 +117,11 @@ export function secureMessaging({api,store=secureStore(),now=Date.now,olm=loadOl
         // Reload after the request: another tab may have consumed a prekey.
         const data=await db.read('account'),account=unpack(O.Account,data);
         try{
-          account.mark_keys_as_published();for(const id of Object.keys(prepared.keys))delete data.pending[id];Object.assign(data,pack(account));
+          account.mark_keys_as_published(batch.map(k=>k.id));for(const {id}of batch)delete data.pending[id];Object.assign(data,pack(account));
           puts.push(await db.record('account',data,{kind:'account'}));await db.commit(puts);
         }finally{account.free();}
       });
+      }
     });
   }
   async function cached(db,e){
@@ -149,8 +157,8 @@ export function secureMessaging({api,store=secureStore(),now=Date.now,olm=loadOl
         for(let attempt=0;;attempt++)try{bundle=await api('/ratchet/claim/'+peer.id,'POST',{});break;}
         catch(error){if(error.status!==503||attempt>=3)throw error;await new Promise(resolve=>setTimeout(resolve,500*2**attempt));}
         if(bundle.v!==2||!bundle.prekey)throw new Error(`Ask ${peer.name||'the other person'} to reopen WebCaller to update secure messaging.`);
-        await verify(peer.keys.sign,identityStatement(peer.id,bundle.identity),bundle.signature);
-        await verify(peer.keys.sign,prekeyStatement(peer.id,bundle.identity,bundle.prekey.id,bundle.prekey.key),bundle.prekey.signature);
+        await verify(peer.keys.sign,peer.id,identityStatement(peer.id,bundle.identity),bundle.signature);
+        await verify(peer.keys.sign,peer.id,prekeyStatement(peer.id,bundle.identity,bundle.prekey.id,bundle.prekey.key),bundle.prekey.signature);
       }
       return store.lock(owner(),async db=>{
       let account,session;
@@ -160,7 +168,7 @@ export function secureMessaging({api,store=secureStore(),now=Date.now,olm=loadOl
         if(prior&&['typing','transfer'].includes(lane)&&now()-prior.createdAt>900000)prior=null;
         const data=await db.read('account');account=unpack(O.Account,data);
         let state=prior,peerRecord;
-        if(prior)session=unpack(O.Session,prior);
+        if(prior)session=unpack(O.Session,prior,account);
         else{
           peerRecord=await peerIdentity(db,peer,bundle.identity);
           session=account.create_outbound_session(bundle.identity,bundle.prekey.key,O.SessionConfigVersion.V2);
@@ -168,7 +176,7 @@ export function secureMessaging({api,store=secureStore(),now=Date.now,olm=loadOl
         }
         e.createdAt=Math.max(now(),(state.lastSentAt||0)+1,view?.startedAt||0);e.expiresAt=e.v===3?NO_EXPIRY:messageExpiry(e.createdAt,ttl,lane);state.lastSentAt=e.createdAt;
         const message=session.encrypt(JSON.stringify({header:header(e),payload}));
-        try{e.ratchet={protocol:'olm-v2',lane,scope,sessionId:session.session_id,identity:account.curve25519_key,recipientIdentity:state.identity,type:message.message_type,data:b64(message.ciphertext),prekeyId:state.prekeyId};}finally{message.free();}
+        try{e.ratchet={protocol:'signal-pqxdh-v1',lane,scope,sessionId:session.session_id,identity:account.curve25519_key,recipientIdentity:state.identity,type:message.message_type,data:b64(message.ciphertext),prekeyId:state.prekeyId};}finally{message.free();}
         e.signature=await sign(signed(e));
         const puts=lane==='files'?[]:[await db.record('session/'+session.session_id,{...state,...pack(session)},{kind:'session',peer:peer.id,expiresAt:sessionDeadline(lane)}),await db.record('preferred/'+stream,{id:session.session_id},{kind:'preferred',peer:peer.id,expiresAt:sessionDeadline(lane)})];
         if(peerRecord)puts.push(peerRecord);const parent=await views.remember(db,e);if(parent?.record)puts.push(parent.record);if(persistent(payload)){const history=await archive(db,e,payload,parent);if(history)puts.push(history);}if(view)puts.push(await views.queued(db,e,payload));
@@ -180,7 +188,7 @@ export function secureMessaging({api,store=secureStore(),now=Date.now,olm=loadOl
   async function open(identity,self,peer,e){
     if(!O||self!==owner()||identity!==device.identity)throw new Error('Secure messaging is not ready.');
     validate(e,self,peer,now());await trust(peer);
-    if(e.v>=2){await verify(e.from===self?identity.keys.sign:peer.keys.sign,signed(e),e.signature);olmFraming(e.ratchet);}
+    if(e.v>=2){await verify(e.from===self?identity.keys.sign:peer.keys.sign,e.from,signed(e),e.signature);signalFraming(e.ratchet);}
     let consumed=false;const payload=await store.lock(owner(),async db=>{
       if(await db.read('deleted/'+e.id))throw new Error('Message was deleted.');
       await views.assertReadable(db,e);
@@ -197,14 +205,14 @@ export function secureMessaging({api,store=secureStore(),now=Date.now,olm=loadOl
         if(r.recipientIdentity!==account.curve25519_key)throw new Error('Wrong secure device.');
         const peerRecord=await peerIdentity(db,peer,r.identity),prior=await db.read('session/'+r.sessionId);
         if(prior&&(prior.peer!==peer.id||prior.lane!==r.lane||prior.scope!==r.scope||prior.identity!==r.identity))throw new Error('Wrong secure session.');
-        message=new O.OlmMessage(r.type,unb64(r.data));let plaintext,state=prior;
-        if(prior){session=unpack(O.Session,prior);plaintext=session.decrypt(message);}
+        message=new O.SignalMessage(r.type,unb64(r.data));let plaintext,state=prior;
+        if(prior){session=unpack(O.Session,prior,account);plaintext=session.decrypt(message);}
         else{
-          if(r.type!==0)throw new Error('Secure session is missing. Ask the other person to reopen WebCaller.');
+          if(r.type!==3)throw new Error('Secure session is missing. Ask the other person to reopen WebCaller.');
           result=account.create_inbound_session(r.identity,message);session=result.session;plaintext=result.plaintext;
           if(session.session_id!==r.sessionId)throw new Error('Wrong session identifier.');
           state={peer:peer.id,lane:r.lane,scope:r.scope,identity:r.identity,prekeyId:r.prekeyId,createdAt:e.createdAt};
-          delete data.keys[r.prekeyId];delete data.pending[r.prekeyId];Object.assign(data,pack(account));
+          for(const id of account.consumed){delete data.keys[id];delete data.pending[id];}Object.assign(data,pack(account));
           consumed=true;
         }
         const decoded=JSON.parse(plaintext);
@@ -230,7 +238,7 @@ export function secureMessaging({api,store=secureStore(),now=Date.now,olm=loadOl
   async function forgetPeer(peer){return store.lock(owner(),async db=>{
     const rows=await db.list();await db.commit([],rows.filter(r=>r.peer===peer&&!['trust','ratchet-peer'].includes(r.kind)).map(r=>r.id));
   });}
-  async function forget(){if(!owner())return;clearTimeout(replenishTimer);replenishTimer=null;await store.lock(owner(),async db=>{await db.commit([],(await db.list()).filter(r=>r.kind!=='lease').map(r=>r.id));});device=null;O=null;initializing=null;}
+  async function forget(){if(!owner())return;clearTimeout(replenishTimer);replenishTimer=null;await store.lock(owner(),async db=>{await db.commit([],(await db.list()).filter(r=>r.kind!=='lease').map(r=>r.id));});device=null;O=null;applicationSigner=null;initializing=null;}
   async function viewReceipt(value,peer){return seal(device.identity,owner(),peer,{kind:'message-read',target:value.id,deliveredAt:value.deliveredAt,readAt:value.readAt},0,{viewReceipt:{target:value.id,startedAt:value.readAt}});}
   return {initialize,seal,open,trust,publish,purge,remove,forgetPeer,forget,store,messageState:views.inspect,markViewed:views.mark,pendingViews:views.pending,viewReceipt,ackView:views.acknowledge};
 }

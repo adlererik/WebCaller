@@ -5,7 +5,9 @@ import http from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { randomBytes, randomUUID, createHash, createHmac, timingSafeEqual, createPublicKey, verify } from 'node:crypto';
+import { randomBytes, randomUUID, createHash, createHmac, timingSafeEqual, createPublicKey } from 'node:crypto';
+import {signingKeyType,validApplicationSignature} from '../public/application-signatures.js';
+import {verifyApplicationSignature} from './application-signatures.mjs';
 import { WebSocketServer, WebSocket } from 'ws';
 import webpush from 'web-push';
 import {gzipSync} from 'node:zlib';
@@ -19,6 +21,7 @@ import {createCallAlerts,notificationPayload} from './call-alerts.mjs';
 import {ratchetRoutes} from './ratchet.mjs';
 import {ntfyAlerts} from './ntfy.mjs';
 import {dialing} from './dialing.mjs';
+import {appPaths,retiredAppPaths,matchAppPath,manifestIdentity} from './app-paths.mjs';
 
 const root = fileURLToPath(new URL('../public/', import.meta.url));
 const hash = (v) => createHash('sha256').update(v).digest('hex');
@@ -29,10 +32,12 @@ const validName = (s) => typeof s === 'string' && s.trim().length >= 1 && s.trim
 const same = (a, b) => typeof a === 'string' && typeof b === 'string' && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 function validKeys(keys) {
   try {
-    for (const k of [keys.dh, keys.sign]) {
+    for (const k of [keys.dh]) {
       if (k.kty !== 'EC' || k.crv !== 'P-256' || k.d || typeof k.x !== 'string' || typeof k.y !== 'string') return false;
       createPublicKey({ key: k, format: 'jwk' });
     }
+    if(!signingKeyType(keys.sign))return false;
+    createPublicKey({key:keys.sign,format:'jwk'});
     return true;
   } catch { return false; }
 }
@@ -46,6 +51,9 @@ export function createApp(options = {}) {
   const env = { ...process.env, ...options.env };
   const publicURL = new URL(env.PUBLIC_URL || 'http://localhost:8080/calls');
   const base = publicURL.pathname.replace(/\/$/, '') || '/calls';
+  const paths = appPaths(publicURL, env.APP_PATH_ALIASES || '');
+  const retiredPaths = retiredAppPaths(publicURL, env.APP_RETIRED_PATHS || '', paths);
+  const manifestId = manifestIdentity(env.APP_MANIFEST_ID, base);
   const origin = publicURL.origin;
   const mapTileURL=env.MAP_TILE_URL||'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
   const mapProvider=new URL(mapTileURL,origin);
@@ -57,6 +65,7 @@ export function createApp(options = {}) {
   const store = createStore(options.dataDir || env.DATA_DIR || './data');
   const acquireTransfer=transferLimits();
   const sockets = new Map(), tickets = new Map(), calls = new Map(), rates = new Map(), disconnectTimers=new Map();
+  const scheduleDisconnect=options.scheduleDisconnect||setTimeout,cancelDisconnect=options.cancelDisconnect||clearTimeout;
   const alertTests=new Map(),testTimers=new Set();
   const pushReady = Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY);
   if (pushReady) webpush.setVapidDetails(env.VAPID_SUBJECT || 'mailto:admin@example.com', env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
@@ -118,7 +127,7 @@ export function createApp(options = {}) {
   }
   const securityHeaders = {
     'Content-Security-Policy': `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob: ${mapImageSource}; connect-src 'self'; media-src 'self' blob:; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`,
-    'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff', 'X-Robots-Tag': 'noindex, nofollow, noarchive',
     'Permissions-Policy': 'camera=(self), microphone=(self), geolocation=(self), speaker-selection=(self)',
     'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY'
   };
@@ -126,13 +135,14 @@ export function createApp(options = {}) {
     for (const [k,v] of Object.entries(securityHeaders)) res.setHeader(k,v);
     const json = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(value)); };
     try {
-      const url = new URL(req.url, origin), path = url.pathname;
+      const url = new URL(req.url, origin), path = url.pathname, base = matchAppPath(path, paths);
+      if (!base) return json(404, { error: 'Not found' });
       if (path === `${base}/health`) return json(200, { ok: true });
       if (!path.startsWith(base + '/') && path !== base) return json(404, { error: 'Not found' });
       if (path.startsWith(`${base}/api/`)) {
         if (req.method !== 'GET' && req.headers.origin !== origin) fail(403, 'Unrecognized origin');
         const route = path.slice((base + '/api').length);
-        if (route === '/config' && req.method === 'GET') return json(200, { base, mapTileURL, mapAttribution, ntfyAvailable:extraAlerts.available, dialCodes:env.DIAL_CODES_ENABLED!=='false', publicURL: publicURL.href.replace(/\/$/, ''), vapidPublicKey: env.VAPID_PUBLIC_KEY || null, bootstrap: !store.get('SELECT id FROM users LIMIT 1'), turnConfigured: Boolean((env.TURN_SECRET && env.TURN_URLS) || (env.CF_TURN_KEY_ID && env.CF_TURN_API_TOKEN)) });
+        if (route === '/config' && req.method === 'GET') return json(200, { base, appPaths:paths, retiredAppPaths:retiredPaths, mapTileURL, mapAttribution, ntfyAvailable:extraAlerts.available, dialCodes:env.DIAL_CODES_ENABLED!=='false', publicURL: publicURL.href.replace(/\/$/, ''), vapidPublicKey: env.VAPID_PUBLIC_KEY || null, experimental: true, cryptoEngine:'libsignal 0.105.1 / PQXDH', bootstrap: !store.get('SELECT id FROM users LIMIT 1'), turnConfigured: Boolean((env.TURN_SECRET && env.TURN_URLS) || (env.CF_TURN_KEY_ID && env.CF_TURN_API_TOKEN)) });
         if(route==='/dial/connect'&&req.method==='POST')return await directory.connect(req,json);
         if(route==='/invite-info'&&req.method==='POST'){
           rate(`invite-info:${req.socket.remoteAddress}`,30);const b=await body(req);
@@ -273,10 +283,17 @@ export function createApp(options = {}) {
           const allowed = ['fcm.googleapis.com', 'updates.push.services.mozilla.com', 'web.push.apple.com', 'push.apple.com'];
           if (endpoint.protocol !== 'https:' || endpoint.port || !allowed.some(h => endpoint.hostname === h || endpoint.hostname.endsWith('.' + h)) || !b.keys?.p256dh || !b.keys?.auth || JSON.stringify(b).length > 4096) fail(400, 'Unsupported push service');
           if (store.get('SELECT endpoint FROM push WHERE endpoint=? AND owner<>?', b.endpoint, u.id)) fail(409, 'Subscription belongs to another device');
-          if (store.get('SELECT COUNT(*) AS n FROM push WHERE owner=?', u.id).n >= 5 && !store.get('SELECT endpoint FROM push WHERE endpoint=?', b.endpoint)) fail(429, 'Too many subscriptions');
+          const replaces=b.replaces===undefined?[]:b.replaces;
+          if(!Array.isArray(replaces)||replaces.length>5||replaces.some(value=>typeof value!=='string'||value.length>4096))fail(400,'Invalid previous subscriptions');
+          const previous=[...new Set(replaces)].filter(value=>value!==b.endpoint);
+          if(previous.some(value=>store.get('SELECT owner FROM push WHERE endpoint=?',value)?.owner!==u.id))fail(409,'Previous subscription is unavailable');
+          if (store.get('SELECT COUNT(*) AS n FROM push WHERE owner=?', u.id).n-previous.length >= 5 && !store.get('SELECT endpoint FROM push WHERE endpoint=?', b.endpoint)) fail(429, 'Too many subscriptions');
           const subscription=JSON.stringify({endpoint:b.endpoint,keys:{auth:b.keys.auth,p256dh:b.keys.p256dh}});
           const prior=store.get('SELECT subscription,confirmed FROM push WHERE endpoint=?',b.endpoint);
-          store.run('INSERT OR REPLACE INTO push(owner,endpoint,subscription,confirmed) VALUES(?,?,?,?)', u.id, b.endpoint, subscription,prior?.subscription===subscription?prior.confirmed:0); return json(200, { ok: true });
+          store.transaction(()=>{
+            for(const endpoint of previous)store.run('DELETE FROM push WHERE owner=? AND endpoint=?',u.id,endpoint);
+            store.run('INSERT OR REPLACE INTO push(owner,endpoint,subscription,confirmed) VALUES(?,?,?,?)', u.id, b.endpoint, subscription,prior?.subscription===subscription?prior.confirmed:0);
+          });return json(200, { ok: true });
         }
         if(route==='/push/status'&&req.method==='POST'){
           const b=await body(req),row=store.get('SELECT confirmed FROM push WHERE owner=? AND endpoint=?',u.id,b.endpoint||'');
@@ -334,6 +351,11 @@ export function createApp(options = {}) {
       }
       if (req.method !== 'GET' && req.method !== 'HEAD') fail(405, 'Method not allowed');
       if (path === base) { res.writeHead(308, { Location: base + '/' }); return res.end(); }
+      if (path === base + '/manifest.webmanifest') {
+        const manifest = JSON.parse(await readFile(resolve(root, 'manifest.webmanifest'), 'utf8'));
+        res.writeHead(200, {'Content-Type':'application/manifest+json'});
+        return res.end(JSON.stringify({...manifest, id:manifestId, start_url:base+'/', scope:'/'}));
+      }
       const relative = decodeURIComponent(path.slice(base.length + 1)) || 'index.html';
       const file = resolve(root, relative);
       if (!file.startsWith(root) || !(await stat(file)).isFile()) fail(404, 'Not found');
@@ -348,25 +370,25 @@ export function createApp(options = {}) {
   });
   function validateEnvelope(b, sender, signaling = false, reservedUpload = false) {
     const now = Date.now();
-    if (![1,2,3].includes(b?.v) || b.from !== sender || typeof b.to !== 'string' || typeof b.id !== 'string' || !/^[a-f0-9-]{36}$/.test(b.id) || !Number.isSafeInteger(b.createdAt) || !Number.isSafeInteger(b.expiresAt) || b.createdAt > now + 30000 || (!reservedUpload && b.createdAt < now - 300000) || b.expiresAt <= now || !validLifetime(b,signaling) || b.expiresAt <= b.createdAt || typeof b.signature !== 'string' || !/^[A-Za-z0-9_-]{86}$/.test(b.signature)) fail(400, 'Invalid encrypted message');
+    if (![1,2,3].includes(b?.v) || b.from !== sender || typeof b.to !== 'string' || typeof b.id !== 'string' || !/^[a-f0-9-]{36}$/.test(b.id) || !Number.isSafeInteger(b.createdAt) || !Number.isSafeInteger(b.expiresAt) || b.createdAt > now + 30000 || (!reservedUpload && b.createdAt < now - 300000) || b.expiresAt <= now || !validLifetime(b,signaling) || b.expiresAt <= b.createdAt || !validApplicationSignature(b.signature)) fail(400, 'Invalid encrypted message');
     if(b.v===1){
       if(typeof b.ciphertext!=='string'||b.ciphertext.length>24000||typeof b.selfCiphertext!=='string'||b.selfCiphertext.length>24000||typeof b.iv!=='string'||b.iv.length!==16||!b.ephemeral?.x||!b.ephemeral?.y||b.ephemeral.d)fail(400,'Invalid encrypted message');
       if(store.get('SELECT owner FROM ratchet_accounts WHERE owner IN (?,?)',sender,b.to)&&!reservedUpload)fail(426,'Reopen WebCaller on both phones to update secure messaging.');
     }else{
-      const r=b.ratchet,key=s=>typeof s==='string'&&/^[A-Za-z0-9+/]{43}$/.test(s);
-      if(b.selfCiphertext!==undefined||b.ephemeral!==undefined||r?.protocol!=='olm-v2'||!['chat','events','signal','files','typing','transfer'].includes(r.lane)||typeof r.scope!=='string'||r.scope.length>100||![0,1].includes(r.type)||!key(r.sessionId)||!key(r.identity)||!key(r.recipientIdentity)||typeof r.data!=='string'||!/^[A-Za-z0-9_-]+$/.test(r.data)||r.data.length>24000||typeof r.prekeyId!=='string'||r.prekeyId.length>24)fail(400,'Invalid ratchet message');
+      const r=b.ratchet,key=s=>typeof s==='string'&&/^[A-Za-z0-9+/]{44}$/.test(s);
+      if(b.selfCiphertext!==undefined||b.ephemeral!==undefined||r?.protocol!=='signal-pqxdh-v1'||!['chat','events','signal','files','typing','transfer'].includes(r.lane)||typeof r.scope!=='string'||r.scope.length>100||![2,3].includes(r.type)||!key(r.sessionId)||!key(r.identity)||!key(r.recipientIdentity)||typeof r.data!=='string'||!/^[A-Za-z0-9_-]+$/.test(r.data)||r.data.length>24000||typeof r.prekeyId!=='string'||r.prekeyId.length>24)fail(400,'Invalid ratchet message');
       const from=store.get('SELECT identity FROM ratchet_accounts WHERE owner=?',sender),to=store.get('SELECT identity FROM ratchet_accounts WHERE owner=?',b.to);
       if(!from||!to||from.identity!==r.identity||to.identity!==r.recipientIdentity)fail(400,'Secure device identity does not match');
-      if(b.v===3){
+      {
         const signer=store.get('SELECT keys FROM users WHERE id=?',sender);let authentic=false;
-        try{authentic=verify('sha256',Buffer.from(ratchetStatement(b)),{key:createPublicKey({key:JSON.parse(signer.keys).sign,format:'jwk'}),dsaEncoding:'ieee-p1363'},Buffer.from(b.signature,'base64url'));}catch{}
-        if(!authentic)fail(400,'Invalid signed message lifetime');
+        try{authentic=verifyApplicationSignature(JSON.parse(signer.keys).sign,sender,ratchetStatement(b),b.signature);}catch{}
+        if(!authentic)fail(400,'Invalid signed encrypted message');
       }
     }
   }
   const wss = new WebSocketServer({ noServer: true, maxPayload: 65536, perMessageDeflate: false });
   server.on('upgrade', (req, socket, head) => {
-    if (req.headers.origin !== origin || req.url !== base + '/ws') return socket.destroy();
+    if (req.headers.origin !== origin || !paths.some(path => req.url === path + '/ws')) return socket.destroy();
     try { rate(`upgrade:${req.socket.remoteAddress}`, 60); } catch { return socket.destroy(); }
     wss.handleUpgrade(req, socket, head, ws => wss.emit('connection', ws));
   });
@@ -381,17 +403,24 @@ export function createApp(options = {}) {
         if (!ws.user) {
           const ticket = tickets.get(b.ticket); tickets.delete(b.ticket);
           if (b.type !== 'auth' || !ticket || ticket.expires < Date.now()) return ws.close(4401, 'Ticket expired');
-          if ((sockets.get(ticket.id)?.size || 0) >= 4) return ws.close(4429, 'Too many tabs');
+          if(b.clientId!==undefined&&(typeof b.clientId!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(b.clientId)))return ws.close(4401,'Invalid transport identity');
+          const previous=[...(sockets.get(ticket.id)||[])].filter(peer=>b.clientId&&peer.clientId===b.clientId);
+          if ((sockets.get(ticket.id)?.size || 0)-previous.length >= 4) return ws.close(4429, 'Too many tabs');
+          ws.clientId=b.clientId;
+          // Rebind only this authenticated page's answered call, before closing
+          // a dead old TCP connection. A different tab cannot inherit ownership.
+          for(const c of calls.values())if(c.to===ticket.id&&(c.answerClientId&&c.answerClientId===b.clientId||previous.includes(c.answerSocket)))c.answerSocket=ws;
           ws.user = ticket.id; clearTimeout(deadline);
-          clearTimeout(disconnectTimers.get(ws.user));disconnectTimers.delete(ws.user);
+          cancelDisconnect(disconnectTimers.get(ws.user));disconnectTimers.delete(ws.user);
           if (!sockets.has(ws.user)) sockets.set(ws.user, new Set()); sockets.get(ws.user).add(ws);
+          for(const peer of previous){sockets.get(ws.user).delete(peer);peer.terminate();}
           ws.send(JSON.stringify({ type: 'ready' }));
           const pending = [...calls.values()].find(c => c.to === ws.user && c.expiresAt > Date.now());
           if (pending&&!pending.answered) ws.send(JSON.stringify({ type: 'signal', envelope: pending.envelope, kind: 'offer', callId: pending.id }));
           return;
         }
         rate(`ws:${ws.user}`, 240);
-        if (b.type === 'ping') return ws.send(JSON.stringify({ type: 'pong' }));
+        if (b.type === 'ping') return ws.send(JSON.stringify({ type: 'pong',...(typeof b.nonce==='string'&&b.nonce.length<=64?{nonce:b.nonce}:{}) }));
         if(b.type==='transfer'){
           validateEnvelope(b.envelope,ws.user,true);if(b.envelope.expiresAt-b.envelope.createdAt>20000)fail(400,'Transfer update expires too late');
           if(!/^[a-f0-9-]{36}$/.test(b.messageId||''))fail(400,'Invalid transfer');
@@ -424,13 +453,13 @@ export function createApp(options = {}) {
           return;
         }
         if (b.kind !== 'receipt' && (!active || ![active.from,active.to].includes(ws.user) || ![active.from,active.to].includes(target) || ws.user === target)) fail(403, 'Unknown call');
-        if(active?.answered&&ws.user===active.to&&active.answerSocket!==ws&&active.answerSocket?.readyState===1){ws.send(JSON.stringify({type:'call-answered',callId:b.callId}));return;}
+        if(active?.answered&&ws.user===active.to&&active.answerSocket!==ws&&(active.answerClientId||active.answerSocket?.readyState===1)){ws.send(JSON.stringify({type:'call-answered',callId:b.callId}));return;}
         if(b.kind==='sas'){if(!active.answered)fail(403,'Call not answered');rate(`sas:${ws.user}`,50);}
         if (b.kind === 'answer') {
           if(active.to!==ws.user)fail(403,'Only the recipient can answer');
           if(active.answered){if(active.answerSocket!==ws)ws.send(JSON.stringify({type:'call-answered',callId:b.callId}));return;}
           if(!related(active.to,active.from))directory.accept(active.to,active.from);
-          active.answered = true;active.answerSocket=ws;active.expiresAt = Date.now()+14400000;alerts.stop(b.callId);
+          active.answered = true;active.answerSocket=ws;active.answerClientId=ws.clientId;active.expiresAt = Date.now()+14400000;alerts.stop(b.callId);
           // Sibling tabs share this device's identity and can all display the
           // pending offer. Only the tab that answered should keep the call UI.
           for(const sibling of sockets.get(ws.user)||[])if(sibling!==ws&&sibling.readyState===1)sibling.send(JSON.stringify({type:'call-answered',callId:b.callId}));
@@ -443,8 +472,8 @@ export function createApp(options = {}) {
       clearTimeout(deadline);
       if (ws.user) { const set = sockets.get(ws.user); set?.delete(ws); if (!set?.size) sockets.delete(ws.user); }
       if (ws.user && !sockets.has(ws.user)) {
-        clearTimeout(disconnectTimers.get(ws.user));
-        const timer = setTimeout(() => {
+        cancelDisconnect(disconnectTimers.get(ws.user));
+        const timer = scheduleDisconnect(() => {
           disconnectTimers.delete(ws.user);
           if (sockets.has(ws.user)) return;
           for (const [id,c] of calls) if ([c.from,c.to].includes(ws.user)) {
@@ -468,9 +497,10 @@ export function createApp(options = {}) {
   const heartbeat = setInterval(() => {
     for (const ws of wss.clients) { if (!ws.isAlive) { ws.terminate(); continue; } ws.isAlive = false; ws.ping(); }
   }, 30000); heartbeat.unref();
-  return { server, store, base, close: async () => { alerts.close();extraAlerts.close();testTimers.forEach(clearTimeout);disconnectTimers.forEach(clearTimeout);clearInterval(cleanup); clearInterval(heartbeat); for (const ws of wss.clients) ws.terminate(); wss.close(); await new Promise(r => server.close(r));disconnectTimers.forEach(clearTimeout); store.close(); } };
+  return { server, store, base, close: async () => { alerts.close();extraAlerts.close();testTimers.forEach(clearTimeout);disconnectTimers.forEach(cancelDisconnect);clearInterval(cleanup); clearInterval(heartbeat); for (const ws of wss.clients) ws.terminate(); wss.close(); await new Promise(r => server.close(r));disconnectTimers.forEach(cancelDisconnect); store.close(); } };
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  if(process.env.WEBCALLER_TEST_INSTANCE!=='libsignal-preview-v1'&&process.env.WEBCALLER_CRYPTO_ENGINE!=='libsignal-pqxdh-v1')throw new Error('This experimental build requires an explicit preview or approved libsignal cutover configuration.');
   const app = createApp();
   const port = Number(process.env.PORT || 8080), host = process.env.HOST || '127.0.0.1';
   app.server.listen(port, host, () => console.log(`WebCaller Calls listening on http://${host}:${port}${app.base}/`));

@@ -10,6 +10,8 @@ Copy `.env.example` or use the installer/setup command. `.env` is private, ignor
 | PORT | `.env.example` uses separate native port 8088; Compose uses internal 8080 |
 | WEBCALLER_TEST_INSTANCE | Must equal libsignal-preview-v1 for direct startup of this branch; not needed by stable WebCaller |
 | PUBLIC_URL | Canonical full HTTPS origin/path, e.g. https://calls.example.com/calls with your own domain substituted; determines allowed Origin and path |
+| APP_PATH_ALIASES | Optional comma-separated previous paths on the same origin, e.g. /calls when PUBLIC_URL ends in /com; share the existing accounts and service |
+| APP_MANIFEST_ID | Optional original absolute app directory, e.g. /calls/, retained during a path move so the installed web app keeps its manifest identity |
 | DATA_DIR | SQLite directory; Compose overrides to /app/data in its named volume |
 | BOOTSTRAP_TOKEN | Generated 24-byte random first-owner bearer secret; private QR hides typing, not its sensitivity |
 | VAPID_PUBLIC_KEY | Generated public browser push key |

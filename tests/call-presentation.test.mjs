@@ -11,7 +11,7 @@ function fixture(){
   const document=target({visibilityState:'visible',activeElement:null,querySelector:()=>dialog?{}:null});
   const view=target({innerWidth:390,innerHeight:844,visualViewport:target()});
   const screen=target({ownerDocument:document,classList:{contains:c=>classes.has(c),add:(...cs)=>cs.forEach(c=>classes.add(c)),remove:(...cs)=>cs.forEach(c=>classes.delete(c)),toggle(c,force){if(force)classes.add(c);else classes.delete(c);}},getBoundingClientRect:()=>({width:view.innerWidth,height:view.innerHeight})});
-  const remote=target({videoWidth:360,videoHeight:640}),local=target(),orientations=[];
+  const remote=target({videoWidth:360,videoHeight:640}),local=target({style:{removeProperty(){}},classList:{add(){},remove(){}}}),orientations=[];
   const controller=callPresentation({screen,remote,local,view,document,onOrientationChange:o=>orientations.push(o),schedule:(fn,ms)=>{timers.set(++nextId,{fn,ms});return nextId;},cancel:id=>timers.delete(id)});
   return {controller,screen,remote,view,document,classes,timers,orientations,dialog(value){dialog=value;},tick(){const pending=[...timers.values()];timers.clear();pending.forEach(({fn})=>fn());}};
 }

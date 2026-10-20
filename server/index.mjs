@@ -21,6 +21,7 @@ import {createCallAlerts,notificationPayload} from './call-alerts.mjs';
 import {ratchetRoutes} from './ratchet.mjs';
 import {ntfyAlerts} from './ntfy.mjs';
 import {dialing} from './dialing.mjs';
+import {appPaths,matchAppPath,manifestIdentity} from './app-paths.mjs';
 
 const root = fileURLToPath(new URL('../public/', import.meta.url));
 const hash = (v) => createHash('sha256').update(v).digest('hex');
@@ -50,6 +51,8 @@ export function createApp(options = {}) {
   const env = { ...process.env, ...options.env };
   const publicURL = new URL(env.PUBLIC_URL || 'http://localhost:8080/calls');
   const base = publicURL.pathname.replace(/\/$/, '') || '/calls';
+  const paths = appPaths(publicURL, env.APP_PATH_ALIASES || '');
+  const manifestId = manifestIdentity(env.APP_MANIFEST_ID, base);
   const origin = publicURL.origin;
   const mapTileURL=env.MAP_TILE_URL||'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
   const mapProvider=new URL(mapTileURL,origin);
@@ -130,13 +133,14 @@ export function createApp(options = {}) {
     for (const [k,v] of Object.entries(securityHeaders)) res.setHeader(k,v);
     const json = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(value)); };
     try {
-      const url = new URL(req.url, origin), path = url.pathname;
+      const url = new URL(req.url, origin), path = url.pathname, base = matchAppPath(path, paths);
+      if (!base) return json(404, { error: 'Not found' });
       if (path === `${base}/health`) return json(200, { ok: true });
       if (!path.startsWith(base + '/') && path !== base) return json(404, { error: 'Not found' });
       if (path.startsWith(`${base}/api/`)) {
         if (req.method !== 'GET' && req.headers.origin !== origin) fail(403, 'Unrecognized origin');
         const route = path.slice((base + '/api').length);
-        if (route === '/config' && req.method === 'GET') return json(200, { base, mapTileURL, mapAttribution, ntfyAvailable:extraAlerts.available, dialCodes:env.DIAL_CODES_ENABLED!=='false', publicURL: publicURL.href.replace(/\/$/, ''), vapidPublicKey: env.VAPID_PUBLIC_KEY || null, experimental: true, cryptoEngine:'libsignal 0.105.1 / PQXDH', bootstrap: !store.get('SELECT id FROM users LIMIT 1'), turnConfigured: Boolean((env.TURN_SECRET && env.TURN_URLS) || (env.CF_TURN_KEY_ID && env.CF_TURN_API_TOKEN)) });
+        if (route === '/config' && req.method === 'GET') return json(200, { base, appPaths:paths, mapTileURL, mapAttribution, ntfyAvailable:extraAlerts.available, dialCodes:env.DIAL_CODES_ENABLED!=='false', publicURL: publicURL.href.replace(/\/$/, ''), vapidPublicKey: env.VAPID_PUBLIC_KEY || null, experimental: true, cryptoEngine:'libsignal 0.105.1 / PQXDH', bootstrap: !store.get('SELECT id FROM users LIMIT 1'), turnConfigured: Boolean((env.TURN_SECRET && env.TURN_URLS) || (env.CF_TURN_KEY_ID && env.CF_TURN_API_TOKEN)) });
         if(route==='/dial/connect'&&req.method==='POST')return await directory.connect(req,json);
         if(route==='/invite-info'&&req.method==='POST'){
           rate(`invite-info:${req.socket.remoteAddress}`,30);const b=await body(req);
@@ -338,6 +342,11 @@ export function createApp(options = {}) {
       }
       if (req.method !== 'GET' && req.method !== 'HEAD') fail(405, 'Method not allowed');
       if (path === base) { res.writeHead(308, { Location: base + '/' }); return res.end(); }
+      if (path === base + '/manifest.webmanifest') {
+        const manifest = JSON.parse(await readFile(resolve(root, 'manifest.webmanifest'), 'utf8'));
+        res.writeHead(200, {'Content-Type':'application/manifest+json'});
+        return res.end(JSON.stringify({...manifest, id:manifestId, start_url:base+'/', scope:'/'}));
+      }
       const relative = decodeURIComponent(path.slice(base.length + 1)) || 'index.html';
       const file = resolve(root, relative);
       if (!file.startsWith(root) || !(await stat(file)).isFile()) fail(404, 'Not found');
@@ -370,7 +379,7 @@ export function createApp(options = {}) {
   }
   const wss = new WebSocketServer({ noServer: true, maxPayload: 65536, perMessageDeflate: false });
   server.on('upgrade', (req, socket, head) => {
-    if (req.headers.origin !== origin || req.url !== base + '/ws') return socket.destroy();
+    if (req.headers.origin !== origin || !paths.some(path => req.url === path + '/ws')) return socket.destroy();
     try { rate(`upgrade:${req.socket.remoteAddress}`, 60); } catch { return socket.destroy(); }
     wss.handleUpgrade(req, socket, head, ws => wss.emit('connection', ws));
   });

@@ -33,7 +33,7 @@ export function callSetup({api,config,device,save,toast}){
     page('Hear incoming calls','Tap below, then allow notifications so this phone can alert you even when the page is closed.');
     button('Enable call alerts',enable);
     if(Notification.permission==='granted'){
-      try{const reg=await registerAlerts();const sub=await reg.pushManager.getSubscription();const state=await api('/push/status','POST',{endpoint:sub?.endpoint});if(state.subscribed){page(state.confirmed?'Your call alerts are set up':'Let’s check the sound',state.confirmed?'You have confirmed an alert on this phone. You can send another test any time.':'We’ll send a test alert. Your phone’s notification sound needs to be on.');button('Send test alert',test);}}catch{}
+      try{const reg=await registerAlerts(config());const sub=await reg.pushManager.getSubscription();const state=await api('/push/status','POST',{endpoint:sub?.endpoint});if(state.subscribed){page(state.confirmed?'Your call alerts are set up':'Let’s check the sound',state.confirmed?'You have confirmed an alert on this phone. You can send another test any time.':'We’ll send a test alert. Your phone’s notification sound needs to be on.');button('Send test alert',test);}}catch{}
     }
   }
   async function enable(){
@@ -41,7 +41,7 @@ export function callSetup({api,config,device,save,toast}){
     try{
       // Permission must be requested directly from this deliberate tap.
       const permission=await Notification.requestPermission();if(permission!=='granted'){help();return;}
-      const registration=await registerAlerts();await navigator.serviceWorker.ready;
+      const registration=await registerAlerts(config());
       const raw=config().vapidPublicKey.replace(/-/g,'+').replace(/_/g,'/');
       const key=Uint8Array.from(atob(raw),c=>c.charCodeAt(0));
       const subscription=await registration.pushManager.getSubscription()||await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
@@ -52,7 +52,7 @@ export function callSetup({api,config,device,save,toast}){
   async function test(){
     $('alerts-primary').disabled=true;
     try{
-      const reg=await registerAlerts(),sub=await reg.pushManager.getSubscription();
+      const reg=await registerAlerts(config()),sub=await reg.pushManager.getSubscription();
       if(!sub){await enable();return;}
       const result=await api('/push/test','POST',{endpoint:sub.endpoint});testId=result.testId;
       device().alertTest={id:testId,expiresAt:result.expiresAt};await save();
@@ -80,6 +80,35 @@ export function callSetup({api,config,device,save,toast}){
   return {show,resume,close:()=>dialog.close(),platform};
 }
 
-export function registerAlerts(){
-  return navigator.serviceWorker.register(new URL('./sw.js',location.href).pathname,{scope:new URL('./',location.href).pathname,type:'module',updateViaCache:'none'});
+// A path migration must reuse a working subscription instead of making this
+// phone ring twice. Only reuse this app's exact same-origin worker/scope pairs.
+export async function registerAlerts(config={}, {worker=navigator.serviceWorker, href=location.href}={}) {
+  const current=new URL('./',href);
+  const scopes=[current,...(config.appPaths||[]).filter(path=>/^\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(path)).map(path=>new URL(path+'/',current.origin))];
+  const allowed=new Set(scopes.map(url=>url.href));
+  const registrations=await worker.getRegistrations();
+  const candidates=registrations.filter(reg=>{
+    const script=reg.active?.scriptURL||reg.waiting?.scriptURL||reg.installing?.scriptURL;
+    return allowed.has(reg.scope)&&script===new URL('sw.js',reg.scope).href;
+  }).sort((a,b)=>Number(b.scope===current.href)-Number(a.scope===current.href));
+  let existing;
+  for(const reg of candidates)if(await reg.pushManager.getSubscription()){existing=reg;break;}
+  existing ||= candidates[0];
+  const scope=existing?.scope||current.href;
+  const registration=await worker.register(new URL('sw.js',scope).pathname,{scope:new URL(scope).pathname,type:'module',updateViaCache:'none'});
+  if(registration.active)return registration;
+  // serviceWorker.ready waits for a worker controlling the *current* path;
+  // the reused legacy worker may deliberately have a different scope.
+  await new Promise((resolve,reject)=>{
+    const installing=registration.installing||registration.waiting;
+    let timeout;
+    const finish=error=>{clearTimeout(timeout);installing?.removeEventListener('statechange',changed);error?reject(error):resolve();};
+    const changed=()=>{
+      if(registration.active||installing?.state==='activated')finish();
+      else if(!installing||installing.state==='redundant')finish(new Error('Call alerts could not start. Please try again.'));
+    };
+    timeout=setTimeout(()=>finish(new Error('Call alerts took too long to start. Please try again.')),10000);
+    installing?.addEventListener('statechange',changed);changed();
+  });
+  return registration;
 }

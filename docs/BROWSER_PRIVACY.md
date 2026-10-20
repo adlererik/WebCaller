@@ -21,6 +21,8 @@ The [standard History interface](https://html.spec.whatwg.org/multipage/nav-hist
 
 ## Practical choices
 
+**Settings → Page title** changes the tab name on this device, with a neutral default of **Home**. An operator can also choose an inconspicuous app path such as `/com`. These reduce descriptive labels; they do not hide a visit, erase older history or conceal website storage from somebody inspecting an unlocked browser. Existing Home Screen labels are managed by the phone.
+
 Keep the phone locked with a passcode and use the phone’s notification privacy controls when other people can see its screen. To remove a saved site address from ordinary browsing history, use the browser’s own history controls. Deleting only a history entry is different from clearing all website data: clearing site data can lose this phone’s identity, contacts and cached media and require a new invitation.
 
 Private/Incognito windows reduce retained browsing state, but can discard this phone’s identity when closed and restrict background notifications. They are not a substitute for a persistent web phone that must receive calls while closed. [Chromium Incognito design](https://www.chromium.org/user-experience/incognito/), [WebKit storage isolation](https://webkit.org/tracking-prevention/), [iPhone Home Screen push requirements](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/).

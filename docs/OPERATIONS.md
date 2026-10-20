@@ -57,3 +57,17 @@ sudo systemctl disable --now webcaller-experimental.service
 ```
 
 Keep backups until you decide what to retain. Removing source, server state or a phone identity is a separate destructive decision; stopping the service does not need any of those deletions. Do not touch the stable service, reverse-proxy routes or phones.
+
+## Move the app path on the same hostname
+
+Back up the source, private configuration and a consistent database first, then finish calls. For example, to move `/calls` to `/com`, keep the existing origin and database and set these private `.env` values:
+
+```dotenv
+PUBLIC_URL=https://phone.example.com/com
+APP_PATH_ALIASES=/calls
+APP_MANIFEST_ID=/calls/
+```
+
+Replace the example domain with your own. Forward **both** `/com` and `/calls` (including each path's `/ws` WebSocket upgrade) to the existing app port before any website visitor logging. The optional Archive bridge supports both. Restart the app and any proxy process that imports that bridge, then test HTTPS health, authenticated messaging and calls through both paths. A whole-host Cloudflare Tunnel route does not need to change; a path-specific route must cover the new prefix too. TURN and a separate ntfy hostname are unchanged.
+
+New invitations and calling links use the canonical `PUBLIC_URL`. Old Home Screen icons and notification workers can keep using the alias. Do not force redirects, clear site data, uninstall icons or rotate VAPID/device keys. The browser reuses an existing app worker with a push subscription at a configured alias to avoid adding a second subscription. Existing subscriptions are not removed. Keep the alias until every saved entry point and alert has been migrated and tested on the actual phones; changing a hostname is a separate identity/storage migration.

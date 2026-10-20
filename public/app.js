@@ -619,7 +619,7 @@ function showCall(incoming=false){
   timerUi.dismiss();
   $('answer').disabled=!wsReady;
   dialUi.close();$('dial-settings-dialog').close();$('contact-options-dialog').close();$('remove-contact-dialog').close();
-  actions.reset();alerts.close();locationShare.close();$('attachment-dialog').close();$('audio-output-dialog').close();$('return-call').classList.add('hidden');$('settings-dialog').close();stopTyping();captures.close();closeViewer();$('draft-dialog').close();$('emoji-dialog').close();
+  actions.reset();alerts.close();locationShare.close();$('attachment-dialog').close();$('audio-output-dialog').close();$('return-call').classList.add('hidden');$('settings-dialog').close();$('page-title-dialog').close();stopTyping();captures.close();closeViewer();$('draft-dialog').close();$('emoji-dialog').close();
   $('call-screen').classList.remove('hidden');$('call-screen').classList.remove('has-video');$('call-name').textContent=contactName(device,call.peer);$('call-avatar').textContent=initials(contactName(device,call.peer));
   $('call-screen').classList.remove('call-connected','has-remote-video');$('call-peer-top').textContent=contactName(device,call.peer);$('switch-camera').classList.add('hidden');
   renderCallSas('pending');
@@ -848,7 +848,7 @@ async function ready(){
   await messenger.initialize(device);
   phoneInitialized=true;
   $('self-name').textContent=device.user.name;$('self-avatar').textContent=initials(device.user.name);renderContacts();await consumeNotificationAnswer();await consumeMessageNotice();await connect();startupStatus('ready');
-  if(navigator.serviceWorker&&(!phonePlatform().ios||phonePlatform().standalone))void registerAlerts().catch(()=>{});
+  if(navigator.serviceWorker&&(!phonePlatform().ios||phonePlatform().standalone))void registerAlerts(config).catch(()=>{});
 }
 $('welcome-form').onsubmit=async event=>{
   event.preventDefault();unlockSound();if(invitation&&phonePlatform().needsHomeScreen){await alerts.show();return;}$('join-button').disabled=true;$('welcome-error').textContent='';

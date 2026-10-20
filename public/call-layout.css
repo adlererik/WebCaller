@@ -40,3 +40,50 @@
 .brand-icon .brand-mark { display:block; width:100%; height:100%; border-radius:inherit; }
 
 :root .sidebar .brand-icon.app-brand { background:transparent; box-shadow:none; }
+
+/* One centered word column with equal wings across the entire phone screen. */
+.call-screen.has-video .call-top {
+  display:grid; grid-template-columns:38px minmax(0,1fr) max-content minmax(0,1fr) 38px;
+  grid-template-rows:minmax(38px,auto) auto auto; gap:4px 6px; max-width:none;
+  padding-left:max(12px,env(safe-area-inset-left)); padding-right:max(12px,env(safe-area-inset-right));
+}
+.call-screen.has-video .call-heading,
+.call-screen.has-video .call-title,
+.call-screen.has-video .call-quality-row { display:contents; }
+.call-screen.has-video #call-back { grid-area:1/1; }
+.call-screen.has-video #call-peer-top { grid-area:1/2; align-self:center; }
+.call-screen.has-video #call-sas { grid-area:1/3; align-self:center; }
+.call-screen.has-video #call-settings { grid-area:1/5; }
+.call-screen.has-video .call-metrics { grid-area:2/2/3/5; margin:0; }
+.call-screen.has-video #call-quality {
+  grid-area:3/2/4/4; align-self:center; min-width:0; max-width:100%;
+  margin-left:18px; text-overflow:ellipsis;
+}
+.call-screen.has-video #call-duration { grid-area:3/4; align-self:center; justify-self:end; }
+.call-screen.has-video.controls-hidden #call-quality {
+  grid-area:1/1/2/3; margin:0; justify-self:center; text-align:center;
+}
+.call-screen.has-video.controls-hidden #call-duration {
+  grid-area:1/4/2/6; justify-self:center; text-align:center;
+}
+.call-screen.has-video .call-sas,
+.call-screen.has-video #call-duration,
+.call-screen.has-video #call-quality { text-shadow:0 1px 4px #000,0 0 12px #0008; }
+.call-screen.has-video.call-connected .call-metrics,
+.call-screen.has-video.call-connected .call-bottom { transition:opacity .25s ease,visibility .25s; }
+.call-screen.has-video.call-connected.controls-hidden .call-metrics,
+.call-screen.has-video.call-connected.controls-hidden .call-bottom { opacity:0;visibility:hidden;pointer-events:none; }
+.call-screen.has-video #local-media {
+  pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;
+}
+.call-screen.has-video #local-media.dragging { cursor:grabbing; }
+.call-screen #local-media:focus-visible { outline:2px solid #dce7ff;outline-offset:3px; }
+@media(max-width:760px){
+  .call-screen.has-video .call-top { grid-template-columns:34px minmax(0,1fr) max-content minmax(0,1fr) 34px;grid-template-rows:minmax(34px,auto) auto auto; }
+  .call-screen.has-video #call-quality { margin-left:16px; }
+  .call-screen.has-video.controls-hidden #call-quality { margin-left:0; }
+}
+@media(prefers-reduced-motion:reduce){
+  .call-screen.has-video.call-connected .call-metrics,
+  .call-screen.has-video.call-connected .call-bottom { transition:none; }
+}

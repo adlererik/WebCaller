@@ -58,3 +58,7 @@ Use a separate directory/database/hostname/service/port and fresh owner/VAPID se
 Keep `.env`, keys, private QR links, databases, server credentials, infrastructure diagnostics and backups out of Git. The publishing guard is not a complete scanner/audit. Official upstream is a pinned public source submodule; the source offer requires that clean checked-out source and excludes local state.
 
 Independent review should cover the adapter, storage, signatures, call binding and deployment. Signal's supported clients have substantially greater scrutiny. [Comparison](../README.md#forward-secrecy-mitm-and-comparison-with-signal) · [Verification](VERIFICATION.md) · [Reporting](../SECURITY.md).
+
+### Reconnecting call transports
+
+A signaling page creates a random UUID in memory and presents it with its existing one-use authenticated WebSocket ticket. The server can rebind that page's answered call to a replacement socket during a radio handover. The UUID is scoped to the authenticated account, is not persisted in browser storage/server tables, and is not a substitute for identity verification or an authentication secret. Different tabs keep different IDs and cannot inherit the answered socket. Control heartbeat nonces travel within HTTPS/WSS; SDP, ICE, restart-correlation IDs and call verification updates still use the existing signed encrypted call envelopes. Encryption algorithms, keys, SAS binding and stored ratchet formats are unchanged.

@@ -55,3 +55,10 @@ Public HTTPS and WebSocket checks, exact vendor/source bytes and authenticated T
 6. Test locked-screen/browser-closed alerts, notification opening and supported actions on each OS. If using ntfy, confirm the sound/opening test and absence of duplicate browser call pushes.
 
 Record browser/OS versions, network conditions and observed limits without publishing private messages or credentials. No test can promise zero traces, screenshot prevention or forced ringing against OS settings.
+
+## Handover recovery regression checks
+
+- Blackhole an existing test signaling socket without closing TCP. Confirm heartbeat timeout replaces it, a fresh authenticated connection uses the same memory-only page ID, and the answered call is not dismissed as another tab. A genuinely different tab must still be rejected.
+- Drop or delay a restart answer, retry the same offer, and switch the network again before it is answered. Confirm old generations/answers cannot replace the new negotiation and cached answers avoid repeated codec reconfiguration.
+- Feed low/stale bandwidth estimates with five healthy received-audio samples. Check tiny-video recovery and bounded three-second probes, including failure/backoff, CPU limits, file-sharing suppression and immediate retreat on degraded speech. Voice ceilings must remain unchanged.
+- On actual Android/iPhone hardware, walk between Wi-Fi and cellular in both call directions, including when the receiving phone moves. Repeat with loss/latency and screen orientation changes. Automated tests cannot reproduce every OS/carrier radio transition or promise continuous sound through an outage.

@@ -64,6 +64,7 @@ export function createApp(options = {}) {
   const store = createStore(options.dataDir || env.DATA_DIR || './data');
   const acquireTransfer=transferLimits();
   const sockets = new Map(), tickets = new Map(), calls = new Map(), rates = new Map(), disconnectTimers=new Map();
+  const scheduleDisconnect=options.scheduleDisconnect||setTimeout,cancelDisconnect=options.cancelDisconnect||clearTimeout;
   const alertTests=new Map(),testTimers=new Set();
   const pushReady = Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY);
   if (pushReady) webpush.setVapidDetails(env.VAPID_SUBJECT || 'mailto:admin@example.com', env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
@@ -394,17 +395,24 @@ export function createApp(options = {}) {
         if (!ws.user) {
           const ticket = tickets.get(b.ticket); tickets.delete(b.ticket);
           if (b.type !== 'auth' || !ticket || ticket.expires < Date.now()) return ws.close(4401, 'Ticket expired');
-          if ((sockets.get(ticket.id)?.size || 0) >= 4) return ws.close(4429, 'Too many tabs');
+          if(b.clientId!==undefined&&(typeof b.clientId!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(b.clientId)))return ws.close(4401,'Invalid transport identity');
+          const previous=[...(sockets.get(ticket.id)||[])].filter(peer=>b.clientId&&peer.clientId===b.clientId);
+          if ((sockets.get(ticket.id)?.size || 0)-previous.length >= 4) return ws.close(4429, 'Too many tabs');
+          ws.clientId=b.clientId;
+          // Rebind only this authenticated page's answered call, before closing
+          // a dead old TCP connection. A different tab cannot inherit ownership.
+          for(const c of calls.values())if(c.to===ticket.id&&(c.answerClientId&&c.answerClientId===b.clientId||previous.includes(c.answerSocket)))c.answerSocket=ws;
           ws.user = ticket.id; clearTimeout(deadline);
-          clearTimeout(disconnectTimers.get(ws.user));disconnectTimers.delete(ws.user);
+          cancelDisconnect(disconnectTimers.get(ws.user));disconnectTimers.delete(ws.user);
           if (!sockets.has(ws.user)) sockets.set(ws.user, new Set()); sockets.get(ws.user).add(ws);
+          for(const peer of previous){sockets.get(ws.user).delete(peer);peer.terminate();}
           ws.send(JSON.stringify({ type: 'ready' }));
           const pending = [...calls.values()].find(c => c.to === ws.user && c.expiresAt > Date.now());
           if (pending&&!pending.answered) ws.send(JSON.stringify({ type: 'signal', envelope: pending.envelope, kind: 'offer', callId: pending.id }));
           return;
         }
         rate(`ws:${ws.user}`, 240);
-        if (b.type === 'ping') return ws.send(JSON.stringify({ type: 'pong' }));
+        if (b.type === 'ping') return ws.send(JSON.stringify({ type: 'pong',...(typeof b.nonce==='string'&&b.nonce.length<=64?{nonce:b.nonce}:{}) }));
         if(b.type==='transfer'){
           validateEnvelope(b.envelope,ws.user,true);if(b.envelope.expiresAt-b.envelope.createdAt>20000)fail(400,'Transfer update expires too late');
           if(!/^[a-f0-9-]{36}$/.test(b.messageId||''))fail(400,'Invalid transfer');
@@ -437,13 +445,13 @@ export function createApp(options = {}) {
           return;
         }
         if (b.kind !== 'receipt' && (!active || ![active.from,active.to].includes(ws.user) || ![active.from,active.to].includes(target) || ws.user === target)) fail(403, 'Unknown call');
-        if(active?.answered&&ws.user===active.to&&active.answerSocket!==ws&&active.answerSocket?.readyState===1){ws.send(JSON.stringify({type:'call-answered',callId:b.callId}));return;}
+        if(active?.answered&&ws.user===active.to&&active.answerSocket!==ws&&(active.answerClientId||active.answerSocket?.readyState===1)){ws.send(JSON.stringify({type:'call-answered',callId:b.callId}));return;}
         if(b.kind==='sas'){if(!active.answered)fail(403,'Call not answered');rate(`sas:${ws.user}`,50);}
         if (b.kind === 'answer') {
           if(active.to!==ws.user)fail(403,'Only the recipient can answer');
           if(active.answered){if(active.answerSocket!==ws)ws.send(JSON.stringify({type:'call-answered',callId:b.callId}));return;}
           if(!related(active.to,active.from))directory.accept(active.to,active.from);
-          active.answered = true;active.answerSocket=ws;active.expiresAt = Date.now()+14400000;alerts.stop(b.callId);
+          active.answered = true;active.answerSocket=ws;active.answerClientId=ws.clientId;active.expiresAt = Date.now()+14400000;alerts.stop(b.callId);
           // Sibling tabs share this device's identity and can all display the
           // pending offer. Only the tab that answered should keep the call UI.
           for(const sibling of sockets.get(ws.user)||[])if(sibling!==ws&&sibling.readyState===1)sibling.send(JSON.stringify({type:'call-answered',callId:b.callId}));
@@ -456,8 +464,8 @@ export function createApp(options = {}) {
       clearTimeout(deadline);
       if (ws.user) { const set = sockets.get(ws.user); set?.delete(ws); if (!set?.size) sockets.delete(ws.user); }
       if (ws.user && !sockets.has(ws.user)) {
-        clearTimeout(disconnectTimers.get(ws.user));
-        const timer = setTimeout(() => {
+        cancelDisconnect(disconnectTimers.get(ws.user));
+        const timer = scheduleDisconnect(() => {
           disconnectTimers.delete(ws.user);
           if (sockets.has(ws.user)) return;
           for (const [id,c] of calls) if ([c.from,c.to].includes(ws.user)) {
@@ -481,7 +489,7 @@ export function createApp(options = {}) {
   const heartbeat = setInterval(() => {
     for (const ws of wss.clients) { if (!ws.isAlive) { ws.terminate(); continue; } ws.isAlive = false; ws.ping(); }
   }, 30000); heartbeat.unref();
-  return { server, store, base, close: async () => { alerts.close();extraAlerts.close();testTimers.forEach(clearTimeout);disconnectTimers.forEach(clearTimeout);clearInterval(cleanup); clearInterval(heartbeat); for (const ws of wss.clients) ws.terminate(); wss.close(); await new Promise(r => server.close(r));disconnectTimers.forEach(clearTimeout); store.close(); } };
+  return { server, store, base, close: async () => { alerts.close();extraAlerts.close();testTimers.forEach(clearTimeout);disconnectTimers.forEach(cancelDisconnect);clearInterval(cleanup); clearInterval(heartbeat); for (const ws of wss.clients) ws.terminate(); wss.close(); await new Promise(r => server.close(r));disconnectTimers.forEach(cancelDisconnect); store.close(); } };
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   if(process.env.WEBCALLER_TEST_INSTANCE!=='libsignal-preview-v1'&&process.env.WEBCALLER_CRYPTO_ENGINE!=='libsignal-pqxdh-v1')throw new Error('This experimental build requires an explicit preview or approved libsignal cutover configuration.');

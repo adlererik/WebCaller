@@ -27,6 +27,7 @@ For a serious nation-state threat, I would worry about a compromised phone or ma
 | Sharing during calls | Bounded parallel encrypted transfer, percentage/spinner placeholders, retry/cancellation and audio-aware pacing. Video yields capacity; severe audio trouble pauses transfer. Retained cached media is reused, subject to browser storage limits. |
 | Message lifetime | Off, presets and custom seconds/minutes/hours/days/weeks up to four weeks. Sender countdown starts when sent; recipient countdown starts on first viewing. State survives refresh. Unread ciphertext can remain after sender expiry. |
 | Alerts | Neutral message notices open the conversation. Web Push requests call sound and Answer/Decline where supported. Optional self-hosted ntfy adds priority-5 alerts with a per-phone sound/opening test and avoids duplicate browser call pushes. |
+| Mobile video | Up to 500 kbps in each direction, with lower resolution/frame rate on poor links, voice-first pauses and cautious periodic recovery probes. |
 | Call header | Aligned audio/video codec and kbps/Mbps rows fade with video controls. Centered four-word SAS, quality and timer stay visible; drag the fixed-size self preview. Rates describe codec payload, not carrier billing. |
 | Hosting | Native Node.js/SQLite, HTTPS/WSS signaling, direct WebRTC where possible, TURN fallback and optional Cloudflare Tunnel for the website. A Tunnel is not a TURN relay. |
 

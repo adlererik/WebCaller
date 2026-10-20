@@ -1,9 +1,10 @@
 import {measureCall} from './call-metrics.js';
+import {healthyAudio,fitVideo,videoRecovery} from './video-recovery.js';
 import {codecKey,probeVideoCodecs,preferVideoCodecs} from './video-codecs.js';
 // Bitrates are codec payload caps. IP/UDP/SRTP/TURN overhead is additional.
 export const PROFILES = {
   wifi: { audio:48000, video:900000, width:960, height:540, fps:24, label:'Wi-Fi · clear voice' },
-  saver: { audio:20000, video:120000, width:320, height:180, fps:12, label:'Data saver · mono voice' },
+  saver: { audio:20000, video:500000, width:640, height:360, fps:20, label:'Data saver · mono voice' },
   weak: { audio:12000, video:45000, width:240, height:135, fps:6, label:'Weak connection · voice first' },
   critical: { audio:8000, video:0, width:160, height:90, fps:4, label:'Very weak · video paused' }
 };
@@ -14,8 +15,8 @@ export function networkMode(preference='auto', connection=globalThis.navigator?.
 }
 export function chooseProfile(mode, stats, previous='saver', stable=0) {
   const { loss=0, rtt=0, jitter=0, bandwidth=Infinity } = stats;
-  if (loss > .16 || rtt > 1.5 || jitter > .15 || bandwidth < 35000) return 'critical';
-  if (loss > .06 || rtt > .65 || jitter > .06 || bandwidth < 85000) return 'weak';
+  if (loss > .16 || rtt > 1.5 || jitter > .15 || bandwidth < 35000 && stable < 5) return 'critical';
+  if (loss > .06 || rtt > .65 || jitter > .06 || bandwidth < 85000 && stable < 5) return 'weak';
   // Slow recovery prevents repeatedly starving audio on a marginal link.
   if (['critical','weak'].includes(previous) && stable < 5) return previous;
   return mode;
@@ -26,14 +27,14 @@ export function mediaBudget(profile,stats={},cpuLimited=false,sharing=false){
     // Reserve voice and headroom before assigning anything to video.
     p.audio=Math.max(6000,Math.min(p.audio,Math.floor(stats.bandwidth*.45)));
     p.video=Math.min(p.video,Math.max(0,Math.floor(stats.bandwidth*.65-p.audio*1.5-8000)));
-    if(p.video<25000)p.video=0;
+    if(p.video<5000)p.video=0;
   }
   if(sharing){p.video=Math.min(p.video,profile==='wifi'?180000:45000);p.width=Math.min(p.width,320);p.height=Math.min(p.height,180);p.fps=Math.min(p.fps,10);}
   if(p.video>0&&p.video<90000){p.width=240;p.height=135;p.fps=6;}
   else if(p.video>0&&p.video<300000){p.width=320;p.height=180;p.fps=12;}
   if(sharing)p.fps=Math.min(p.fps,10);
   if(cpuLimited){p.fps=Math.min(p.fps,12);p.width=Math.min(p.width,640);p.height=Math.min(p.height,360);p.video=Math.min(p.video,350000);}
-  return p;
+  return fitVideo(p);
 }
 // Capture one full camera frame. Adapt the encoder rather than repeatedly
 // switching camera resolutions/lens crops as bandwidth estimates fluctuate.
@@ -56,12 +57,16 @@ export function tuneOpus(sdp, bitrate=20000) {
   }
   return sdp;
 }
+export function candidateMatches(description,candidate){
+  const ufrag=candidate.usernameFragment||candidate.candidate?.match(/\bufrag ([^\s]+)/)?.[1];
+  return !ufrag||[...(description?.sdp||'').matchAll(/a=ice-ufrag:([^\r\n]+)/g)].some(match=>match[1]===ufrag);
+}
 export class Phone {
-  constructor({ signal, update, remote, local, ended, preference }) {
-    Object.assign(this,{signal,update,remote,local,ended,preference});
+  constructor({ signal, update, remote, local, ended, preference, ensureSignaling=()=>{} }) {
+    Object.assign(this,{signal,update,remote,local,ended,preference,ensureSignaling});
     this.pc=null; this.stream=null; this.candidates=[]; this.localCandidates=[]; this.videoWanted=false; this.muted=false;
     this.profile=networkMode(preference()); this.stable=0; this.last=null; this.restartAt=0; this.applying=false;
-    this.facingMode='user';this.cameraBusy=false;this.trafficSamples=new Map();this.stats=null;this.codecSummary=[];this.avoidCodecs=new Set();this.restartPending=false;this.restartBusy=false;this.cpuSamples=0;this.sharing=false;this.remoteSharingUntil=0;
+    this.facingMode='user';this.cameraBusy=false;this.trafficSamples=new Map();this.stats=null;this.codecSummary=[];this.avoidCodecs=new Set();this.restartPending=false;this.restartBusy=false;this.cpuSamples=0;this.sharing=false;this.remoteSharingUntil=0;this.videoRecovery=videoRecovery();this.audioFlowAt=0;this.mediaFlowAt=0;this.stallRestartAt=0;this.restartId=null;this.offerAt=0;this.networkEpoch=0;this.offerEpoch=0;this.networkAt=-Infinity;
   }
   localMode(){return networkMode(this.preference());}
   mode(){return this.localMode()==='wifi'&&this.remoteMode==='wifi'?'wifi':'saver';}
@@ -98,7 +103,7 @@ export class Phone {
     }
     this.setVideoPreferences();
     this.local.srcObject=this.stream;
-    this.pc.onicecandidate=({candidate})=>{ if(candidate){this.localCandidates.push(candidate.toJSON()); void this.signal('ice',{candidate:candidate.toJSON()}).catch(()=>{});} };
+    this.pc.onicecandidate=({candidate})=>{ if(this.pc===pc&&candidate){if(this.localCandidates.length<128)this.localCandidates.push(candidate.toJSON()); void this.signal('ice',{candidate:candidate.toJSON()}).catch(()=>{});} };
     this.pc.ontrack=({track})=>{
       let stream=this.remote.srcObject; if(!stream) this.remote.srcObject=stream=new MediaStream();
       if(!stream.getTracks().some(t=>t.id===track.id)) stream.addTrack(track);
@@ -112,7 +117,7 @@ export class Phone {
       const state=this.pc.connectionState; this.update({state});
       if(state==='connected'){clearTimeout(this.failTimer);this.failTimer=null;this.update({connected:true});}
       if(state==='disconnected'||state==='failed'){
-        void this.restart();
+        this.ensureSignaling();void this.restart();
         if(!this.failTimer)this.failTimer=setTimeout(()=>{if(this.pc&&this.pc.connectionState!=='connected')this.ended('Connection lost. Try calling again.');},180000);
       }
     };
@@ -139,7 +144,7 @@ export class Phone {
   }
   async receive(description) {
     const pc=this.pc;
-    if(description.type==='answer'&&pc.signalingState==='stable'&&pc.remoteDescription?.sdp===description.sdp)return;
+    if(pc.signalingState==='stable'&&pc.remoteDescription?.sdp===description.sdp)return false;
     const prior=this.pc.remoteDescription?.sdp.match(/a=ice-ufrag:([^\r\n]+)/)?.[1];
     const incoming=description.sdp.match(/a=ice-ufrag:([^\r\n]+)/)?.[1];
     if(prior&&incoming&&prior!==incoming){
@@ -154,18 +159,18 @@ export class Phone {
       if(this.videoTransceiver){this.videoTransceiver.direction='sendrecv';this.videoSender=this.videoTransceiver.sender;}
     }
     this.setVideoPreferences();
-    const ufrags=[...description.sdp.matchAll(/a=ice-ufrag:([^\r\n]+)/g)].map(m=>m[1]);
-    for(const c of this.candidates.splice(0))if(!c.usernameFragment||ufrags.includes(c.usernameFragment))await this.pc.addIceCandidate(c);
+    for(const c of this.candidates.splice(0))if(candidateMatches(description,c))await this.pc.addIceCandidate(c);
     await this.applyProfile();
-    if(description.type==='answer'&&this.restartPending)void this.restart();
+    if(description.type==='answer'){this.restartPending=this.restartPending&&this.offerEpoch!==this.networkEpoch;this.restartId=null;this.offerAt=0;if(this.restartPending)void this.restart();}
+    return true;
   }
   async candidate(candidate) {
     const description=this.pc?.remoteDescription;
-    const matches=!candidate.usernameFragment||description?.sdp.includes('a=ice-ufrag:'+candidate.usernameFragment);
+    const matches=candidateMatches(description,candidate);
     if(!description||!matches){if(this.candidates.length<100)this.candidates.push(candidate);}
     else await this.pc.addIceCandidate(candidate);
   }
-  async replayCandidates() { for(const candidate of this.localCandidates)await this.signal('ice',{candidate}); }
+  async replayCandidates() { for(const candidate of this.localCandidates)if(candidateMatches(this.pc?.localDescription,candidate))await this.signal('ice',{candidate}); }
   async refreshConfiguration(){
     const pc=this.pc;if(!pc)return;
     const next=await this.refreshIce?.();
@@ -189,37 +194,68 @@ export class Phone {
   }
   async networkChanged(){
     if(!this.pc)return;
-    this.stable=0;this.profile=chooseProfile(this.mode(),this.stats||{},this.profile,0);this.stats=null;this.last=null;this.trafficSamples.clear();
+    // NetworkInformation also fires for estimate changes; coalesce its bursts.
+    if(Date.now()-this.networkAt<1500)return;this.networkAt=Date.now();this.networkEpoch++;
+    this.stable=0;this.stats=null;this.last=null;this.trafficSamples.clear();this.videoRecovery.reset();
+    this.profile=chooseProfile(this.mode(),{},this.profile,0);
+    this.restartPending=true;this.ensureSignaling();
     await this.applyProfile();await this.signal('video',{enabled:this.videoWanted,mode:this.localMode()}).catch(()=>{});await this.restart();
+  }
+  async signalingRestored(){
+    if(!this.pc||!this.pc.localDescription)return;
+    this.restartAt=0;await this.restart();
+  }
+  async receiveRestart(payload){
+    const pc=this.pc;if(!pc)return false;
+    if(payload.request){if(this.caller)await this.restart();return false;}
+    const description=payload.description;
+    if(!description||description.type!==(this.caller?'answer':'offer'))return false;
+    // Ignore an authenticated but delayed answer to an abandoned ICE offer.
+    if(description.type==='answer'&&payload.replyTo&&payload.replyTo!==this.restartId)return false;
+    if(description.type==='answer'&&pc.signalingState!=='have-local-offer')return false;
+    this.setRemoteMode(payload.mode);this.setVideoPreferences(payload.codecs);
+    if(description.type==='offer')this.restartPending=false;
+    const fresh=await this.receive(description);if(this.pc!==pc)return false;
+    if(description.type==='offer'){
+      const answer=!fresh&&pc.localDescription?.type==='answer'?{type:'answer',sdp:pc.localDescription.sdp}:await this.description('answer');
+      if(this.pc!==pc)return false;
+      await this.signal('restart',{description:answer,...(payload.restartId?{replyTo:payload.restartId}:{}),codecs:this.codecSummary,mode:this.localMode()});
+    }
+    if(this.pc!==pc)return false;await this.replayCandidates();return true;
   }
   async restart() {
     if(!this.pc)return;
     this.restartPending=true;
-    const wait=6000-(Date.now()-this.restartAt);
-    if(this.caller&&this.pc.signalingState==='have-local-offer'&&wait<=0&&!this.restartBusy){
-      this.restartAt=Date.now();this.restartBusy=true;
-      const pc=this.pc;
-      try{await this.signal('restart',{description:{type:pc.localDescription.type,sdp:pc.localDescription.sdp},codecs:this.codecSummary,mode:this.localMode()});await this.replayCandidates();}
-      catch{this.update({warning:'Waiting for signaling…'});}
-      finally{this.restartBusy=false;if(this.pc===pc)this.queueRestart(6500);}return;
+    let pc=this.pc;
+    if(this.caller&&pc.signalingState==='have-local-offer'&&!this.restartBusy&&(this.offerEpoch!==this.networkEpoch||this.offerAt&&Date.now()-this.offerAt>18000)){
+      // A new radio path needs fresh candidates, not endless retries of an old
+      // generation. Keep the same peer connection, mic, call ID and SAS context.
+      try{await pc.setLocalDescription({type:'rollback'});}catch{this.queueRestart();return;}
+      if(this.pc!==pc)return;this.restartId=null;this.offerAt=0;this.restartAt=0;
     }
-    if(this.restartBusy||this.pc.signalingState&&this.pc.signalingState!=='stable'||wait>0){this.queueRestart(Math.max(1000,wait));return;}
+    const wait=4000-(Date.now()-this.restartAt);
+    if(this.caller&&pc.signalingState==='have-local-offer'&&wait<=0&&!this.restartBusy){
+      this.restartAt=Date.now();this.restartBusy=true;
+      try{await this.signal('restart',{description:{type:pc.localDescription.type,sdp:pc.localDescription.sdp},restartId:this.restartId,codecs:this.codecSummary,mode:this.localMode()});await this.replayCandidates();}
+      catch{this.ensureSignaling();this.update({warning:'Waiting for signaling…'});}
+      finally{this.restartBusy=false;if(this.pc===pc)this.queueRestart(4500);}return;
+    }
+    if(this.restartBusy||pc.signalingState&&pc.signalingState!=='stable'||wait>0){this.queueRestart(Math.max(500,wait));return;}
     this.restartAt=Date.now();this.restartBusy=true;this.restartPending=false;
-    const pc=this.pc;
     try {
-      await this.refreshConfiguration().catch(()=>this.update({warning:'Relay refresh failed'}));
-      if(this.pc!==pc)return;
-      // Only the original caller offers; this avoids glare during simultaneous handovers.
-      if(this.caller)await this.signal('restart',{description:await this.description('offer',true),codecs:this.codecSummary,mode:this.localMode()});
-      else await this.signal('restart',{request:true});
+      await this.refreshConfiguration().catch(()=>this.update({warning:'Relay refresh failed'}));if(this.pc!==pc)return;
+      // The original caller alone offers, avoiding simultaneous-offer conflicts.
+      if(this.caller){
+        this.restartId=crypto.randomUUID();this.offerAt=Date.now();this.offerEpoch=this.networkEpoch;
+        await this.signal('restart',{description:await this.description('offer',true),restartId:this.restartId,codecs:this.codecSummary,mode:this.localMode()});
+      }else{await this.signal('restart',{request:true});this.restartPending=true;}
     }catch{
-      this.restartPending=true;
-      // A failed signaling send must not leave an unsent local offer blocking retries.
+      this.restartPending=true;this.ensureSignaling();
       if(this.pc===pc&&pc.signalingState==='have-local-offer')await pc.setLocalDescription({type:'rollback'}).catch(()=>{});
       this.update({warning:'Waiting for signaling…'});
     }finally{
       this.restartBusy=false;
-      if(this.pc===pc&&(this.restartPending||['disconnected','failed'].includes(pc.connectionState)||pc.signalingState==='have-local-offer'))this.queueRestart(6500);
+      if(this.pc===pc&&(this.restartPending||['disconnected','failed'].includes(pc.connectionState)||pc.signalingState==='have-local-offer'))this.queueRestart(4500);
     }
   }
   async toggleVideo() {
@@ -287,7 +323,8 @@ export class Phone {
     this.profileDirty=true;if(!this.pc)return Promise.resolve();if(this.profileTask)return this.profileTask;this.applying=true;
     this.profileTask=Promise.resolve().then(async()=>{
       while(this.profileDirty&&this.pc){
-        this.profileDirty=false;const pc=this.pc,p=mediaBudget(this.profile,this.stats||{},this.cpuSamples>=3,this.isSharing);this.budget=p;
+        this.profileDirty=false;const pc=this.pc,stats=this.stats||{},base=mediaBudget(this.profile,stats,this.cpuSamples>=3,this.isSharing);
+        const p=this.videoRecovery.budget(base,mediaBudget(this.mode(),{},this.cpuSamples>=3,this.isSharing),stats,{stable:this.stable,wanted:this.videoWanted,sharing:this.isSharing});this.budget=p;
         const capture=this.stream?.getVideoTracks()[0]?.getSettings?.()||{};
         const signature=JSON.stringify([capture.width,capture.height,p.audio,Math.floor(p.video/1000)*1000,p.width,p.height,p.fps,p.label,this.isSharing,this.videoWanted,this.stream?.getVideoTracks()[0]?.id,this.audioSender?.getParameters?.().encodings?.length,this.videoSender?.getParameters?.().encodings?.length]);
         if(signature===this.appliedBudget)continue;this.appliedBudget=signature;
@@ -322,27 +359,31 @@ export class Phone {
           relay=report.get(s.localCandidateId)?.candidateType==='relay'||report.get(s.remoteCandidateId)?.candidateType==='relay';
         }
       }
-      const dl=Math.max(0,lost-(this.last?.lost||0)),dr=Math.max(0,received-(this.last?.received||0));
-      const sentDelta=Math.max(0,sent-(this.last?.sent||0)),remoteLossDelta=Math.max(0,remoteLost-(this.last?.remoteLost||0));
+      const pair=[...selectedPairs].sort().join(','),prior=this.last?.pair===pair?this.last:null;
+      const dl=prior?Math.max(0,lost-prior.lost):0,dr=prior?Math.max(0,received-prior.received):0;
+      const sentDelta=prior?Math.max(0,sent-prior.sent):0,remoteLossDelta=prior?Math.max(0,remoteLost-prior.remoteLost):0;
       const loss=Math.max(outboundLoss,sentDelta?Math.min(1,remoteLossDelta/sentDelta):0,dl+dr?dl/(dl+dr):0);
       const {samples,...traffic}=measureCall(report,this.trafficSamples);this.trafficSamples=samples;
-      const stats={loss,rtt,jitter,bandwidth,relay,sampledAt:Date.now(),...traffic};this.stats=stats;
+      const now=Date.now(),connected=pc.connectionState==='connected';
+      if(dr>0)this.audioFlowAt=now;if(dr>0||traffic.downloadKbps>0)this.mediaFlowAt=now;
+      const stats={loss,rtt,jitter,bandwidth,relay,sampledAt:now,connected,audioFlow:this.audioFlowAt>0&&now-this.audioFlowAt<8000,...traffic};this.stats=stats;
+      if(connected&&this.mediaFlowAt&&now-this.mediaFlowAt>12000&&now-this.stallRestartAt>12000){this.stallRestartAt=now;this.ensureSignaling();void this.restart();}
       const limited=[...report.values()].find(s=>s.type==='outbound-rtp'&&s.kind==='video'&&s.qualityLimitationReason==='cpu');
       this.cpuSamples=limited?this.cpuSamples+1:0;
       if(this.cpuSamples===10){
         const codec=report.get(limited.codecId),current=(this.videoCodecs||[]).find(c=>c.mimeType.toLowerCase()===codec?.mimeType?.toLowerCase()&&(c.sdpFmtpLine||'')===(codec?.sdpFmtpLine||''));
         const alternatives=this.codecSummary.filter(c=>c.encode&&c.decode&&this.remoteCodecs?.some(r=>r.key===c.key&&r.encode&&r.decode));
-        if(current&&alternatives.some(c=>c.key!==codecKey(current))){this.avoidCodecs.add(codecKey(current));this.setVideoPreferences();void this.restart();}
+        if(current&&alternatives.some(c=>c.key!==codecKey(current))){this.avoidCodecs.add(codecKey(current));this.setVideoPreferences();this.networkEpoch++;void this.restart();}
       }
-      this.last={lost,received,sent,remoteLost};
-      if(loss<.03&&rtt<.5&&jitter<.04&&bandwidth>100000)this.stable++;else this.stable=0;
+      this.last={lost,received,sent,remoteLost,pair};
+      if(healthyAudio(stats))this.stable++;else this.stable=0;
       const next=chooseProfile(this.mode(),stats,this.profile,this.stable);
       this.profile=next;await this.applyProfile();
       this.update({stats});
     }catch{}finally{this.sampling=false;}
   }
   close(){
-    clearInterval(this.statsTimer);clearInterval(this.iceRefresh);clearTimeout(this.failTimer);clearTimeout(this.restartTimer);this.closed=true;
+    clearInterval(this.statsTimer);clearInterval(this.iceRefresh);clearTimeout(this.failTimer);clearTimeout(this.restartTimer);this.videoRecovery.reset();this.closed=true;
     this.pc?.close();this.pc=null;this.stream?.getTracks().forEach(t=>t.stop());this.stream=null;
     this.remote.srcObject=null;this.local.srcObject=null;
   }

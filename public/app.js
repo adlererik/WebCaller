@@ -18,6 +18,7 @@ const seal=(...args)=>messenger.seal(...args),open=(...args)=>messenger.open(...
 import { Phone, testRelay } from './media.js';
 import {callPresentation,viewOrientation,validOrientation} from './call-presentation.js';
 import {callOutbox,orderedTasks,callRinger,waitingForAnswer} from './call-signaling.js';
+import {signalingLink} from './signaling-link.js';
 import {dialEntry,dialLink,checkDialTarget} from './dial-code.js';
 import {dialingUI,dialIdentity} from './dialing.js';
 import {formatRate} from './call-metrics.js';
@@ -70,7 +71,7 @@ let ownerSetup=entry.setupCode;
 const ownerName=entry.name;entry.setupCode=null;
 // Retain only an iPhone invitation fragment for its Home Screen handoff; never an owner code.
 clearEntryFragment(location,history,!!invitation&&phonePlatform().needsHomeScreen,!!initialDialCode&&phonePlatform().needsHomeScreen);
-let device,config,selected,ws,wsReady=false,connecting=false,reconnectTimer,reconnectAttempt=0,heartbeat,phone,call,callTicker,wakeLock,soundContext,toastTimer;let ringNodes=new Set(),phoneInitialized=false;
+let device,config,selected,ws,wsReady=false,phone,call,callTicker,wakeLock,soundContext,toastTimer;let ringNodes=new Set(),phoneInitialized=false;
 const callInbox=orderedTasks();
 const sendCallSignal=callOutbox({current:()=>call,ready:()=>wsReady&&ws?.readyState===1,
   seal:(current,kind,payload)=>seal(device.identity,device.user.id,current.peer,{kind,callId:current.id,...payload},kind==='offer'?90:120),
@@ -552,16 +553,20 @@ async function sync(){
   }finally{hydratingMessages=false;}
   if(selected)renderMessages();openMessageNotice();queueReceipts();void pumpViewOutbox(true);
 }
-async function connect(){
-  clearTimeout(reconnectTimer);if(!device?.token||connecting||ws?.readyState===0||ws?.readyState===1)return;connecting=true;
-  try{
-    const ticket=await api('/ticket','POST',{});
-    const socket=new WebSocket(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}${base}/ws`);ws=socket;
-    socket.onopen=()=>{if(ws===socket)socket.send(JSON.stringify({type:'auth',ticket:ticket.ticket}));};
-    socket.onmessage=async event=>{if(ws!==socket)return;let b;try{
-      b=JSON.parse(event.data);
-      if(b.type==='ready'){const recoveringPhone=phone;connected(true);reconnectAttempt=0;await sync();if(ws!==socket)return;if(recoveringPhone&&phone===recoveringPhone)await recoveringPhone.restart();if(ws!==socket)return;clearInterval(heartbeat);heartbeat=setInterval(()=>{if(ws===socket&&wsReady&&socket.readyState===1)socket.send(JSON.stringify({type:'ping'}));},25000);}
-      else if(b.type==='transfer')await receiveTransfer(b);
+const callLink=signalingLink({
+  ticket:signal=>api('/ticket','POST',{},signal),
+  url:()=>`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}${base}/ws`,
+  enabled:()=>!!device?.token,active:()=>!!call,
+  clientId:crypto.randomUUID(), // Same tab on a new network; no persistent ID.
+  onSocket:socket=>{ws=socket;},onState:connected,
+  onReady:async socket=>{
+    const recovering=phone;
+    if(recovering)await recovering.signalingRestored();
+    if(ws!==socket)return;
+    await sync();
+  },
+  onPacket:async(b,socket)=>{
+      if(b.type==='transfer')await receiveTransfer(b);
       else if(b.type==='transfer-ended'){if(pendingTransfers.delete(b.id)&&selected)renderMessages();}
       else if(b.type==='message')await acceptMessage(b.envelope);
       else if(b.type==='message-event')await acceptMessageEvent(b);
@@ -579,17 +584,16 @@ async function connect(){
         else if(b.error==='Unknown call'&&b.callId)finishCall('This call is no longer available. Try calling again.');
         else toast(b.error);
       });
-    }catch(e){
-      if(ws!==socket||e.message==='Expired')return;
-      if(b?.type==='signal'){
-        if(e.callVerification)toast('A call update could not be authenticated. Keep your saved identity and verify the contact.');
-        else if(call?.id===b.callId){updateCall({warning:'Call connection update failed. Reconnecting…'});void phone?.restart();}
-      }else toast(b?.type==='ready'||b?.type==='contacts'?'Could not refresh conversations. Reconnecting…':'An encrypted update could not be verified.');
-    }};
-    socket.onerror=()=>{};socket.onclose=()=>{if(ws!==socket)return;connected(false);clearInterval(heartbeat);scheduleReconnect();};
-  }catch{connected(false);scheduleReconnect();}finally{connecting=false;}
-}
-function scheduleReconnect(){clearTimeout(reconnectTimer);if(!device)return;reconnectTimer=setTimeout(connect,Math.min(20000,1000*2**Math.min(5,reconnectAttempt++))+Math.random()*400);}
+  },
+  onError:(e,b)=>{
+    if(e.message==='Expired')return;
+    if(b?.type==='signal'){
+      if(e.callVerification)toast('A call update could not be authenticated. Keep your saved identity and verify the contact.');
+      else if(call?.id===b.callId){updateCall({warning:'Call connection update failed. Reconnecting…'});void phone?.restart();}
+    }else toast(b?.type==='ready'||b?.type==='contacts'?'Could not refresh conversations. Reconnecting…':'An encrypted update could not be verified.');
+  }
+});
+function connect(){return callLink.connect();}
 async function signal(kind,payload){
   return sendCallSignal(kind,['offer','answer','restart','video'].includes(kind)?{...payload,orientation:viewOrientation()}:payload);
 }
@@ -632,7 +636,7 @@ async function createPhone(video,caller){
   const ice=await api('/ice');
   if(call?.id!==id)throw new Error('Call cancelled');
   if(!ice.turn)$('call-warning').textContent='Relay is not configured. Calls across some networks may fail.';
-  const active=new Phone({signal:(kind,payload)=>call===current?signal(kind,payload):Promise.resolve(),update:update=>{if(call===current&&phone===active)updateCall(update);},remote:$('remote-media'),local:$('local-media'),ended:reason=>{if(call===current&&phone===active)void endCall(reason);},preference});phone=active;active.refreshIce=()=>api('/ice');
+  const active=new Phone({signal:(kind,payload)=>call===current?signal(kind,payload):Promise.resolve(),update:update=>{if(call===current&&phone===active)updateCall(update);},remote:$('remote-media'),local:$('local-media'),ended:reason=>{if(call===current&&phone===active)void endCall(reason);},preference,ensureSignaling:()=>callLink.probe(true)});phone=active;callLink.probe();active.refreshIce=()=>api('/ice');
   active.remoteCodecs=current.codecs;active.remoteMode=current.mode;await active.prepare(ice,video,caller);
   if(call!==current){active.close();return;}if(transfer?.callId)await shareCall(transfer);if(call!==current)return;void output.start(video).catch(()=>{});
   for(const c of pendingCandidates.get(id)||[]){if(call!==current)return;await active.candidate(c);}pendingCandidates.delete(id);
@@ -746,13 +750,7 @@ async function processSignal(b){
     // A caller may retry while the recipient is still granting microphone
     // access. The original offer remains pending; do not negotiate over it.
     if(!active||!current.caller&&!current.answerSent)return;
-    if(payload.request){if(current.caller)await active.restart();}
-    else if(payload.description){
-      if(payload.description.type!==(current.caller?'answer':'offer'))return;
-      active.setRemoteMode(payload.mode);active.setVideoPreferences(payload.codecs);await active.receive(payload.description);if(call!==current)return;
-      if(payload.description.type==='offer'){const description=await active.description('answer');if(call!==current)return;await signal('restart',{description,codecs:active.codecSummary,mode:active.localMode()});}
-      if(call!==current)return;await active.replayCandidates();if(call===current)void prepareCallSas();
-    }
+    if(await active.receiveRestart(payload)&&call===current)void prepareCallSas();
   }
   else if(b.kind==='sharing'){await phone?.setRemoteSharing(payload.active===true);}
   else if(b.kind==='video'){phone?.setRemoteMode(payload.mode);call.remoteVideo=!!payload.enabled;videoLayout();}
@@ -980,13 +978,19 @@ $('confirm-remove-contact').onclick=async()=>{
   }catch(e){if(contactToRemove?.id===c.id){$('remove-contact-error').textContent=e.message;$('confirm-remove-contact').disabled=false;}else toast(e.message);}
 };
 $('confirm-forget').onclick=async()=>{
-  try{await api('/device','DELETE');if(ws){ws.onclose=null;ws.close();}clearTimeout(reconnectTimer);clearInterval(heartbeat);finishCall('');transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();await cachedMedia.clear();await notificationIntents.clear();await chatNotificationIntents.clear();await messenger.forget();await vault('delete');localStorage.removeItem('ellie-settings');device=null;location.reload();}catch(e){toast(e.message);}
+  try{await api('/device','DELETE');callLink.stop();finishCall('');transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();await cachedMedia.clear();await notificationIntents.clear();await chatNotificationIntents.clear();await messenger.forget();await vault('delete');localStorage.removeItem('ellie-settings');device=null;location.reload();}catch(e){toast(e.message);}
 };
 function clearMessage(m){m.reactions=null;m.receipt=null;m.versions=null;m.pinVersion=null;m.replyTo=null;if(viewerMessage?.id===m.id)closeViewer();if(m.blobURL)URL.revokeObjectURL(m.blobURL);m.blobURL=null;m.blob=null;m.location=null;m.text='';m.attachment=null;}
 setInterval(()=>{if(purgeTransfers(pendingTransfers)&&selected)renderMessages();if(selected&&document.visibilityState==='visible')updateCountdowns($('messages'));for(const [id,updates]of pendingMessageEvents)if(!updates.some(e=>e.envelope.expiresAt>Date.now()))pendingMessageEvents.delete(id);queueReceipts();void pumpViewOutbox();for(const [id,expiry]of deletedMessages)if(expiry<=Date.now())deletedMessages.delete(id);for(const [id,expiry]of typingSeen)if(expiry<=Date.now())typingSeen.delete(id);renderTyping();let changed=false;for(const [id,m]of messages)if(m.expiresAt<=Date.now()){void cachedMedia.remove(device?.user.id,id,m.wireExpiresAt||m.expiresAt);if(m.lifetime){deletedMessages.set(id,m.wireExpiresAt);void messenger.purge().catch(()=>{});}clearMessage(m);messages.delete(id);receiptWanted.delete(id);visibleSince.delete(id);changed=true;}if(changed&&selected)renderMessages();},1000);
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&device?.user){void consumeMessageNotice();void consumeNotificationAnswer();void cachedMedia.purge();unlockSound();if(!wsReady)connect();else sync().catch(()=>{});if(call?.started)navigator.wakeLock?.request('screen').then(lock=>wakeLock=lock).catch(()=>{});}if(document.visibilityState==='hidden'){timerUi.dismiss();pendingTransfers.clear();actions.reset();clearTimeout(receiptTimer);receiptTimer=null;receiptWanted.clear();visibleSince.clear();pendingMessageEvents.clear();locationShare.close();$('attachment-dialog').close();stopTyping();typingPeers.clear();renderTyping();captures.close();closeViewer();clearDraft();$('draft-dialog').close();$('emoji-dialog').close();transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();$('messages').replaceChildren();$('pinned-message').textContent='';$('pinned-message').onclick=null;$('pinned-message').classList.add('hidden');}});
-window.addEventListener('online',()=>{if(device&&!wsReady)connect();if(phone)void phone.networkChanged();});
-navigator.connection?.addEventListener('change',()=>{if(phone)void phone.networkChanged();});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&device?.user){void consumeMessageNotice();void consumeNotificationAnswer();void cachedMedia.purge();unlockSound();if(!wsReady)connect();else{callLink.probe(true);if(!call)sync().catch(()=>{});}if(call?.started)navigator.wakeLock?.request('screen').then(lock=>wakeLock=lock).catch(()=>{});}if(document.visibilityState==='hidden'){timerUi.dismiss();pendingTransfers.clear();actions.reset();clearTimeout(receiptTimer);receiptTimer=null;receiptWanted.clear();visibleSince.clear();pendingMessageEvents.clear();locationShare.close();$('attachment-dialog').close();stopTyping();typingPeers.clear();renderTyping();captures.close();closeViewer();clearDraft();$('draft-dialog').close();$('emoji-dialog').close();transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();$('messages').replaceChildren();$('pinned-message').textContent='';$('pinned-message').onclick=null;$('pinned-message').classList.add('hidden');}});
+let previousNetwork=navigator.connection?.type;
+function networkChanged(online=false){
+  const next=navigator.connection?.type,changed=!!next&&!!previousNetwork&&next!==previousNetwork;previousNetwork=next;
+  if(!device)return;callLink.networkChanged(online||changed);
+  if(phone)void phone.networkChanged();
+}
+window.addEventListener('online',()=>networkChanged(true));
+navigator.connection?.addEventListener('change',()=>networkChanged());
 window.addEventListener('pagehide',()=>{clearCallSas();pendingTransfers.clear();actions.reset();clearTimeout(receiptTimer);receiptWanted.clear();visibleSince.clear();pendingMessageEvents.clear();locationShare.close();output.stop();stopTyping();captures.close();closeViewer();clearDraft();phone?.close();transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();});
 unlockSound();
 void boot();

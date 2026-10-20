@@ -7,7 +7,7 @@ Experimental libsignal/PQXDH branch: call/chat/media workflows below are retaine
 | Profile | Opus payload ceiling | Video ceiling | Encoder bounding box |
 |---|---:|---:|---|
 | Wi-Fi | 48 kb/s | 900 kb/s | 960×540, 24 fps |
-| Cellular / unknown network / remote saver | 20 kb/s | 120 kb/s | 320×180, 12 fps |
+| Cellular / unknown network / remote saver | 20 kb/s | 500 kb/s | 640×360, 20 fps |
 | Weak | 12 kb/s | 45 kb/s | 240×135, 6 fps |
 | Critical | 8 kb/s | Paused | Audio continues if transport permits |
 
@@ -134,3 +134,5 @@ New timed text/media starts the sender’s countdown when sent and the recipient
 - Per-browser **Page title** setting, with **Home** as its neutral default; older browser history and Home Screen labels remain outside website control.
 - Same-origin app path aliases for gradual URL migration without a new account/database or duplicate push subscription.
 - Video controls and codec statistics fade together; SAS remains centered between quality and elapsed time. The fixed-size self preview can be dragged or moved with arrow keys. Media adaptation and encryption are independent of this display.
+
+Network handovers use acknowledged signaling heartbeats, bounded reconnects and temporary per-page call ownership. Call negotiation resumes before chat hydration. Tiny video is retained where usable; paused video probes cautiously and recovers without increasing the existing voice ceilings. See [Changing networks](CALL_NETWORK.md).

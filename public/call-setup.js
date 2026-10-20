@@ -33,7 +33,7 @@ export function callSetup({api,config,device,save,toast}){
     page('Hear incoming calls','Tap below, then allow notifications so this phone can alert you even when the page is closed.');
     button('Enable call alerts',enable);
     if(Notification.permission==='granted'){
-      try{const reg=await registerAlerts(config());const sub=await reg.pushManager.getSubscription();const state=await api('/push/status','POST',{endpoint:sub?.endpoint});if(state.subscribed){page(state.confirmed?'Your call alerts are set up':'Let’s check the sound',state.confirmed?'You have confirmed an alert on this phone. You can send another test any time.':'We’ll send a test alert. Your phone’s notification sound needs to be on.');button('Send test alert',test);}}catch{}
+      try{const reg=await registerAlerts(config(),{api});const sub=await reg.pushManager.getSubscription();const state=await api('/push/status','POST',{endpoint:sub?.endpoint});if(state.subscribed){page(state.confirmed?'Your call alerts are set up':'Let’s check the sound',state.confirmed?'You have confirmed an alert on this phone. You can send another test any time.':'We’ll send a test alert. Your phone’s notification sound needs to be on.');button('Send test alert',test);}}catch{}
     }
   }
   async function enable(){
@@ -41,7 +41,7 @@ export function callSetup({api,config,device,save,toast}){
     try{
       // Permission must be requested directly from this deliberate tap.
       const permission=await Notification.requestPermission();if(permission!=='granted'){help();return;}
-      const registration=await registerAlerts(config());
+      const registration=await registerAlerts(config(),{api});
       const raw=config().vapidPublicKey.replace(/-/g,'+').replace(/_/g,'/');
       const key=Uint8Array.from(atob(raw),c=>c.charCodeAt(0));
       const subscription=await registration.pushManager.getSubscription()||await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
@@ -52,7 +52,7 @@ export function callSetup({api,config,device,save,toast}){
   async function test(){
     $('alerts-primary').disabled=true;
     try{
-      const reg=await registerAlerts(config()),sub=await reg.pushManager.getSubscription();
+      const reg=await registerAlerts(config(),{api}),sub=await reg.pushManager.getSubscription();
       if(!sub){await enable();return;}
       const result=await api('/push/test','POST',{endpoint:sub.endpoint});testId=result.testId;
       device().alertTest={id:testId,expiresAt:result.expiresAt};await save();
@@ -82,7 +82,15 @@ export function callSetup({api,config,device,save,toast}){
 
 // A path migration must reuse a working subscription instead of making this
 // phone ring twice. Only reuse this app's exact same-origin worker/scope pairs.
-export async function registerAlerts(config={}, {worker=navigator.serviceWorker, href=location.href}={}) {
+const alertRegistrations=new WeakMap();
+export async function registerAlerts(config={}, options={}) {
+  const worker=options.worker||navigator.serviceWorker,href=options.href||location.href;
+  const pending=alertRegistrations.get(worker);
+  if(pending?.href===href)return pending.task;
+  const task=registerPhoneAlerts(config,{...options,worker,href});alertRegistrations.set(worker,{href,task});
+  try{return await task;}finally{if(alertRegistrations.get(worker)?.task===task)alertRegistrations.delete(worker);}
+}
+async function registerPhoneAlerts(config, {worker,href,api,permission=()=>globalThis.Notification?.permission}) {
   const current=new URL('./',href);
   const scopes=[current,...(config.appPaths||[]).filter(path=>/^\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(path)).map(path=>new URL(path+'/',current.origin))];
   const allowed=new Set(scopes.map(url=>url.href));
@@ -96,10 +104,9 @@ export async function registerAlerts(config={}, {worker=navigator.serviceWorker,
   existing ||= candidates[0];
   const scope=existing?.scope||current.href;
   const registration=await worker.register(new URL('sw.js',scope).pathname,{scope:new URL(scope).pathname,type:'module',updateViaCache:'none'});
-  if(registration.active)return registration;
   // serviceWorker.ready waits for a worker controlling the *current* path;
   // the reused legacy worker may deliberately have a different scope.
-  await new Promise((resolve,reject)=>{
+  if(!registration.active)await new Promise((resolve,reject)=>{
     const installing=registration.installing||registration.waiting;
     let timeout;
     const finish=error=>{clearTimeout(timeout);installing?.removeEventListener('statechange',changed);error?reject(error):resolve();};
@@ -110,5 +117,27 @@ export async function registerAlerts(config={}, {worker=navigator.serviceWorker,
     timeout=setTimeout(()=>finish(new Error('Call alerts took too long to start. Please try again.')),10000);
     installing?.addEventListener('statechange',changed);changed();
   });
+  // A retired URL cannot host a worker anymore. First create and register the
+  // replacement, then remove only subscriptions owned by this signed-in phone.
+  // Never prompt for permission in the background or touch another site's worker.
+  if(api&&config.vapidPublicKey&&permission()==='granted'){
+    const retired=new Set((config.retiredAppPaths||[]).filter(path=>/^\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(path)).map(path=>new URL(path+'/',current.origin).href));
+    retired.delete(scope);
+    const previous=[];
+    for(const reg of registrations){
+      if(!retired.has(reg.scope)||reg.active?.scriptURL!==new URL('sw.js',reg.scope).href)continue;
+      const sub=await reg.pushManager.getSubscription();if(!sub)continue;
+      if((await api('/push/status','POST',{endpoint:sub.endpoint})).subscribed)previous.push({reg,sub});
+    }
+    if(previous.length){
+      const raw=config.vapidPublicKey.replace(/-/g,'+').replace(/_/g,'/'),key=Uint8Array.from(atob(raw),c=>c.charCodeAt(0));
+      const sub=await registration.pushManager.getSubscription()||await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
+      await api('/push','POST',{...sub.toJSON(),replaces:previous.map(item=>item.sub.endpoint)});
+      for(const old of previous){
+        try{for(const notice of await old.reg.getNotifications())notice.close();}catch{}
+        try{await old.sub.unsubscribe();await old.reg.unregister();}catch{}
+      }
+    }
+  }
   return registration;
 }

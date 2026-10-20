@@ -846,7 +846,7 @@ async function ready(){
   await messenger.initialize(device);
   phoneInitialized=true;
   $('self-name').textContent=device.user.name;$('self-avatar').textContent=initials(device.user.name);renderContacts();await consumeNotificationAnswer();await consumeMessageNotice();await connect();startupStatus('ready');
-  if(navigator.serviceWorker&&(!phonePlatform().ios||phonePlatform().standalone))void registerAlerts(config).catch(()=>{});
+  if(navigator.serviceWorker&&(!phonePlatform().ios||phonePlatform().standalone))void registerAlerts(config,{api}).catch(()=>{});
 }
 $('welcome-form').onsubmit=async event=>{
   event.preventDefault();unlockSound();if(invitation&&phonePlatform().needsHomeScreen){await alerts.show();return;}$('join-button').disabled=true;$('welcome-error').textContent='';

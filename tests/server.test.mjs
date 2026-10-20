@@ -33,6 +33,24 @@ async function fixture(push=false,extra={},options={}){
   }
   return {app,request,alice,pair,socket,url,origin};
 }
+test('push path migration atomically replaces only owned endpoints and preserves limits',async t=>{
+  const f=await fixture(true);t.after(()=>f.app.close());const {bob}=await f.pair(),keys={auth:'a',p256dh:'b'};
+  const send=(user,endpoint,replaces)=>f.request('/push',{method:'POST',token:user.token,body:{endpoint,keys,...(replaces===undefined?{}:{replaces})}});
+  const old=Array.from({length:5},(_,i)=>'https://fcm.googleapis.com/old-'+i),next='https://fcm.googleapis.com/new',foreign='https://fcm.googleapis.com/foreign';
+  for(const endpoint of old)assert.equal((await send(f.alice,endpoint)).status,200);
+  assert.equal((await send(bob,foreign)).status,200);
+  assert.equal((await send(f.alice,next)).status,429);
+  assert.equal((await send(f.alice,next,[old[0],foreign])).status,409);
+  assert.equal(f.app.store.get('SELECT count(*) n FROM push').n,6);
+  assert.equal((await send(f.alice,next,[old[0],old[0]])).status,200);
+  assert.equal(f.app.store.get('SELECT 1 FROM push WHERE endpoint=?',old[0]),undefined);
+  assert.equal(f.app.store.get('SELECT count(*) n FROM push').n,6);
+  assert.equal(f.app.store.get('SELECT confirmed FROM push WHERE endpoint=?',next).confirmed,0);
+  assert.equal((await send(f.alice,next,'invalid')).status,400);
+  assert.equal((await send(f.alice,'http://localhost:22',[next])).status,400);
+  assert.equal(f.app.store.get('SELECT owner FROM push WHERE endpoint=?',next).owner,f.alice.user.id);
+  assert.equal(f.app.store.get('SELECT owner FROM push WHERE endpoint=?',foreign).owner,bob.user.id);
+});
 test('contact removal clears both histories, events and complete/partial media, with durable replay protection',async t=>{
   const f=await fixture();t.after(()=>f.app.close());const {bob}=await f.pair(),{bob:other}=await f.pair();
   const peer={id:bob.user.id,keys:bob.identity.keys};

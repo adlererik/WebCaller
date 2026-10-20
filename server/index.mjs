@@ -21,7 +21,7 @@ import {createCallAlerts,notificationPayload} from './call-alerts.mjs';
 import {ratchetRoutes} from './ratchet.mjs';
 import {ntfyAlerts} from './ntfy.mjs';
 import {dialing} from './dialing.mjs';
-import {appPaths,matchAppPath,manifestIdentity} from './app-paths.mjs';
+import {appPaths,retiredAppPaths,matchAppPath,manifestIdentity} from './app-paths.mjs';
 
 const root = fileURLToPath(new URL('../public/', import.meta.url));
 const hash = (v) => createHash('sha256').update(v).digest('hex');
@@ -52,6 +52,7 @@ export function createApp(options = {}) {
   const publicURL = new URL(env.PUBLIC_URL || 'http://localhost:8080/calls');
   const base = publicURL.pathname.replace(/\/$/, '') || '/calls';
   const paths = appPaths(publicURL, env.APP_PATH_ALIASES || '');
+  const retiredPaths = retiredAppPaths(publicURL, env.APP_RETIRED_PATHS || '', paths);
   const manifestId = manifestIdentity(env.APP_MANIFEST_ID, base);
   const origin = publicURL.origin;
   const mapTileURL=env.MAP_TILE_URL||'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -126,7 +127,7 @@ export function createApp(options = {}) {
   }
   const securityHeaders = {
     'Content-Security-Policy': `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob: ${mapImageSource}; connect-src 'self'; media-src 'self' blob:; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`,
-    'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff', 'X-Robots-Tag': 'noindex, nofollow, noarchive',
     'Permissions-Policy': 'camera=(self), microphone=(self), geolocation=(self), speaker-selection=(self)',
     'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY'
   };
@@ -141,7 +142,7 @@ export function createApp(options = {}) {
       if (path.startsWith(`${base}/api/`)) {
         if (req.method !== 'GET' && req.headers.origin !== origin) fail(403, 'Unrecognized origin');
         const route = path.slice((base + '/api').length);
-        if (route === '/config' && req.method === 'GET') return json(200, { base, appPaths:paths, mapTileURL, mapAttribution, ntfyAvailable:extraAlerts.available, dialCodes:env.DIAL_CODES_ENABLED!=='false', publicURL: publicURL.href.replace(/\/$/, ''), vapidPublicKey: env.VAPID_PUBLIC_KEY || null, experimental: true, cryptoEngine:'libsignal 0.105.1 / PQXDH', bootstrap: !store.get('SELECT id FROM users LIMIT 1'), turnConfigured: Boolean((env.TURN_SECRET && env.TURN_URLS) || (env.CF_TURN_KEY_ID && env.CF_TURN_API_TOKEN)) });
+        if (route === '/config' && req.method === 'GET') return json(200, { base, appPaths:paths, retiredAppPaths:retiredPaths, mapTileURL, mapAttribution, ntfyAvailable:extraAlerts.available, dialCodes:env.DIAL_CODES_ENABLED!=='false', publicURL: publicURL.href.replace(/\/$/, ''), vapidPublicKey: env.VAPID_PUBLIC_KEY || null, experimental: true, cryptoEngine:'libsignal 0.105.1 / PQXDH', bootstrap: !store.get('SELECT id FROM users LIMIT 1'), turnConfigured: Boolean((env.TURN_SECRET && env.TURN_URLS) || (env.CF_TURN_KEY_ID && env.CF_TURN_API_TOKEN)) });
         if(route==='/dial/connect'&&req.method==='POST')return await directory.connect(req,json);
         if(route==='/invite-info'&&req.method==='POST'){
           rate(`invite-info:${req.socket.remoteAddress}`,30);const b=await body(req);
@@ -282,10 +283,17 @@ export function createApp(options = {}) {
           const allowed = ['fcm.googleapis.com', 'updates.push.services.mozilla.com', 'web.push.apple.com', 'push.apple.com'];
           if (endpoint.protocol !== 'https:' || endpoint.port || !allowed.some(h => endpoint.hostname === h || endpoint.hostname.endsWith('.' + h)) || !b.keys?.p256dh || !b.keys?.auth || JSON.stringify(b).length > 4096) fail(400, 'Unsupported push service');
           if (store.get('SELECT endpoint FROM push WHERE endpoint=? AND owner<>?', b.endpoint, u.id)) fail(409, 'Subscription belongs to another device');
-          if (store.get('SELECT COUNT(*) AS n FROM push WHERE owner=?', u.id).n >= 5 && !store.get('SELECT endpoint FROM push WHERE endpoint=?', b.endpoint)) fail(429, 'Too many subscriptions');
+          const replaces=b.replaces===undefined?[]:b.replaces;
+          if(!Array.isArray(replaces)||replaces.length>5||replaces.some(value=>typeof value!=='string'||value.length>4096))fail(400,'Invalid previous subscriptions');
+          const previous=[...new Set(replaces)].filter(value=>value!==b.endpoint);
+          if(previous.some(value=>store.get('SELECT owner FROM push WHERE endpoint=?',value)?.owner!==u.id))fail(409,'Previous subscription is unavailable');
+          if (store.get('SELECT COUNT(*) AS n FROM push WHERE owner=?', u.id).n-previous.length >= 5 && !store.get('SELECT endpoint FROM push WHERE endpoint=?', b.endpoint)) fail(429, 'Too many subscriptions');
           const subscription=JSON.stringify({endpoint:b.endpoint,keys:{auth:b.keys.auth,p256dh:b.keys.p256dh}});
           const prior=store.get('SELECT subscription,confirmed FROM push WHERE endpoint=?',b.endpoint);
-          store.run('INSERT OR REPLACE INTO push(owner,endpoint,subscription,confirmed) VALUES(?,?,?,?)', u.id, b.endpoint, subscription,prior?.subscription===subscription?prior.confirmed:0); return json(200, { ok: true });
+          store.transaction(()=>{
+            for(const endpoint of previous)store.run('DELETE FROM push WHERE owner=? AND endpoint=?',u.id,endpoint);
+            store.run('INSERT OR REPLACE INTO push(owner,endpoint,subscription,confirmed) VALUES(?,?,?,?)', u.id, b.endpoint, subscription,prior?.subscription===subscription?prior.confirmed:0);
+          });return json(200, { ok: true });
         }
         if(route==='/push/status'&&req.method==='POST'){
           const b=await body(req),row=store.get('SELECT confirmed FROM push WHERE owner=? AND endpoint=?',u.id,b.endpoint||'');

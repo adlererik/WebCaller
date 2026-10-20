@@ -1,6 +1,6 @@
 {
   "name": "webcaller",
-  "version": "0.18.0-experimental.1",
+  "version": "0.18.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -22,7 +22,7 @@
     "web-push": "3.6.7",
     "ws": "8.21.0"
   },
-  "description": "Experimental Signal-like WebRTC phone with official libsignal PQXDH, Ed25519 signatures and optional call SAS",
+  "description": "Signal-like self-hosted WebRTC phone with libsignal PQXDH/Triple Ratchet, adaptive calls, encrypted chat and optional SAS",
   "license": "AGPL-3.0-only",
   "devDependencies": {
     "fake-indexeddb": "6.2.5",

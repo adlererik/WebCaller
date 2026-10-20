@@ -27,4 +27,10 @@ This application-specific integration has not had an independent security audit.
 
 References: [Matrix SAS](https://spec.matrix.org/latest/client-server-api/#short-authentication-string-sas-verification), [ZRTP commitment design](https://www.rfc-editor.org/rfc/rfc6189.html#section-4.4.1.1), [WebRTC media identities](https://www.rfc-editor.org/rfc/rfc8827.html#section-7.4). The word alphabet is MIT-licensed BIP-39 English; it is used only for display. See [its notice](../third_party/bip39/NOTICE.txt).
 
-The [source review](SECURITY_REVIEW.md) explains MITM, identity continuity and forward-secrecy limits; the [README](../README.md#forward-secrecy-mitm-and-comparison-with-signal) compares the design with Signal.
+The [source review](SECURITY_REVIEW.md) explains MITM, identity continuity and forward-secrecy limits; the [README](../README.md#how-it-compares-with-signal) compares the design with Signal.
+
+## Full identity fingerprint
+
+For a persistent identity check, open the chat and tap the contact's name/header. Compare **every group** of the displayed safety fingerprint in person or over an independent trusted channel. The display is SHA-256 of the sorted two application-identity fingerprints: 256 bits shown as grouped hexadecimal. It is WebCaller's pairwise format, not Signal's 60-digit safety number and not a display of a Signal root key. The signed prekey and persistent libsignal pin checks supply the additional binding. New browser/cleared storage may create a new identity; investigate key warnings rather than resetting pins to get past them.
+
+The maintainer deliberately chose human verification/pins instead of an external key-transparency service/auditor dependency. These do not supply directory-wide automatic transparency checks. Skipping SAS keeps calls usable but adds no human authentication. [Security tradeoffs](SECURITY.md#identity-verification-without-key-transparency).

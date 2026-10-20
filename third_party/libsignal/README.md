@@ -1,4 +1,4 @@
-# Official libsignal browser experiment
+# Official libsignal browser integration
 
 The browser uses unmodified official libsignal **v0.105.1**, commit `1738ead8a12ffe539f6309958123dadb16dc3b95`. `upstream/` is the pinned public Git submodule, `binding/` is the small custom AGPL-3.0-only Rust/WASM adapter and exact Cargo lock, and `oracle/` contains tests against official `@signalapp/libsignal-client` 0.105.1. This is not an official Signal browser SDK or supported Signal client.
 

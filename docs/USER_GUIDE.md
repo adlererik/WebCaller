@@ -1,6 +1,6 @@
 # Using WebCaller
 
-Experimental branch: use the separate installation in [Install](INSTALL.md). New encrypted transport is libsignal/PQXDH with Ed25519 application signatures; the normal workflow remains. Stable Olm accounts are not imported. [Security](SECURITY.md).
+This release uses libsignal/PQXDH with Ed25519 application signatures. [Install](INSTALL.md) · [Security](SECURITY.md) · [Olm upgrade planning](APPROVED_CUTOVER.md).
 
 ## Your browser is your device
 
@@ -147,7 +147,7 @@ During a connected voice/video call, four small words appear at the top. In vide
 
 Reading the words is optional: the call works without confirmation, including a child’s call. Skipping them gives no additional human verification. Matching words check this call’s connection under trusted software; they do not defeat malicious website code or prove the security of all earlier messages. They are not a password/recovery phrase and are cleared on hang-up/page exit. [How it works](CALL_VERIFICATION.md).
 
-Messages and files are end-to-end encrypted, but local readable history, metadata and browser/device traces have separate risks. Deleting a contact preserves minimal verification pins to resist identity replacement. Clearing site storage loses keys/history and those pins. See [security](SECURITY.md), [review](SECURITY_REVIEW.md) and [Signal comparison](../README.md#forward-secrecy-mitm-and-comparison-with-signal).
+Messages and files are end-to-end encrypted, but local readable history, metadata and browser/device traces have separate risks. Deleting a contact preserves minimal verification pins to resist identity replacement. Clearing site storage loses keys/history and those pins. See [security](SECURITY.md), [review](SECURITY_REVIEW.md) and [Signal comparison](../README.md#how-it-compares-with-signal).
 
 ## Optional extra ringing
 
@@ -188,3 +188,13 @@ Tap the call's back arrow to open your chat, then **+ → Gallery** for a photo/
 A strong connection can send much faster than earlier releases. Voice still takes priority: video temporarily reduces, and sharing may say **Waiting for connection · voice first** when the call needs the link. Leave the page visible; it resumes automatically when the call improves. Closing/backgrounding cancels the transfer, so choose it again when ready. Short disappearing timers may expire before a large file finishes; choose a longer timer or Off first.
 
 Verified encrypted media stays in this browser's cache until its local timer ends or it is deleted, subject to storage limits/eviction. Reopening the chat should use those bytes without downloading them again. A new browser/device has a separate cache. Very large files need enough phone memory/storage; failure to keep a local copy is reported and may require another download later.
+
+## Check the identity and live call
+
+In the chat, tap the contact's **name/header** to open the full safety fingerprint. Compare every group through a separate trusted channel or in person. It is a 256-bit pairwise hexadecimal identity check, not a password. During a call, compare **all four security words in order**. Matching words check the accepted call connection under the documented assumptions; skipping them does not interrupt the call and adds no manual verification. If words/fingerprint differ, stop sharing sensitive information and verify the real person elsewhere. The app deliberately does not depend on a third-party key-transparency service; manual checks/pins have different limits. [Security](SECURITY.md) · [SAS details](CALL_VERIFICATION.md).
+
+## Call screen and picture quality
+
+Video fills an upright call screen when both peers are upright; if either screen is sideways, both views use square fitting. Some edges can be cropped by display fitting. Controls and codec/rate rows fade after inactivity and return on a tap; the SAS, quality and elapsed time remain. Drag the small self preview to move it. The codec rows show measured voice/video **upload plus download payload rates**, not your internet plan's speed.
+
+Automatic mode uses the conservative cellular/unknown budget whenever either phone cannot confirm Wi-Fi. Healthy video can use up to 500 kbps each way there; voice stays first. Poor conditions lower quality, may pause video/files, and cautiously resume after improvement. A temporary radio gap is possible when walking between Wi-Fi/cellular. [Detailed policies](CALL_NETWORK.md).

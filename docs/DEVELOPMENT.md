@@ -1,4 +1,4 @@
-# Developing the experimental branch
+# Developing WebCaller
 
 Use Node 24+, Python 3, Git and a recursive source checkout. The bundled Signal/Vodozemac WASM runs in ordinary browsers; Rust is only for rebuilding it. Do not point development processes at a live database or hostname.
 
@@ -26,6 +26,6 @@ The oracle's pinned dependency tree currently reports the moderate [uuid buffer-
 
 The application suite includes explicit skips for three old Olm-account migration cases: this branch uses fresh libsignal accounts. Direct Vodozemac tests remain useful for its independent SAS and legacy sanity checks; passing them is not evidence that Signal transport works. The separate native oracle establishes that interoperability.
 
-CI runs source/syntax/tests/publishing and source-offer checks on this branch. Stable image publication is restricted to the stable branch; no experimental image/release is published automatically. Dockerfiles/source recipes are advanced development paths, not a tested prebuilt experimental bundle. Generated-phone media tests cannot establish audible quality, battery use, OS routing or locked-device alerts.
+CI runs source/syntax/tests/publishing and source-offer checks on this branch. Release-matched prebuilt images are published explicitly after CI tests on amd64/arm64; a branch push alone does not overwrite a published version. Container tests use disposable volumes. Generated-phone media tests cannot establish audible quality, battery use, OS routing or locked-device alerts.
 
 Original WebCaller source keeps its MIT notice; the combined libsignal distribution/integration uses AGPL-3.0-only. Preserve [licensing](../LICENSING.md), corresponding source and dependency notices. Report vulnerabilities privately via [SECURITY.md](../SECURITY.md).

@@ -2,10 +2,6 @@
 set -eu
 bundle_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 cd "$bundle_dir"
-if test -f EXPERIMENTAL-BRANCH; then
- echo 'This experimental branch has no prebuilt image. Follow docs/INSTALL_NATIVE.md; the stable Docker bundle contains Olm.' >&2
- exit 1
-fi
 image_value() { sed -n "s/^$1=//p" images.env; }
 setup_image=$(image_value SETUP_IMAGE)
 if test -z "$setup_image"; then echo 'Missing images.env. Extract the complete Docker bundle.' >&2; exit 1; fi

@@ -5,9 +5,14 @@ import {readFileSync,mkdtempSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {audit} from '../scripts/audit-source.mjs';
-test('experimental checkout refuses the stable prebuilt launcher before Docker or configuration is used',()=>{
+test('release bundle references its own version and refuses startup without private setup',()=>{
+ const version=JSON.parse(readFileSync('package.json')).version;
+ assert.equal(readFileSync('docker/VERSION','utf8').trim(),version);
+ const images=readFileSync('docker/images.env','utf8');
+ for(const suffix of ['','-setup','-turn'])assert.ok(images.includes('ghcr.io/adlererik/webcaller:'+version+suffix+'\n'));
+ assert.match(images,/BUNDLE_FORMAT=2/);
  const result=spawnSync('sh',['docker/webcaller','status'],{encoding:'utf8'});
- assert.notEqual(result.status,0);assert.match(result.stderr,/experimental branch has no prebuilt image/);
+ assert.equal(result.status,1);assert.match(result.stdout+result.stderr,/Run \.\/webcaller setup first/);
 });
 test('publishing guard accepts only the pinned official upstream gitlink and rejects substitution',t=>{
  const cwd=mkdtempSync(join(tmpdir(),'webcaller-publication-'));t.after(()=>rmSync(cwd,{recursive:true,force:true}));

@@ -1,6 +1,6 @@
-# Experimental source review and limits
+# Source review and limits
 
-Reviewed against the libsignal/PQXDH browser experiment and Ed25519 application signatures on 19 October 2026. This is a maintainer-assisted implementation review and test record, **not an independent audit, proof or Signal endorsement**. Historical stable Olm reviews do not certify this adapter.
+Reviewed against the libsignal/PQXDH integration, Ed25519 application signatures and v0.18.0 release changes through 20 October 2026. This is a maintainer-assisted implementation review and test record, **not an independent audit, proof or Signal endorsement**. Historical stable Olm reviews do not certify this adapter.
 
 ## Protections checked
 
@@ -13,10 +13,16 @@ Reviewed against the libsignal/PQXDH browser experiment and Ed25519 application 
 
 ## Unresolved boundaries
 
-The wrapper is custom; this is not an official supported browser API. Interoperability is not proof of secure composition. Recovery must reach each affected stream. Stored history/file keys remain accessible to a compromised usable origin/profile. Malicious website updates can use nonextractable keys and read plaintext. Existing test P-256 anchors remain trust anchors.
+The wrapper is custom; this is not an official supported browser API. Interoperability is not proof of secure composition. Recovery must reach each affected stream. Stored history/file keys remain accessible to a compromised usable origin/profile. Malicious website updates can use nonextractable keys and read plaintext. Existing P-256 anchors remain trust anchors.
 
 Outer signatures alter deniability. The native MAC is eight bytes, not the stable Olm MAC. PQXDH/SPQR does not make DTLS media, classical identity authentication or SAS post-quantum. No key transparency, Sealed Sender, anonymous transport or Signal-equivalent metadata protection is claimed.
 
 Real-device microphone quality, power, locked-screen sound, storage eviction, media pickers and radio handovers require physical trials. TURN allocation/page load is not an end-to-end call test. No zero-trace, universal screenshot prevention or forced closed-browser ringing claim is possible.
 
 [Verification commands](VERIFICATION.md) · [Binding/oracle](../third_party/libsignal/README.md) · [Threat model](SECURITY.md) · [SAS](CALL_VERIFICATION.md).
+
+## Release additions checked
+
+The release adds authenticated same-page handover recovery, acknowledged dead-socket detection, fresh correlated ICE generations and audio-gated video recovery. These change transport reliability, not cryptographic keys/algorithms. Retired routes reject old HTTP/WS paths without revealing the replacement, and push migration replaces only an authenticated owner's previous endpoints after the new subscription is accepted. Public source examples contain no deployment-specific paths.
+
+Release-matched Docker bundles explicitly select the libsignal engine and use a new bundle format so old Olm updaters cannot silently cross the protocol boundary. Complete source archives expand the pinned upstream gitlink and include the hosted corresponding-source offer. Independent review of the composition is still outstanding.

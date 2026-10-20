@@ -1,6 +1,6 @@
 # Optional extra ringing with self-hosted ntfy
 
-Experimental branch: use the separate installation in [Install](INSTALL.md). New encrypted transport is libsignal/PQXDH with Ed25519 application signatures; the normal workflow remains. Stable Olm accounts are not imported. [Security](SECURITY.md).
+This release uses libsignal/PQXDH with Ed25519 application signatures. [Install](INSTALL.md) · [Security](SECURITY.md) · [Olm upgrade planning](APPROVED_CUTOVER.md).
 
 WebCaller keeps its normal Web Push and encrypted WebSocket signaling. After a recipient confirms the locked-phone ntfy sound test, incoming calls prefer ntfy and suppress duplicate browser call alerts. Phones without confirmed ntfy use Web Push as before. This is an optional notification service, not a native telephone-call service or a guarantee of ringing through Silent mode, Focus, no connectivity, force-stop, denied permissions or battery restrictions.
 

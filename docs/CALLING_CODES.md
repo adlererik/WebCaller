@@ -1,6 +1,6 @@
 # Call by code
 
-Experimental branch: use the separate installation in [Install](INSTALL.md). New encrypted transport is libsignal/PQXDH with Ed25519 application signatures; the normal workflow remains. Stable Olm accounts are not imported. [Security](SECURITY.md).
+This release uses libsignal/PQXDH with Ed25519 application signatures. [Install](INSTALL.md) · [Security](SECURITY.md) · [Olm upgrade planning](APPROVED_CUTOVER.md).
 
 A calling code is a public address inside this WebCaller server. You can keep using invitations too. There is no SIM, mobile number, account password or app-store download to arrange.
 

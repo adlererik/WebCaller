@@ -1,6 +1,6 @@
 # Configuration reference
 
-Use a separate directory/database/origin and [experimental native service](INSTALL_NATIVE.md). The stable prebuilt launcher/images do not install this branch. `WEBCALLER_TEST_INSTANCE=libsignal-preview-v1` is required; there is no runtime switch back to Olm.
+Use [native installation](INSTALL_NATIVE.md), the release-matched [Docker bundle](../docker/README.md), or a source build. Fresh setups select `WEBCALLER_CRYPTO_ENGINE=libsignal-pqxdh-v1`; there is no runtime switch back to Olm. Existing Olm data requires an explicit backed-up migration.
 
 Copy `.env.example` or use the installer/setup command. `.env` is private, ignored by Git and never copied into the image/release. Values are plain `KEY=value`; use single-line values without surrounding quotes in the supplied helpers. Never paste the file into an issue.
 
@@ -8,7 +8,8 @@ Copy `.env.example` or use the installer/setup command. `.env` is private, ignor
 |---|---|
 | HOST | Native HTTP bind, default loopback. Compose overrides to 0.0.0.0 inside the container |
 | PORT | `.env.example` uses separate native port 8088; Compose uses internal 8080 |
-| WEBCALLER_TEST_INSTANCE | Must equal libsignal-preview-v1 for direct startup of this branch; not needed by stable WebCaller |
+| WEBCALLER_CRYPTO_ENGINE | Explicit libsignal-pqxdh-v1 transport selection, set by new setup/Docker defaults; do not silently reuse Olm state |
+| WEBCALLER_TEST_INSTANCE | Legacy isolated preview startup flag libsignal-preview-v1; accepted for existing previews, not needed for a new release installation |
 | PUBLIC_URL | Canonical full HTTPS origin/path, e.g. https://calls.example.com/calls with your own domain substituted; determines allowed Origin and path |
 | APP_PATH_ALIASES | Optional comma-separated previous paths on the same origin, e.g. /calls when PUBLIC_URL ends in /com; share the existing accounts and service |
 | APP_RETIRED_PATHS | Optional comma-separated removed paths, disjoint from active paths. The website bridge returns 404 without revealing the replacement. Open the new address on each phone so it can migrate permitted browser alerts. |
@@ -52,7 +53,7 @@ Map configuration is public through `/api/config`; never put secret keys in thes
 
 Leave `NTFY_PUBLIC_URL`, `NTFY_PUBLISH_URL` and `NTFY_PUBLISH_TOKEN` all empty to use only normal Web Push. Enabling ntfy requires all three together; a partial configuration fails startup. `NTFY_IOS_UPSTREAM` describes the ntfy server's actual upstream setup rather than configuring it. Phone subscriptions have their own random read-only addresses, not the publisher token or a shared password. See [Extra ringing](EXTRA_RINGING.md) for setup, isolation, retention and the iPhone wake-up limitation.
 
-## Stable prebuilt Docker reference (not this branch)
+## Prebuilt Docker reference
 
 The [Docker bundle](../docker/README.md) separates release-pinned `images.env` from private `.env` installation choices and `config/app.env`, `config/turn.env`, ntfy/proxy configuration and a private optional connector-token file. App data, ntfy auth state and its publisher credential use separate persistent volumes; ntfy never mounts the app database or app environment. Use the supplied wrapper so both environment files are loaded. The setup wizard refuses existing configuration; upgrades preserve it.
 

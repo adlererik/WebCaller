@@ -1,103 +1,112 @@
-# WebCaller — experimental libsignal / PQXDH
+# WebCaller
 
-A **Signal-like WebRTC phone** for Android, iPhone and desktop browsers: adaptive voice/video, encrypted chat, pictures, files and simple invitations. No SIM card, account password or phone number is required. This is an independent project, not a Signal client or a way to contact Signal users.
+**A Signal-like WebRTC phone for Android, iPhone and desktop.** High-quality adaptive voice/video, end-to-end encrypted messages and media, simple invitations and optional calling codes. No SIM card, phone number or account password is required. The phone runs in your browser; you host the server.
 
-**This branch is an experimental browser integration of official libsignal v0.105.1, with PQXDH and Ed25519 application signatures.** It is based on WebCaller v0.17.1, but is not a stable release, an audited messenger or an in-place upgrade for the Olm version on [`main`](https://github.com/adlererik/WebCaller/tree/main). Use a separate installation, HTTPS hostname and fresh accounts. [Beginner installation](docs/INSTALL.md) · [All features](docs/FEATURES.md) · [Security model](docs/SECURITY.md).
+[Install on your server](docs/INSTALL.md) · [Download v0.18.0](https://github.com/adlererik/WebCaller/releases/tag/v0.18.0) · [All features](docs/FEATURES.md) · [How to use it](docs/USER_GUIDE.md) · [Security explained](docs/SECURITY.md)
 
-The stable release's Docker downloads/images still contain Olm. They do **not** install this branch. Start with the native experimental guide. Nothing in this branch automatically changes an existing server.
+**v0.18.0 brings the official libsignal core, PQXDH and Triple Ratchet to the main release.** The cryptographic core is upstream Signal code; its browser binding, storage integration and optional call-verification exchange are WebCaller code and remain unaudited. This is an independent project, not an official Signal client. It cannot call Signal or WhatsApp users, and using the same core does not give it Signal's overall security assurance. Earlier Olm installations need a planned migration, not an ordinary overwrite. [Upgrade guide](docs/APPROVED_CUTOVER.md).
 
-## Why this experiment exists
+## Why I built it this way
 
-On the stable branch I chose Olm Double Ratchet for practical calling and classical forward secrecy. Here I am testing the official Signal protocol core in the browser, including its post-quantum session agreement and ratcheting. This lets us evaluate extra startup, storage, bandwidth and integration work with real phones instead of guessing. The protocol implementation is upstream; the browser/storage adapter and WebCaller integration are experimental.
+I wanted something a nontechnical relative could open and understand: accept an invitation, choose a name and talk. I also wanted control over my own server, good sound on poor connections and no compulsory telephone-number directory. The interface follows familiar Signal-style calling and messaging patterns, with extra controls tucked into Settings.
 
-I still want invitations and calling codes ordinary people can use without giving a phone number. The four visible call words remain an optional human check. You can ask someone to read them aloud; forgetting does not stop the call. This does not replace key transparency's directory-consistency checks, and key transparency does not inherently require phone numbers.
+I started with Olm Double Ratchet for classical forward secrecy. This release moves new message and signaling sessions to the official **libsignal 0.105.1** implementation, with **PQXDH and Triple Ratchet/SPQR**. I chose an established protocol implementation instead of inventing a message cipher. The application around that library still needs careful testing and independent review.
 
-For a serious nation-state threat, I would worry about a compromised phone or malicious website code as well as the encryption. A phone exploit can expose the microphone and plaintext without breaking a cipher. Excellent cryptography cannot repair an owned endpoint; this project is not interception-proof. **Stay tuned… I’m working on an embedded device for encrypted calls, much like a Trezor hardware wallet—but for calls ;)** That remains a separate project in development.
+**I chose not to depend on a third-party key-transparency service or its auditors.** WebCaller instead combines trusted invitations, locally pinned identities, a full pairwise safety fingerprint and an optional four-word check during calls. That is a deliberate dependency/usability choice, not a claim that human checks provide key transparency's automatic, directory-wide consistency guarantees. Key transparency does not inherently require a phone number. [What this choice protects—and what it leaves to you](docs/SECURITY.md#identity-verification-without-key-transparency).
 
-## What you can do
+Against a nation-state adversary, I would worry about a compromised phone or malicious website update as much as cryptanalysis. An exploit such as Pegasus can get at the microphone or plaintext without breaking the encryption. This applies to excellent messengers too; it is not evidence that Signal's protocol is broken. Don't assume anything on an owned phone is safe. **Stay tuned… I'm working on an embedded device for encrypted calls, much like a Trezor hardware wallet—but for calls ;)** That is a separate project in development.
 
-| Area | Included features |
+## What is included
+
+| Feature | What it does |
 |---|---|
-| Reach someone | One-use invitations, private first-phone QR, optional user-chosen 4–12 digit calling codes, remembered contacts, search and local contact names. Video defaults, with voice-only calling available. |
-| Calls | One-to-one full-duplex voice/video, front/back cameras, mute, camera on/off, chat during calls and browser-supported audio-output selection. Complete frames fit portrait/landscape screens. |
-| Sound and bandwidth | Opus, requested AEC/NS/AGC, FEC and DTX; automatic audio-first adaptation, video reduction/pause, Wi-Fi/mobile budgets and ICE recovery. Complete outages can still interrupt calls. |
-| Video | Conditional AV1 → H.265/HEVC → VP9 → H.264 → VP8 efficiency preference when both browsers report efficient encoding **and** decoding; compatible fallbacks remain. Hardware use is browser-controlled. |
-| Chat | Encrypted text, typing indicators, delivered/read marks, replies, sender-only edits, reactions, forwarding, copy, selection, info, pinning and deletion for both participants. System/light/dark themes and familiar composer controls. |
-| Media | Inline images/video, full-screen viewing/playback, gallery/files, camera capture, voice notes and current-location sharing with platform map links. Up to **200 MiB per file**. |
-| Sharing during calls | Bounded parallel encrypted transfer, percentage/spinner placeholders, retry/cancellation and audio-aware pacing. Video yields capacity; severe audio trouble pauses transfer. Retained cached media is reused, subject to browser storage limits. |
-| Message lifetime | Off, presets and custom seconds/minutes/hours/days/weeks up to four weeks. Sender countdown starts when sent; recipient countdown starts on first viewing. State survives refresh. Unread ciphertext can remain after sender expiry. |
-| Alerts | Neutral message notices open the conversation. Web Push requests call sound and Answer/Decline where supported. Optional self-hosted ntfy adds priority-5 alerts with a per-phone sound/opening test and avoids duplicate browser call pushes. |
-| Mobile video | Up to 500 kbps in each direction, with lower resolution/frame rate on poor links, voice-first pauses and cautious periodic recovery probes. |
-| Call header | Aligned audio/video codec and kbps/Mbps rows fade with video controls. Centered four-word SAS, quality and timer stay visible; drag the fixed-size self preview. Rates describe codec payload, not carrier billing. |
-| Hosting | Native Node.js/SQLite, HTTPS/WSS signaling, direct WebRTC where possible, TURN fallback and optional Cloudflare Tunnel for the website. A Tunnel is not a TURN relay. |
+| Simple contact setup | Private first-phone QR, one-use invitations, optional recipient name, optional unique 4–12 digit calling codes, remembered contacts and local contact renaming. No mandatory telephone number. |
+| Voice and video | One-to-one full-duplex calling, video by default, voice-only option, mute, camera toggle, front/back cameras and browser-supported output selection. |
+| Good sound first | Opus, requested echo cancellation, noise suppression, gain control, in-band FEC and DTX; browser packet-loss concealment, jitter buffering and congestion control. Video/files yield before voice. |
+| Efficient video | AV1, H.265/HEVC, VP9, H.264 and VP8 when the browsers expose them. Both phones' encode/decode efficiency reports influence selection; compatible fallbacks remain available. |
+| Changing networks | Automatic bitrate, frame-rate and resolution adaptation; tiny video, pause/recovery probes, authenticated signaling recovery and fresh ICE restarts during Wi-Fi/cellular changes. |
+| Practical mobile budgets | Up to 500 kbps sent and 500 kbps received for video when either end is cellular/unknown. Confirmed Wi-Fi can use 900 kbps per direction. Audio/headers/files are additional. |
+| Modern call screen | Immersive upright view, square layout when either screen is sideways, fading controls/codec rows, persistent SAS/quality/timer and a draggable fixed-size self preview. |
+| Encrypted chat | Text, typing animation, replies, sender-only edits, reactions, forwarding, copy, selection, pinning, message information and deletion for both people. |
+| Media and files | Up to 200 MiB per item; inline pictures/video/audio, full-screen viewer, captions, gallery/file picker, front/back photo capture, voice notes and current-location map cards. |
+| Sharing while talking | Up to four paced encrypted upload/download workers, weak-link parts, retry/cancellation and percentage placeholders. Video temporarily yields capacity; poor audio pauses file traffic. |
+| Media that stays available | Complete encrypted local media caching avoids another transfer when reopening a chat, until expiry/deletion or browser storage eviction. |
+| Disappearing messages | One-hour default for new conversations; Off, presets and custom number/unit wheels through four weeks. Separate sender/send and recipient/first-view countdowns. |
+| Call and message alerts | Neutral message notifications open the intended chat. Web Push requests call sound and Answer/Decline where supported. Optional self-hosted ntfy priority-5 alerts avoid duplicate browser call pushes, with failure fallback. |
+| Appearance and privacy controls | System/light/dark appearance, configurable local page title, settings behind a cog, no plaintext message content in notifications, no application asset cache in the service worker. |
+| Self-hosting | Native Node/SQLite, source-built Docker or the guided prebuilt Docker bundle; HTTPS/WSS, STUN/ICE, authenticated TURN and optional Cloudflare Tunnel. Configurable paths and safe retirement of previous routes. |
 
-See [Features](docs/FEATURES.md), [User guide](docs/USER_GUIDE.md), [Calling codes](docs/CALLING_CODES.md) and [Call networking](docs/CALL_NETWORK.md). A website cannot force a closed phone to ring, select an unexposed earpiece, prevent all screenshots or erase browser/OS history. iPhone background Web Push requires the website's Home Screen icon; stock ntfy iPhone wake-up also uses platform push infrastructure and the configured upstream wake-up relay. [Alerts](docs/CALL_ALERTS.md) · [Extra ringing](docs/EXTRA_RINGING.md) · [Browser privacy](docs/BROWSER_PRIVACY.md).
+[Complete feature reference](docs/FEATURES.md). Browser restrictions still matter: a website cannot guarantee ringing after the OS suspends it, force an unexposed earpiece, prevent every screenshot or erase browser/OS history. iPhone browser call alerts require a Home Screen web app. Optional ntfy requires its client; stock iPhone ntfy wake-up also uses platform push infrastructure. [Alerts](docs/CALL_ALERTS.md) · [ntfy](docs/EXTRA_RINGING.md).
 
-## Encryption used here
+## Security in plain English
 
-Content is end-to-end encrypted when browsers run trusted code and authenticate the intended contact keys. The website/CDN/operator still supplies executable JavaScript; a malicious update can use keys or read plaintext on the phone.
+Your phones encrypt message content, attachment keys and call setup before sending them through the server. The server routes ciphertext. Live sound/video is encrypted by WebRTC between the peers, including when a TURN relay carries it. The server still sees account/contact/routing/timing/size information, and it supplies the JavaScript your phone runs. Self-hosting gives you control; it does not make the website incapable of attacking its clients.
 
-| Component | Algorithms and implementation | Meaning and limits |
-|---|---|---|
-| Initial message/signaling session | Official **PQXDH**, **X25519 + Kyber-1024**, libsignal v0.105.1 | Explicit session version 4; no silent classical v3 session. Kyber-1024 must not be relabeled ML-KEM-1024. |
-| Ongoing ratchet | Upstream **Double Ratchet + SPQR**, the **Triple Ratchet**; SPQR v1.6.0 uses **ML-KEM-768** | Native/WASM tests observe SPQR traffic in both directions. Recovery needs fresh uncompromised exchanges in the affected stream and loss of attacker access. |
-| Ratcheted messages | **AES-256-CBC**, **HMAC-SHA-256**, **HKDF-SHA-256** | Upstream Signal message MAC: **8 bytes / 64 bits**, not Olm's 32-byte MAC. WebCaller additionally authenticates envelopes with Ed25519. |
-| Application signatures | Native Web Crypto **Ed25519**; libsignal keeps its internal **XEdDSA/Curve25519** machinery | New identities use Ed25519 directly. Earlier test P-256 identities certify a nonextractable Ed25519 signer with **ECDSA P-256/SHA-256**, preserving pins/history. Outer signatures reduce deniability. |
-| Attachments and local wrapped records | **AES-256-GCM**, 128-bit tags | Fresh per-file keys and authenticated chunks; keys/manifests are ratcheted. A separate nonextractable browser wrapping key does not protect against an attacker controlling the origin/profile. |
-| Live voice/video | Browser-negotiated **DTLS-SRTP** | Separate from the message ratchet. Live media is **not made post-quantum secure**; no fixed SRTP AES key size is promised. |
-| Optional four-word SAS | Fresh **X25519**, **SHA-256** commitment, **HKDF-SHA-256/HMAC-SHA-256** | A 44-bit comparison bound to call ID, roles, authenticated identities and accepted media certificate fingerprints. No ratchet secret is exported. |
-| Compatibility-only history | Historical P-256 signatures; authorized v1 **ECDH P-256 / HKDF-SHA-256 / AES-256-GCM** | Earlier test history remains readable; new traffic cannot downgrade to v1. This is not an Olm-account migration. |
-| Website and notifications | **HTTPS/WSS**, TURN REST **HMAC-SHA-1** credentials, Web Push **ECDSA P-256 VAPID** | Delivery mechanisms separate from content encryption. Relevant services still see delivery/network metadata. |
-
-Official core pin: [`1738ead8a12ffe539f6309958123dadb16dc3b95`](https://github.com/signalapp/libsignal/tree/1738ead8a12ffe539f6309958123dadb16dc3b95). The [binding/build guide](third_party/libsignal/README.md), exact lockfiles, pinned upstream source submodule and matching official Node oracle are included. [Provenance](public/vendor/signal/provenance.json) records the checked WASM hash. Vodozemac remains for the separate SAS primitive and legacy regression checks; it no longer encrypts new messages/signaling.
-
-### Forward secrecy, MITM and comparison with Signal
-
-| Property | This experiment | Signal |
-|---|---|---|
-| Protocol | Pinned official libsignal through a custom browser adapter, PQXDH and current ratcheting | Maintained protocol and supported clients. [Specifications](https://signal.org/docs/). |
-| Past traffic | Discarded ratchet secrets protect transport; retained history/file keys remain separate exposures | Ratcheting also does not erase retained endpoint history. [Ratchet design](https://signal.org/docs/specifications/doubleratchet/). |
-| MITM checks | Invitation fingerprints, persistent application/libsignal pins and optional SAS; calling-code first contact trusts initial mapping | Safety numbers and, where supported, automatic key verification/key transparency. [Safety numbers](https://support.signal.org/hc/en-us/articles/360007060632-What-is-a-safety-number-and-why-do-I-see-that-it-changed). |
-| Client delivery | Origin/operator controls newly delivered executable JavaScript | Installed clients separate delivery-server replies from application updates. |
-| Metadata/deniability | No Sealed Sender or key transparency; routing/timing/size metadata remains. Extra public signatures reduce deniability | Different application protections, including [Sealed Sender](https://signal.org/blog/sealed-sender/). Neither guarantees anonymity. |
-| Assurance | Unaudited browser/storage/signature/SAS integration and limited device testing | Much more external scrutiny, supported clients and operational experience. Same core does not mean same overall assurance. |
-
-Classical Ed25519/P-256 authentication, the SAS and DTLS media remain separate from hybrid message secrecy. This is not a claim of Signal-equivalent security or protection against endpoint compromise. [Threat model](docs/SECURITY.md) · [Source review](docs/SECURITY_REVIEW.md) · [PQXDH](https://signal.org/docs/specifications/pqxdh/) · [SPQR](https://signal.org/blog/spqr/).
-
-### Use the four call words
-
-Read **all four words in order** to each other during the call. They appear at the top beside the name; codecs/rates and quality sit underneath. Matching words check the accepted connection under trusted-client/protocol assumptions. A mismatch means this check has not authenticated the call: stop sharing sensitive information and reconnect/verify through a trusted channel. Skipping comparison leaves the call working but gives no additional human verification. [Exchange details](docs/CALL_VERIFICATION.md).
-
-## Try it on your own server
-
-Use a new hostname, directory/database, owner token and VAPID keys. A different path on an existing hostname is **not** browser-storage isolation. Keep any stable installation and phone storage intact.
-
-```sh
-git clone --recurse-submodules --branch codex/experimental-libsignal-pqxdh https://github.com/adlererik/WebCaller.git WebCaller-Experimental
-cd WebCaller-Experimental
-npm ci --ignore-scripts
-npm run setup
-npm run prepare:source
-```
-
-Node.js 24+, Python 3 and Git are needed; Rust is only for rebuilding WASM. Edit the new private `.env` for your HTTPS hostname/relay and keep `WEBCALLER_TEST_INSTANCE=libsignal-preview-v1`. Follow the [native guide](docs/INSTALL_NATIVE.md) for a private Node runtime, boot service, HTTPS and first-phone QR. Local desktop testing can use `PUBLIC_URL=http://localhost:8088/calls` and `PORT=8088`, then `npm start`; phones require HTTPS.
-
-Both participants must use the experimental origin. Stable Olm accounts/sessions cannot be imported. Earlier libsignal/P-256 test accounts keep their identities/history using certified Ed25519 signers; refresh **both** phones without clearing site data.
-
-## Verification and documentation
-
-Before public packaging, the experiment passed **255 application tests, zero failures, three explicit skips** for inapplicable old Olm migration cases. Three official-native interoperability tests passed, including both initiation directions and SPQR traffic. Browser checks covered old/new signing identities, messages, reload persistence, calls and matching SAS. A generated-data 200 MiB encrypted attachment round trip passed. These are not an independent audit or a physical-phone audio/alert/hand-over guarantee. [Reproducible verification](docs/VERIFICATION.md).
-
-| Guide | Contents |
+| Layer | What this release actually uses |
 |---|---|
-| [Install](docs/INSTALL.md) / [Native server](docs/INSTALL_NATIVE.md) | Separate setup, HTTPS, TURN, owner QR and phones |
-| [User guide](docs/USER_GUIDE.md) / [Features](docs/FEATURES.md) | Calls, chat, media, settings and limitations |
-| [Security](docs/SECURITY.md) / [Call words](docs/CALL_VERIFICATION.md) | Algorithms, pins, SAS and metadata |
-| [Architecture](docs/ARCHITECTURE.md) / [Build libsignal](third_party/libsignal/README.md) | Adapters, wire framing, build and native oracle |
-| [Configuration](docs/CONFIGURATION.md) / [Networking](docs/NETWORKING.md) | Private secrets, TURN, CGNAT, proxies and signaling |
-| [Alerts](docs/CALL_ALERTS.md) / [Extra ringing](docs/EXTRA_RINGING.md) | Android/iPhone, optional ntfy and sound tests |
-| [Operations](docs/OPERATIONS.md) / [Development](docs/DEVELOPMENT.md) | Backups, updates, browser state and source distribution |
+| Session establishment | **PQXDH v4: X25519 + Kyber-1024**, with signed prekeys and libsignal's internal **XEdDSA** authentication. Classical-only v3 sessions are rejected by the binding. |
+| Ongoing encryption | Official **Double Ratchet + Sparse Post-Quantum Ratchet (SPQR)**, combined as **Triple Ratchet**. Pinned SPQR 1.6.0 uses **ML-KEM-768**. |
+| Ratcheted message cipher | Upstream v4 **AES-256-CBC**, **HKDF-SHA-256** and **HMAC-SHA-256**, with libsignal's **8-byte/64-bit message MAC**. This is authenticated upstream protocol encryption, not bare CBC. |
+| Extra application authentication | Native Web Crypto **Ed25519** signatures cover encrypted envelopes and prekey publications. Existing P-256 identities can certify an Ed25519 signer without changing their stored fingerprint. |
+| Attachments/local wrapped records | **AES-256-GCM**, with 128-bit authentication tags. Each file has a fresh 256-bit key and indexed authenticated chunks; its key travels inside a ratcheted message. |
+| Live voice/video | Browser-negotiated **DTLS-SRTP**. PQXDH/Triple Ratchet does **not** make live media post-quantum encrypted. The browser selects the media cipher; no universal AES size or ChaCha20-Poly1305 promise is made. |
+| Four call words | Fresh **X25519**, **SHA-256** commitment and **HKDF/HMAC-SHA-256** key confirmation, with four 11-bit word indices: **44 comparison bits**. Bound to accepted media certificate fingerprints and authenticated identities. |
+| Full safety fingerprint | A **256-bit SHA-256 pairwise fingerprint** of the two application identities, shown as grouped hexadecimal. This is WebCaller's format, not Signal's 60-digit safety number. |
+| Delivery/relay credentials | **HTTPS/WSS**, Web Push **P-256 VAPID** authentication, short-lived TURN REST credentials made with **HMAC-SHA-1**. These are separate from conversation encryption. |
+
+Kyber-1024 in PQXDH and ML-KEM-768 in SPQR are different components; the initial KEM is not labeled ML-KEM-1024. Classical Ed25519/XEdDSA authentication and WebRTC media remain distinct from post-quantum message secrecy. The exact pin, binding source, locks, checksums and native interoperability tests are [included](third_party/libsignal/README.md).
+
+**Forward secrecy:** discarding used ratchet keys limits what a later stolen session state reveals about previously recorded traffic. **Post-compromise recovery:** fresh uncompromised ratchet exchanges can protect future traffic after an attacker loses access. Neither mechanism removes saved history/file keys from a phone, fixes a stolen identity, or defeats a continuously compromised endpoint. Each affected message/signaling stream needs to recover. [Full security model](docs/SECURITY.md).
+
+### Verify the person and the call
+
+1. **For a live call:** both people read all four displayed words, in order, and check they match exactly. They sit at the top of the call and remain when controls fade. Words are local UI, not pixels burned into the outgoing video. Forgetting the comparison never blocks the call; it also gives no extra human verification.
+2. **For the saved identity:** open the chat and **tap the contact's name/header**. Compare the entire grouped safety fingerprint in person or through a separate trusted channel. Compare it again after a genuine device/identity change. A name or calling code alone is not proof.
+3. **If either check differs:** stop exchanging sensitive information and investigate through a trusted channel. Do not assume a key warning is just a network issue.
+
+SAS is fresh per accepted media context, survives ordinary ICE handovers and is cleared at hang-up. Four words are a compact comparison, not a secret key, recovery phrase or guarantee of global uniqueness. [How the exchange works](docs/CALL_VERIFICATION.md).
+
+### How it compares with Signal
+
+| Property | WebCaller v0.18.0 | Signal |
+|---|---|---|
+| Protocol core | Pinned official libsignal through a custom WASM/storage adapter | Official maintained clients and protocol integration |
+| Message forward secrecy/PQ | PQXDH + Double/Triple Ratchet; persistence, history and recovery limits apply | Maintained protocol with supported clients and much wider scrutiny |
+| Identity verification | Trusted invitations, persistent pins, full pairwise fingerprint and optional media-bound SAS | Safety numbers and supported automatic verification/key transparency |
+| Key-transparency dependency | No external key-transparency service/auditors; human verification is the operator's choice | Automatic verification adds directory-consistency checks with independent auditors |
+| Media | DTLS-SRTP browser transport, authenticated setup and optional SAS binding | A separate supported calling stack; a shared message library does not make calls identical |
+| Metadata | Self-hosted directory/relay control, no mandatory phone number; no Sealed Sender or traffic anonymity | Includes application protections such as Sealed Sender; not anonymity or endpoint immunity |
+| Application delivery | Website/operator/CDN can deliver new executable client code on load | Installed signed clients have a different update/distribution boundary |
+| Assurance | Unaudited integration and limited physical-device coverage | Substantially more security review, deployment experience and supported testing |
+
+Signal's design is the inspiration, not a certification. Read [Signal's PQXDH specification](https://signal.org/docs/specifications/pqxdh/), [ratchet specification](https://signal.org/docs/specifications/doubleratchet/), [automatic verification explanation](https://signal.org/blog/automatic-key-verification/) and [Sealed Sender description](https://signal.org/blog/sealed-sender/) for their guarantees. [Our strengths and limitations](docs/SECURITY.md#strengths-and-remaining-risks).
+
+## Audio and video quality
+
+Opus is the preferred conversation codec: it handles speech efficiently and changes bitrate as conditions change. Echo/noise/gain processing is requested from the browser; codec FEC, DTX, jitter buffering and concealment help with loss and silence. These are browser-negotiated capabilities, not switches that JavaScript can universally force. Voice-note recording separately uses browser-supported MP4/AAC or WebM/Ogg Opus; it is not the live call codec. Other RTP audio fallbacks depend on the browser; Opus is the preferred conversation path.
+
+For video, the preference among **mutually reported smooth, power-efficient encode/decode variants** is **AV1 → H.265/HEVC → VP9 → H.264 → VP8**. Think of this as an efficiency preference, not an absolute picture-quality ranking: bitrate, hardware, resolution and scene content matter. H.264/VP8 remain practical fallbacks. Both encode **and** decode efficiency must be reported at both ends; an AV1 playback decoder alone is insufficient. The browser ultimately controls hardware acceleration.
+
+High compression leaves more bandwidth for a clear picture, but software encoding on a slow phone can cost power and hurt quality. WebCaller checks reported efficiency, lowers capture load under sustained CPU pressure and can negotiate a supported efficient alternative. It adapts bitrate/frame rate/resolution without changing codec on every fluctuation. On weak links it preserves tiny video where usable, pauses if necessary and periodically probes recovery while protecting voice. [Budgets, transfer pacing, codecs, ICE and handovers](docs/CALL_NETWORK.md).
+
+## Get it running
+
+Choose **one** installation method:
+
+- **Guided prebuilt Docker bundle:** download `WebCaller-Docker-v0.18.0.tar.gz` from the release, extract it, then run `./webcaller setup`, `./webcaller start` and `./webcaller qr`. The wizard configures the optional HTTPS/TURN/ntfy services. [Step-by-step guide](docker/README.md).
+- **Native Debian, no Docker:** use the complete [native guide](docs/INSTALL_NATIVE.md) for Node, private configuration, HTTPS, boot service, TURN and the private first-phone QR.
+- **Build from source:** recursively clone the tagged release, install dependencies, generate private setup keys and build the source offer. The root Compose file can also build a container locally. [Installation choices](docs/INSTALL.md).
+
+You need a server, a domain/HTTPS address and a reachable TURN relay for reliable calls across difficult networks. A Cloudflare Tunnel can carry the website and WebSockets; it cannot relay WebRTC media. CGNAT usually requires a separate public TURN server. A successful relay allocation is useful but not a complete call test.
+
+Scan the private owner QR with the first phone. Other people use invitations or an optional calling code; **never send them server passwords or owner setup credentials**. On iPhone follow Add to Home Screen and use that icon for calls/alerts. Then test messages, a call both ways, all four words, a photo during a call, locked-screen alerts and a Wi-Fi/cellular transition.
+
+## Documentation and verification
+
+[Features](docs/FEATURES.md) · [User guide](docs/USER_GUIDE.md) · [Install](docs/INSTALL.md) · [Native setup](docs/INSTALL_NATIVE.md) · [Docker](docker/README.md) · [Networking](docs/NETWORKING.md) · [Call adaptation](docs/CALL_NETWORK.md) · [Configuration](docs/CONFIGURATION.md) · [Calling codes](docs/CALLING_CODES.md) · [Alerts](docs/CALL_ALERTS.md) · [ntfy](docs/EXTRA_RINGING.md) · [Operations/backups](docs/OPERATIONS.md) · [Security](docs/SECURITY.md) · [SAS](docs/CALL_VERIFICATION.md) · [Source review](docs/SECURITY_REVIEW.md) · [Architecture](docs/ARCHITECTURE.md) · [Development](docs/DEVELOPMENT.md)
+
+Release checks include application tests, official-native libsignal interoperability in both directions/SPQR exchange, source/WASM provenance, secret scanning, installation/bundle checks and container smoke tests. See [the exact evidence and commands](docs/VERIFICATION.md). Tests are not an independent audit or a guarantee of sound, battery life, notification delivery or radio handover on every phone.
 
 ## License
 
-This combined experimental distribution uses **AGPL-3.0-only** because it links libsignal. Original WebCaller code retains its [MIT notice](LICENSE-MIT); Vodozemac is Apache-2.0 and other components retain their licenses. Preserve [notices](THIRD_PARTY_NOTICES.md) and corresponding source when distributing/operating the combined work. `npm run prepare:source` creates the hosted source download without private configuration/state. [Licensing](LICENSING.md) · [Security reporting](SECURITY.md).
+The combined libsignal distribution is **AGPL-3.0-only**. Original application code retains its [MIT notice](LICENSE-MIT); Vodozemac is Apache-2.0. Preserve [dependency notices](THIRD_PARTY_NOTICES.md) and provide corresponding source when required by the [license](LICENSING.md). Release source archives include the pinned upstream source; GitHub's automatic archives do not expand submodules.

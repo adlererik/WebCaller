@@ -1,6 +1,6 @@
-# Experimental distribution licensing
+# Distribution licensing
 
-The integration and combined experimental distribution are **AGPL-3.0-only** because they link libsignal. [LICENSE](LICENSE) contains the full text. The upstream license is also retained in the pinned source submodule and [browser vendor directory](public/vendor/signal/LICENSE-AGPL.txt). This branch is not the stable MIT-only application distribution.
+The integration and combined distribution are **AGPL-3.0-only** because they link libsignal. [LICENSE](LICENSE) contains the full text. The upstream license is also retained in the pinned source submodule and [browser vendor directory](public/vendor/signal/LICENSE-AGPL.txt). Earlier MIT-only Olm releases retain their original licensing.
 
 The original WebCaller application retains its [MIT grant and copyright](LICENSE-MIT). Permissive/Apache licenses on original and dependency components remain attached to them. New binding and signature-integration files are distributed here under AGPL-3.0-only; this does not revoke prior MIT releases.
 

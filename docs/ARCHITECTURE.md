@@ -42,7 +42,7 @@ flowchart LR
 | public/message-expiry.js | Compact expiry formatting and isolated countdown DOM updates |
 | public/transfer-state.js | Validation, version ordering and expiry of transient encrypted upload placeholders |
 | public/call-intents.js | Atomic one-use notification answer decision store, scoped to device/call with a 30-second validity limit |
-| public/sw.js | Call-state checks, generic notifications, foreground-ring coordination, notification actions and taps; no fetch cache |
+| public/sw.js | Bounded call-state checks, generic notifications, independent sound requests, notification actions and taps; no fetch cache |
 | public/call-setup.js | Phone detection, Home Screen guidance, notification permission and heard-alert verification |
 | public/manifest.webmanifest | Stable web app identity/scope, Home Screen display and icons; document URL is the launch fallback |
 | server/call-alerts.mjs | Bounded cancellable reminder scheduler and declarative push payloads |
@@ -115,10 +115,16 @@ The additive `dial_codes`, `contact_requests` and `contact_blocks` tables contai
 
 ## Per-view lifetimes and camera framing
 
-`public/envelope-auth.js` preserves v2 canonical framing and adds authenticated v3 lifetime metadata. `public/view-state.js` seals per-device first-view/deadline records and an encrypted read-start retry outbox under the existing storage key. `server/message-retention.mjs` owns the additive `message_views` table rules, participant visibility and immutable read-start handling. Existing accounts, identities, ratchets and call SAS are not recreated. `public/media-cache.js` separates local cleanup time from immutable attachment AAD. `public/call-layout.css` fits complete video frames; orientation-aware capture ideals and sender downscaling in `public/media.js` preserve field of view across adaptive profiles.
+`public/envelope-auth.js` preserves v2 canonical framing and adds authenticated v3 lifetime metadata. `public/view-state.js` seals per-device first-view/deadline records and an encrypted read-start retry outbox under the existing storage key. `server/message-retention.mjs` owns the additive `message_views` table rules, participant visibility and immutable read-start handling. Existing accounts, identities, ratchets and call SAS are not recreated. `public/media-cache.js` separates local cleanup time from immutable attachment AAD. `public/call-layout.css` selects immersive portrait or landscape square display fitting; orientation-aware capture ideals and sender downscaling in `public/media.js` preserve field of view across adaptive profiles.
 
 ## Larger attachments and adaptive sharing
 
 `public/transfer-policy.js` controls healthy-link probing, metered ceilings, stale/poor-stat pauses and a four-worker pool. `public/app.js` cancels in-flight file HTTP requests on poor call health, streams encryption/decryption and records monotonic acknowledged progress. `server/transfer-limits.mjs` bounds active attachment requests and token-bucket rate separately from chat/signaling. `server/attachments.mjs` accepts up to 200 MiB and chunk indices through 3199. The 64 KiB AES-GCM wire format is unchanged.
 
 The encrypted media cache adds `chunks` and `pending` object stores in an additive version-2 IndexedDB upgrade, preserving existing `files`/`deleted` records. A random generation owns each staged set; only complete sets become visible. Aborts, deletion and replacement invalidate late writers. Temporary chunks have at most a 24-hour staging deadline; committed chunks use the local message deadline. Cache failure does not stop calling or delivery and is reported. Display/download Blobs still need browser resources.
+
+## Network recovery and route retirement
+
+`public/signaling-link.js` owns ticket/authentication deadlines, acknowledged liveness probes, bounded reconnect backoff and generation-safe callbacks. `public/media.js` coordinates ICE restart generations/correlations and media health. `public/video-recovery.js` provides bounded tiny-video probes/backoff while preserving voice settings. `server/index.mjs` can rebind an answered call only within the authenticated account and the same memory-only page ID.
+
+`server/app-paths.mjs` validates canonical, alias and retired paths. `deploy/archive-proxy.mjs` reads private app configuration independently of the surrounding website and intercepts retired routes before visitor logging; it returns 404 without a replacement redirect. `public/call-setup.js` replaces only authenticated owned retired push endpoints after registering the new worker/subscription, preserving unrelated workers and leaving prior subscriptions intact on failure. No private deployment path belongs in source.

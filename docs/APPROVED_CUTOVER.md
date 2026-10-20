@@ -1,6 +1,6 @@
 # Operator-approved replacement of an Olm installation
 
-This build retains the experimental libsignal/PQXDH core and browser adapter. An operator may explicitly approve replacing their existing native application while keeping the same HTTPS origin, proxy/tunnel, TURN and ntfy configuration. This does not make the integration independently audited or change live media from DTLS-SRTP.
+v0.18.0 uses official libsignal/PQXDH with an unaudited custom browser adapter. An operator may explicitly approve replacing their existing native application while keeping the same HTTPS origin, proxy/tunnel, TURN and ntfy configuration. This does not make the integration independently audited or change live media from DTLS-SRTP.
 
 The entry point accepts `WEBCALLER_CRYPTO_ENGINE=libsignal-pqxdh-v1` for this approved cutover. The separate preview still accepts its original test-instance flag. Neither option allows an encryption downgrade or changes network services.
 

@@ -1,35 +1,56 @@
-# Install the experimental libsignal version
+# Install WebCaller v0.18.0
 
-Use a **separate website, directory and database** with disposable accounts. This is not a stable release or a migration tool. Keep any working WebCaller installation and phone storage intact. Public examples contain no maintainer deployment credentials or first-phone links.
+Choose one method below. They run the same libsignal/PQXDH application. You do not need to install a native phone app to use calls/chat; iPhone background browser alerts require adding the website to the Home Screen. Optional ntfy alerts require the separate ntfy client.
+
+## Before you start
+
+You need a Linux server (Debian 12/13 is the documented native target), a domain/HTTPS hostname you control, and either a publicly reachable TURN relay or the ability to create one. A home server behind CGNAT can host the website through a Tunnel but normally needs a public relay elsewhere. The complete Docker stack supports Linux amd64 and arm64. Node 24, Python 3 and Git are needed for source/native setup; phone users need a current browser supporting Web Crypto Ed25519. Bundled WASM means Rust is not needed for installation.
+
+Use a fresh directory and hostname if another installation exists. A different path on the same hostname does not isolate browser keys. This release changes the transport from Olm to libsignal: do not overwrite an old database or point a new image at old volumes without the [migration procedure](APPROVED_CUTOVER.md). Backups and phone site data matter.
+
+## Option A: easiest complete stack — prebuilt Docker
+
+Download **WebCaller-Docker-v0.18.0.tar.gz** from the [release](https://github.com/adlererik/WebCaller/releases/tag/v0.18.0), not GitHub's automatic Source code ZIP. It contains a small launcher/Compose bundle; the actual matching images are pulled from GHCR. The bundle pins their digests.
+
+Follow [the Docker guide](../docker/README.md): install Docker/Compose using their official instructions, extract into an empty folder, run `./webcaller setup`, `./webcaller start`, then `./webcaller qr`. The wizard asks about HTTPS, your relay/public IP, optional ntfy and an existing proxy or Tunnel. It generates credentials privately. It cannot obtain a domain or fix CGNAT/router forwarding for you.
+
+## Option B: native Debian, no Docker
+
+Follow [Native installation](INSTALL_NATIVE.md) from start to finish. It includes prerequisites, a private Node runtime, source, private configuration, a boot service, HTTPS and the first-phone QR. This avoids altering system Node or another website. For TURN use an existing REST relay or the native coturn instructions in [Networking](NETWORKING.md). Optional ntfy has its own [native installer](EXTRA_RINGING.md).
+
+## Option C: source or locally built containers
+
+For a Git checkout:
 
 ```sh
-git clone --recurse-submodules --branch codex/experimental-libsignal-pqxdh https://github.com/adlererik/WebCaller.git WebCaller-Experimental
-cd WebCaller-Experimental
+git clone --recurse-submodules --branch v0.18.0 https://github.com/adlererik/WebCaller.git WebCaller
+cd WebCaller
+npm ci --ignore-scripts
+npm run setup
+npm run prepare:source
 ```
 
-Stable release ZIPs/prebuilt images contain Olm, not this branch. GitHub's ordinary ZIP omits submodule contents; use the recursive clone for complete source. Bundled browser WASM is ready to use, so callers/server operators do not need Rust unless rebuilding it.
+Edit `.env` for your own hostname/HTTPS port/relay. Keep `WEBCALLER_CRYPTO_ENGINE=libsignal-pqxdh-v1` and the generated owner/VAPID secrets. Use `npm start` for a native foreground process, or `docker compose up -d --build` for the root source-build recipe after reviewing its optional HTTPS/TURN profiles. Do not start native and Docker listeners on the same port. The detailed native/Networking guides explain the public proxy and firewall steps.
 
-## What you need
+The uploaded `WebCaller-v0.18.0.tar.gz`/`.zip` release assets include full pinned upstream source and the generated corresponding-source download. GitHub's **automatic** Source code archives do not expand submodules; use the uploaded assets or recursive clone. Keep the source offer/licenses with hosted builds. [Licensing](../LICENSING.md).
 
-- A Linux server. The native guide targets Debian 12/13 with SSH/sudo for prerequisites and an optional boot service.
-- Node.js 24, Python 3 and Git. Browsers need native Web Crypto Ed25519 support; unsupported browsers fail explicitly rather than changing algorithms.
-- A new HTTPS hostname under a domain you control, such as `calls-test.example.com`. Adding a subdomain does not itself register another domain. Provider charges depend on your provider.
-- A reachable TURN relay for calls across difficult networks. A Cloudflare Tunnel carries the website/WebSockets, not TURN media. A suitable relay can be reused without sharing phone databases or owner/push keys.
+## Set up the first phone
 
-**Follow [Native Debian installation](INSTALL_NATIVE.md)** for the complete route: separate directory, private Node runtime, `webcaller-experimental.service`, HTTPS, owner QR and phones. Do not use the stable service installer as an in-place upgrade.
+Generate the private setup QR using the selected guide. Scan it with the first phone's camera; the long owner code fills automatically. Choose a display name. Keep this QR private: it grants the first-phone setup capability.
 
-## First phone and invitations
+Then choose **Invite someone**. Send that invitation through a channel you trust; the invitee accepts and chooses a name. They do not need SSH, a server password, owner code or publishing token. Alternatively choose your own calling code in Settings and let someone dial it. Codes are addresses, not secrets or proof of identity.
 
-Generate the private QR after the website serves HTTPS. Scan it with the first Android phone's camera and keep using the same browser. The owner code fills automatically; choose a test name. Use **Invite someone** for the other phone.
+On **iPhone**, follow Add to Home Screen and use that icon for calls/alerts. Safari and Home Screen profiles can differ, including when ntfy opens a link. If a notification says to open your usual phone, use the existing Home Screen icon rather than creating another identity. If the first phone is an iPhone, add the site before enrollment and open the owner setup there, or enroll a desktop first and invite it.
 
-On iPhone, follow the invitation's Home Screen instructions and use its new **WC Test** icon. Safari/Home Screen storage can differ. Keep any normal WebCaller icon/storage. If the first phone is an iPhone, save the test site to the Home Screen before enrollment and open the owner link/code there, or enroll a desktop first and invite the iPhone.
+On **Android**, accept in the browser you intend to keep using and allow microphone/camera and notifications when requested. In Settings, send the alert test, lock the screen, tap the notice and confirm only if you actually heard it. Optional ntfy has its own guided test. No push urgency bypasses OS restrictions.
 
-After setup, optional calling codes are available in Settings. A code is an address, not a password or proof of identity.
+## Check it before relying on it
 
-## Test and update
+1. Send a message each way, refresh and confirm contacts/history remain.
+2. Call both ways and compare all four SAS words. Tap the chat name/header to compare the full safety fingerprint through a trusted channel.
+3. Send a photo during the call and confirm speech stays clear.
+4. Test on different networks, including TURN allocation and actual media delivery.
+5. Test locked-screen sound, notification opening/answering, front/back cameras and audio output on each phone.
+6. Walk from Wi-Fi to cellular and back during a call; confirm recovery without redialing. A short radio gap remains possible.
 
-Send messages both ways, refresh and reopen chats. Call both ways, compare all four SAS words, and send a photo while talking. Try different networks, locked-screen alerts and Wi-Fi/mobile transitions. OS permissions still apply; urgency cannot force sound. [Optional ntfy](EXTRA_RINGING.md) is a separate alert channel, not conversation transport; never give recipients a publishing token/server password.
-
-Stable Olm accounts cannot be imported. Earlier **libsignal test** P-256 accounts preserve their pins/history through certified Ed25519 signers. Refresh both test phones after updates; keep site data.
-
-Back up source, configuration, database and dependency locks first. Server backups do not contain phone private keys. [Operations](OPERATIONS.md). [Container note](../docker/README.md): there is no published experimental prebuilt image/all-in-one release bundle here.
+Do not clear browser site data to fix a connection problem. It contains the identity, keys and saved conversations. [User guide](USER_GUIDE.md) · [Troubleshooting](OPERATIONS.md) · [Security](SECURITY.md).

@@ -264,7 +264,7 @@ function pumpMedia(){
 async function acceptMessage(envelope,hydrating=false){
   // Advance and seal transport state while hidden, without rebuilding the UI's plaintext.
   if(messages.has(envelope.id)||deletedMessages.has(envelope.id)||envelope.expiresAt<=Date.now())return;
-  const localState=await messenger.messageState(envelope);if(localState.expiresAt<=Date.now())return;
+  let localState=await messenger.messageState(envelope);if(localState.expiresAt<=Date.now())return;
   const peerId=envelope.from===device.user.id?envelope.to:envelope.from;
   let peer=device.contacts.find(c=>c.id===peerId);
   if(!peer&&!hydrating){await pinContacts((await api('/me')).contacts);peer=device.contacts.find(c=>c.id===peerId);}if(!peer)return;
@@ -275,6 +275,9 @@ async function acceptMessage(envelope,hydrating=false){
   if(payload.location!==undefined&&(payload.kind!=='attachment'||mediaKind(payload.attachment.type)!=='image'||!validLocation(payload.location)))return;
   if(document.visibilityState!=='visible'||!device.contacts.some(c=>c.id===peerId)||deletedMessages.has(envelope.id)||messages.has(envelope.id)||envelope.expiresAt<=Date.now())return;
   if(payload.replyTo!==undefined&&!validMessageId(payload.replyTo))return;
+  // Decryption/storage work can overlap a first view in another tab. Hydrate
+  // the latest deadline for this exact signed message, not a stale pre-open copy.
+  localState=await messenger.messageState(envelope);if(document.visibilityState!=='visible'||!device?.contacts.some(c=>c.id===peerId)||localState.expiresAt<=Date.now()||messages.has(envelope.id)||deletedMessages.has(envelope.id))return;
   pendingTransfers.delete(envelope.id);messages.set(envelope.id,{id:envelope.id,from:envelope.from,to:envelope.to,createdAt:envelope.createdAt,expiresAt:localState.expiresAt,wireExpiresAt:envelope.expiresAt,lifetime:localState.lifetime,viewedAt:localState.viewedAt,text:payload.text||'',attachment:payload.attachment,location:payload.location,replyTo:payload.replyTo,forwarded:payload.forwarded===true,receivedLocally:envelope.from!==device.user.id?(localState.deliveredAt||Math.max(envelope.createdAt,Date.now())):undefined});
   for(const update of pendingMessageEvents.get(envelope.id)||[])await acceptMessageEvent(update);pendingMessageEvents.delete(envelope.id);
   if(!hydrating&&envelope.from!==device.user.id&&selected?.id!==peer.id)unread.set(peer.id,(unread.get(peer.id)||0)+1);

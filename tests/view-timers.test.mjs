@@ -11,6 +11,32 @@ import {ratchetStatement,envelopeHeader} from '../public/envelope-auth.js';
 import {signApplication} from '../public/application-signatures.js';
 const send=(f,text='Synthetic timed message',seconds=30)=>f.a.seal(f.alice.identity,f.alice.user.id,f.bob.user,{kind:'text',text},seconds,{perView:true});
 const postRead=(f,e)=>f.apiB('/message-events','POST',{events:[{target:e.lifetime.target,kind:'read',envelope:e}]});
+test('both participants can change future timers or choose Off without retiming earlier messages across reloads',async t=>{
+ let clock=Date.now();t.mock.method(Date,'now',()=>clock);const f=await fixture(t,{clock:()=>clock}),packets=[];
+ const sendAs=async(sender,seconds)=>{
+  clock+=1000;const alice=sender==='a',client=alice?f.a:f.b,device=alice?f.alice:f.bob,peer=alice?f.bob:f.alice;
+  const e=await client.seal(device.identity,device.user.id,peer.user,{kind:'text',text:'Synthetic timer regression'},seconds,{perView:true});
+  await (alice?f.apiA:f.apiB)('/messages','POST',e);await (alice?f.openB:f.openA)(e);packets.push(e);return e;
+ };
+ const oldA=await sendAs('a',3600),oldB=await sendAs('b',120);
+ await sendAs('a',30);const offB=await sendAs('b',0);await sendAs('a',0);await sendAs('b',300);
+ const a=secureMessaging(f.optionsA),b=secureMessaging(f.optionsB);await a.initialize(f.alice);await b.initialize(f.bob);
+ const beforeA=await a.messageState(oldA),beforeB=await b.messageState(oldB);
+ assert.equal(beforeA.expiresAt,oldA.createdAt+3600000);assert.equal(beforeB.expiresAt,oldB.createdAt+120000);
+ assert.equal((await b.messageState(oldA)).expiresAt,NO_EXPIRY);assert.equal((await a.messageState(oldB)).expiresAt,NO_EXPIRY);
+ const readA=await b.markViewed(oldA.id),readB=await a.markViewed(oldB.id);
+ assert.equal(readA.expiresAt,readA.viewedAt+3600000);assert.equal(readB.expiresAt,readB.viewedAt+120000);
+ for(const [client,peer,api]of [[b,f.alice.user,f.apiB],[a,f.bob.user,f.apiA]]){
+  for(const pending of await client.pendingViews()){
+   const receipt=await client.viewReceipt(pending,peer);await api('/message-events','POST',{events:[{target:pending.id,kind:'read',envelope:receipt}]});await client.ackView(pending.id,receipt.id);
+  }
+ }
+ const again=secureMessaging(f.optionsB);await again.initialize(f.bob);assert.deepEqual(await again.markViewed(oldA.id),readA);
+ assert.equal((await a.messageState(oldA)).expiresAt,beforeA.expiresAt);assert.equal((await b.messageState(oldB)).expiresAt,beforeB.expiresAt);
+ assert.equal((await a.messageState(offB)).expiresAt,NO_EXPIRY);assert.equal(await a.markViewed(offB.id),null);
+ for(const e of packets){const row=f.app.store.get('SELECT seconds FROM message_views WHERE message_id=?',e.id);assert.equal(row?.seconds,e.lifetime?.seconds);}
+ clock+=35000;await a.purge();assert.equal((await a.messageState(packets[2])).expiresAt,0);assert.equal((await a.messageState(oldA)).expiresAt,beforeA.expiresAt);
+});
 async function sign(f,e){e.signature=await signApplication({key:f.bob.identity.sign},ratchetStatement(e));return e;}
 test('v3 authenticates the per-view policy while v2 framing stays unchanged',async t=>{
  const f=await fixture(t),e=await send(f);assert.equal(e.v,3);assert.deepEqual(e.lifetime,{mode:'after-view',seconds:30});assert.equal(e.expiresAt,NO_EXPIRY);assert.ok(validLifetime(e));

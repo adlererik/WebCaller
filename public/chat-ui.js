@@ -1,4 +1,4 @@
-import {remainingTime,updateCountdowns} from './message-expiry.js';
+import {remainingTime,updateCountdowns,syncMessageCountdown} from './message-expiry.js';
 import {isPermanent} from './message-lifetime.js';
 import {locationText,defaultAttribution} from './location.js';
 import {mediaKind,fileSize} from './attachments.js';
@@ -76,7 +76,7 @@ export function drawMessages({container,list,self,options,openMedia,load,save,se
       if(m.pending){row.oncontextmenu=e=>e.preventDefault();bubble.onkeydown=null;}
       const menu=node('button','message-options');menu.type='button';menu.ariaLabel='Message options';menu.append(glyph('more'));menu.onclick=()=>{if(!m.pending)options(m);};if(!m.pending)row.append(menu);
     }
-    desired.push(row);
+    syncMessageCountdown(row,m,self);desired.push(row);
   }
   if(!list.length)desired.push(node('p','chat-empty','A conversation just for you two.\nSay hello, or give them a call.'));
   // Reuse unchanged rows so an arriving message does not interrupt playing audio.

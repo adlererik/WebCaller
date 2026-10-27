@@ -38,7 +38,7 @@ export function timerLabel(seconds) {
   }
   return `${seconds} seconds`;
 }
-export const timerDescription = seconds => seconds === 0 ? 'Your new messages won’t disappear' : `Your messages disappear after ${timerLabel(seconds)}`;
+export const timerDescription = seconds => seconds === 0 ? 'Your new messages won’t disappear' : `Your new messages disappear after ${timerLabel(seconds)}`;
 
 // Four weeks exceeds the browser's maximum timeout; Off never arms one.
 export function expiryAlarm(expiresAt, onExpire, {now = Date.now, schedule = setTimeout, cancel = clearTimeout} = {}) {

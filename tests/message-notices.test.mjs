@@ -1,5 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';import {IDBFactory} from 'fake-indexeddb';
-import {messageIntents,resolveMessageIntent} from '../public/message-intents.js';import {remainingTime,updateCountdowns} from '../public/message-expiry.js';import {acceptTransfer,purgeTransfers} from '../public/transfer-state.js';
+import {messageIntents,resolveMessageIntent} from '../public/message-intents.js';import {remainingTime,updateCountdowns,syncMessageCountdown} from '../public/message-expiry.js';import {acceptTransfer,purgeTransfers} from '../public/transfer-state.js';
+import {NO_EXPIRY} from '../public/message-lifetime.js';
 test('message-notification navigation is one-use, identity bound, expires, validates sender and keeps IDs out of links',async()=>{
  let now=1000;const store=messageIntents({factory:new IDBFactory(),now:()=>now}),owner=randomUUID(),peerId=randomUUID(),id=randomUUID(),contacts=[{id:peerId,name:'Test contact'}];
  assert.equal(await store.put(owner,id,peerId,500000),true);const [a,b]=await Promise.all([store.take(owner),store.take(owner)]);const intent=a||b;assert.equal(Number(!!a)+Number(!!b),1);assert.equal(intent.expiresAt,121000);
@@ -15,6 +16,16 @@ test('countdowns respect the original deadline and update only expiry spans',()=
  const container={querySelectorAll:s=>{assert.equal(s,'.message-expiry');return [node];}};updateCountdowns(container,1000);assert.equal(value.textContent,'31s');updateCountdowns(container,2000);assert.equal(value.textContent,'30s');assert.equal(attrs['aria-label'],'Disappears in 30s');
 });
 function progress(){const self=randomUUID(),peer=randomUUID(),id=randomUUID(),target=randomUUID();return {self,peer,pending:new Map(),envelope:{id,from:peer,to:self,createdAt:2000,expiresAt:22000},payload:{kind:'transfer',target,createdAt:1000,expiresAt:61000,percent:10,attachment:{id:randomUUID(),name:'Example.jpg',type:'image/jpeg',size:12345}}};}
+test('a reused bubble leaves first-view waiting state and keeps its own deadline when a new message uses another timer',()=>{
+ const value={textContent:''},node={dataset:{expires:String(NO_EXPIRY),waiting:'true',seconds:'3600'},querySelector:()=>value,setAttribute(){}},row={querySelector:()=>node};
+ const old={from:'peer',expiresAt:NO_EXPIRY,lifetime:{mode:'after-view',seconds:3600}};
+ const container={querySelectorAll:()=>[node]};syncMessageCountdown(row,old,'self');updateCountdowns(container,1000);assert.equal(value.textContent,'1h 0m');
+ old.viewedAt=1000;old.expiresAt=3601000;syncMessageCountdown(row,old,'self');updateCountdowns(container,2000);
+ assert.equal(node.dataset.waiting,'false');assert.equal(node.dataset.seconds,undefined);assert.equal(value.textContent,'59m 59s');
+ const another={from:'peer',expiresAt:32000,viewedAt:2000,lifetime:{mode:'after-view',seconds:30}};
+ syncMessageCountdown({querySelector:()=>null},another,'self');syncMessageCountdown(row,old,'self');updateCountdowns(container,3000);
+ assert.equal(node.dataset.expires,'3601000');assert.equal(value.textContent,'59m 58s');assert.equal(old.lifetime.seconds,3600);
+});
 test('ephemeral transfer placeholders reject wrong/late versions and cannot resurrect committed or deleted media',()=>{
  const f=progress(),options={self:f.self,now:3000};assert.equal(acceptTransfer(f.pending,f.envelope,f.payload,options),true);assert.equal(f.pending.get(f.payload.target).percent,10);
  const next={...f.envelope,id:randomUUID(),createdAt:4000,expiresAt:24000};assert.equal(acceptTransfer(f.pending,next,{...f.payload,percent:60},options),true);assert.equal(f.pending.get(f.payload.target).percent,60);

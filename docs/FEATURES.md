@@ -44,7 +44,7 @@ See [Call networking](CALL_NETWORK.md) for exact policies, diagnostics and real-
 
 ## Timers and deletion
 
-The [sticker picker](STICKERS.md) adds eight local starter packs (40 WebP images), pack tabs, encrypted local Recent/Favorites, one-tap sending and borderless rendering. Stickers retain attachment encryption, timers, reactions, replies, forwarding, caching and deletion. Signal-authenticated data-only WebRTC connections carry encrypted chunks; the usual encrypted attachment store supports offline clients and fallback. No external sticker service is contacted at runtime. Artwork provenance and separate rights accompany the assets.
+The [sticker picker](STICKERS.md) adds 18 local packs (1,117 WebP images), including three dedicated Angel Dust sets (221 images), pack tabs, encrypted local Recent/Favorites, one-tap sending and borderless rendering. Stickers retain attachment encryption, timers, reactions, replies, forwarding, caching and deletion. Signal-authenticated data-only WebRTC connections carry encrypted chunks; the usual encrypted attachment store supports offline clients and fallback. No external sticker service is contacted at runtime. Artwork provenance and separate rights accompany the assets.
 
 New conversations default to **one hour**. Options include Off, presets and custom number/unit wheels for seconds, minutes, hours, days and weeks, up to **four weeks**. Changing your setting affects only new messages you send. Every existing message keeps its original authenticated duration, including when either person chooses a different timer or Off; opening the chat or refreshing never replaces that duration with the current preference.
 

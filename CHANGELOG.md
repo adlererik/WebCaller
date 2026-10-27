@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — Sticker collections
+
+- Expand the local picker from 40 starter stickers to 1,117 WebP images across 18 packs, including 221 Angel Dust stickers. Retain the old sticker IDs, encrypted Favorites/Recent and the existing Signal/AES-GCM/WebRTC delivery. Record source availability and separate artwork rights.
+- Show pack counts, distinguish pack tabs, preserve tab-strip position and reset the grid when choosing another pack. Keep images lazy-loaded to avoid downloading the entire collection on a phone.
+
 ## 0.18.0 — 2026-10-20
 
 - Promote official libsignal 0.105.1/PQXDH v4 and Double/Triple Ratchet/SPQR to the main release, with Ed25519 application signatures, persistent identity pins and existing media-bound four-word SAS. Keep the custom browser integration explicitly unaudited; live media remains DTLS-SRTP. Old Olm installations require an explicit backed-up migration.

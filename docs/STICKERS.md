@@ -2,7 +2,21 @@
 
 Open a chat and tap the folded-corner sticker icon beside the message field. Choose a pack along the bottom, then tap a sticker to send it immediately. Tap a star for Favorites; Recent shows stickers sent in this device. Recent and favorite choices are saved in the existing encrypted device store; no plaintext localStorage history is added.
 
-The collection has **40 WebP stickers**, five curated starter stickers for each of The Amazing Digital Circus, Hazbin Hotel, Helluva Boss, Demon Slayer, Death Note, Spy x Family, Genshin Impact and My Hero Academia. Images are bundled locally. Opening the picker never contacts an external sticker catalog/CDN or tracking script. Sources, hashes, dimensions and artwork rights are in [the catalog](../public/stickers/catalog.json) and [artwork notice](../public/stickers/NOTICE.md). These are community collections, not official endorsements; artwork is separate from the code license.
+The collection has **1,117 WebP stickers across 18 packs**, including **221 Angel Dust stickers in three dedicated packs**. Thirteen packs include their complete source snapshot. Five additional collections retain the available source images; missing source files are explicitly recorded in the catalog and never shown as broken tiles. Existing sticker IDs and favorites remain valid.
+
+| Collection | Stickers |
+| --- | ---: |
+| Angel Dust (three packs) | 221 |
+| Hazbin Hotel | 41 |
+| The Amazing Digital Circus | 33 |
+| Helluva Boss (Blitzo, mixed characters and Loona) | 213 |
+| Demon Slayer (mixed characters and Shinobu) | 118 |
+| Death Note | 87 |
+| Spy x Family | 120 |
+| Genshin Impact (Venti and chibi characters) | 211 |
+| My Hero Academia (three packs) | 73 |
+
+Images are bundled locally (about 28.2 MiB total). Opening the picker does not download every pack: images are lazy-loaded as you browse. Pack headings show the available sticker count; the bottom strip keeps its position when switching packs or adding Favorites. Opening the picker never contacts an external sticker catalog/CDN or tracking script. Sources, source/available counts, hashes, dimensions and artwork rights are in [the catalog](../public/stickers/catalog.json) and [artwork notice](../public/stickers/NOTICE.md). These are community collections, not official endorsements; artwork is separate from the code license.
 
 Stickers render without a colored bubble. Reply, react, forward, pin, message information and deletion for both remain available. Forwarding generates a fresh attachment key and uses the destination chat's current timer. Stickers retain their original per-message disappearing duration, independent sender/recipient countdowns, Off option and encrypted local cache. Browser eviction may require another download.
 

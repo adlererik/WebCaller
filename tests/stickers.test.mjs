@@ -12,11 +12,11 @@ import {ratchetStatement} from '../public/envelope-auth.js';
 import {signApplication} from '../public/application-signatures.js';
 import {secureMessaging} from '../public/secure-messaging.js';
 const catalog=JSON.parse(fs.readFileSync(new URL('../public/stickers/catalog.json',import.meta.url)));
-test('all eight bundled packs have locally available, pinned WebP assets and no remote runtime image paths',()=>{
- assert.ok(validStickerCatalog(catalog));assert.equal(catalog.packs.length,8);let count=0;
- for(const pack of catalog.packs){assert.ok(pack.source.startsWith('https:'));for(const s of pack.stickers){
+test('all expanded bundled packs have locally available, pinned WebP assets and no remote runtime image paths',()=>{
+ assert.ok(validStickerCatalog(catalog));assert.equal(catalog.packs.length,18);let count=0;
+ for(const pack of catalog.packs){assert.ok(pack.source.startsWith('https:'));assert.equal(pack.availableCount,pack.stickers.length);assert.equal(pack.complete,pack.stickers.length===pack.sourceCount);assert.equal(new Set(pack.stickers.map(s=>s.id)).size,pack.stickers.length);for(const s of pack.stickers){
   const data=fs.readFileSync(new URL('../public/stickers/'+s.file,import.meta.url));assert.equal(data.length,s.bytes);assert.equal(data.toString('ascii',0,4),'RIFF');assert.equal(data.toString('ascii',8,12),'WEBP');assert.deepEqual(stickerDimensions(data),{width:s.width,height:s.height});assert.equal(createHash('sha256').update(data).digest('hex'),s.sha256);count++;
- }}assert.equal(count,40);
+ }}assert.equal(count,1117);assert.equal(catalog.packs.filter(p=>p.id.startsWith('angel-dust')).reduce((sum,p)=>sum+p.stickers.length,0),221);assert.equal(catalog.packs.filter(p=>p.complete).length,13);
  const bad=structuredClone(catalog);bad.packs[0].stickers[0].file='https://example.com/tracker.webp';assert.equal(validStickerCatalog(bad),false);
  const traversal=structuredClone(catalog);traversal.packs[0].id='../secrets';assert.equal(validStickerCatalog(traversal),false);
 });

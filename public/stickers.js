@@ -22,21 +22,24 @@ export function stickerPicker({button,panel,peer,send,warm,toast,loadPreferences
   function persist(){const value={recents:recents.slice(),favorites:[...favorites]};preferenceWrites=preferenceWrites.catch(()=>{}).then(()=>savePreferences(value));void preferenceWrites.catch(()=>toast('Sticker choices could not be saved on this device.'));}
   function close(){panel.classList.add('hidden');button.setAttribute('aria-expanded','false');}
   function tabs(){
-    const list=$('sticker-tabs');list.replaceChildren();
-    for(const [id,title,cover]of [['recent','Recent',null],['favorites','Favorites',null],...catalog.packs.map(p=>[p.id,p.title,p.stickers[0].file])]){
+    const list=$('sticker-tabs'),scrollLeft=list.scrollLeft;list.replaceChildren();
+    for(const [id,title,cover,shortTitle]of [['recent','Recent',null],['favorites','Favorites',null],...catalog.packs.map(p=>[p.id,p.title,p.stickers[0].file,p.tabTitle])]){
       const b=document.createElement('button');b.type='button';b.role='tab';b.id='sticker-tab-'+id;b.setAttribute('aria-selected',String(tab===id));b.setAttribute('aria-controls','sticker-grid');b.title=title;b.ariaLabel=title;
       if(cover){const image=document.createElement('img');image.src='./stickers/'+cover;image.alt='';image.loading='lazy';b.append(image);}else b.textContent=id==='recent'?'◷':'☆';
-      const label=document.createElement('span');label.textContent=title;b.append(label);b.onclick=()=>{tab=id;render();};
+      const label=document.createElement('span');label.textContent=shortTitle||title;b.append(label);b.onclick=()=>{tab=id;render(true);};
       b.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const buttons=[...list.children],i=buttons.indexOf(b);const next=e.key==='Home'?buttons[0]:e.key==='End'?buttons.at(-1):buttons[(i+(e.key==='ArrowRight'?1:-1)+buttons.length)%buttons.length];next.click();next.focus();};list.append(b);
     }
+    list.scrollLeft=scrollLeft;
   }
-  function render(){
+  function render(resetScroll=false){
     tabs();const entries=all(),items=tab==='recent'?recents.map(id=>entries.find(x=>x.key===id)).filter(Boolean):tab==='favorites'?entries.filter(x=>favorites.has(x.key)):entries.filter(x=>x.pack.id===tab);
     const grid=$('sticker-grid');grid.replaceChildren();grid.setAttribute('aria-labelledby','sticker-tab-'+tab);
-    $('sticker-pack-name').textContent=catalog.packs.find(p=>p.id===tab)?.title|| (tab==='favorites'?'Favorites':'Recently sent');
+    const title=catalog.packs.find(p=>p.id===tab)?.title|| (tab==='favorites'?'Favorites':'Recently sent');
+    $('sticker-pack-name').textContent=title+(items.length?' · '+items.length:'');
+    if(resetScroll){grid.scrollTop=0;const list=$('sticker-tabs'),active=list.querySelector('[aria-selected=true]');if(active){const left=active.offsetLeft-list.offsetLeft,right=left+active.offsetWidth;if(left<list.scrollLeft)list.scrollLeft=left;else if(right>list.scrollLeft+list.clientWidth)list.scrollLeft=right-list.clientWidth;}}
     for(const entry of items){
       const tile=document.createElement('div');tile.className='sticker-tile';const b=document.createElement('button');b.type='button';b.className='sticker-choice';b.ariaLabel='Send '+entry.sticker.label;b.disabled=busy;
-      const image=document.createElement('img');image.src='./stickers/'+entry.sticker.file;image.alt=entry.sticker.label;image.loading='lazy';image.decoding='async';b.append(image);
+      const image=document.createElement('img');image.src='./stickers/'+entry.sticker.file;image.alt=entry.sticker.label;image.width=entry.sticker.width;image.height=entry.sticker.height;image.loading='lazy';image.decoding='async';b.append(image);
       b.onclick=async()=>{
         if(busy||!peer())return;busy=true;b.disabled=true;$('sticker-status').textContent='Sending sticker…';const contact=peer();
         try{
@@ -57,7 +60,7 @@ export function stickerPicker({button,panel,peer,send,warm,toast,loadPreferences
     try{
       if(!catalog){loading ||= fetch('./stickers/catalog.json',{cache:'no-store',signal:AbortSignal.timeout(15000)}).then(async r=>{if(!r.ok)throw Error('Sticker packs could not be loaded');const value=await r.json();if(!validStickerCatalog(value))throw Error('Invalid sticker catalog');return value;}).catch(e=>{loading=null;throw e;});catalog=await loading;tab=recents.length?'recent':catalog.packs[0].id;}
       loadedPreferences ||= loadPreferences().then(value=>{const valid=new Set(all().map(x=>x.key));recents=[...new Set(Array.isArray(value?.recents)?value.recents:[])].filter(id=>valid.has(id)).slice(0,30);favorites=new Set((Array.isArray(value?.favorites)?value.favorites:[]).filter(id=>valid.has(id)));}).catch(()=>{});await loadedPreferences;
-      render();
+      render(true);
     }catch(e){close();toast(e.message);}
   }
   button.setAttribute('aria-expanded','false');button.onclick=()=>panel.classList.contains('hidden')?void show():close();$('close-stickers').onclick=close;

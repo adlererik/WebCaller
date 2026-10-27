@@ -15,4 +15,4 @@ The current locally built binding adapts Towns Protocol's Apache-2.0 source for 
 
 The 2048-word BIP-39 English list is used only as the optional call-comparison display alphabet. Source, authors, pinned revision and MIT license are in [third_party/bip39/NOTICE.txt](third_party/bip39/NOTICE.txt).
 
-The bundled character-sticker starter collections are third-party artwork, separate from the code's MIT/AGPL grants and not official endorsements. Original creators/rightsholders retain their rights. Per-image sources, hashes, dimensions and separate rights notices are in [public/stickers](public/stickers/NOTICE.md). The installed picker loads no external catalog, analytics or image service.
+The bundled character-sticker collections are third-party artwork, separate from the code's MIT/AGPL grants and not official endorsements. Original creators/rightsholders retain their rights. Per-image sources, hashes, dimensions and separate rights notices are in [public/stickers](public/stickers/NOTICE.md). The installed picker loads no external catalog, analytics or image service.

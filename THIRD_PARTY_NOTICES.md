@@ -14,3 +14,5 @@ Official libsignal v0.105.1 is AGPL-3.0-only, pinned at `1738ead8a12ffe539f63099
 The current locally built binding adapts Towns Protocol's Apache-2.0 source for Vodozemac 0.11.1. Its [source/build instructions](third_party/vodozemac-bindings/README.md), dependency lock and generated dependency license notices are included. The previous Towns 0.1.0 package (Vodozemac 0.9.0) is retained only as a development-test dependency for compatibility checks; it is not a production/browser fallback.
 
 The 2048-word BIP-39 English list is used only as the optional call-comparison display alphabet. Source, authors, pinned revision and MIT license are in [third_party/bip39/NOTICE.txt](third_party/bip39/NOTICE.txt).
+
+The bundled character-sticker starter collections are third-party artwork, separate from the code's MIT/AGPL grants and not official endorsements. Original creators/rightsholders retain their rights. Per-image sources, hashes, dimensions and separate rights notices are in [public/stickers](public/stickers/NOTICE.md). The installed picker loads no external catalog, analytics or image service.

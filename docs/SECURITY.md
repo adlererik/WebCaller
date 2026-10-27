@@ -103,3 +103,7 @@ A random URL path discourages blind discovery but is a shareable address, not ac
 ## Review and reporting
 
 Review provenance and run the tests in [Verification](VERIFICATION.md). Independent review should focus on adapter/store serialization, signature composition, prekey lifetime/consumption, identity continuity, SAS/media binding, retained-history exposure and deployment/code delivery. [Review record](SECURITY_REVIEW.md) distinguishes tests from an audit. Report vulnerabilities privately as described in [SECURITY.md](../SECURITY.md).
+
+## Sticker delivery
+
+Stickers reuse authenticated AES-256-GCM attachment chunks and Signal-ratcheted key manifests. The sticker marker is encrypted with the manifest. A data-only WebRTC connection carries ciphertext; its SDP/ICE are signed and encrypted through pinned Signal identities. The server authorizes only accepted contacts, with bounded requests. Data frames, buffering, size, replay and idle lifetime are bounded. Ciphertext also remains in the ordinary attachment service for offline delivery and cache recovery. This adds no custom ratchet, changes no call SAS or media encryption, and does not make browser DTLS itself post-quantum. Public artwork requests and network/routing metadata remain visible to the host/CDN, and direct ICE may disclose IP addresses to the accepted contact. Recent/favorite sticker IDs use the existing AES-GCM encrypted device store. See [the sticker guide](STICKERS.md).

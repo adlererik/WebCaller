@@ -44,7 +44,7 @@ export function drawMessages({container,list,self,options,openMedia,load,save,se
       bubble.addEventListener('click',e=>{if(held){held=false;e.preventDefault();e.stopImmediatePropagation();}},true);
       if(m.pending){row.classList.add('pending-transfer');bubble.tabIndex=-1;bubble.append(transferCard(m,self));}
       else if(m.attachment){
-        const a=m.attachment,kind=mediaKind(a.type);bubble.classList.add('attachment-message',kind+'-message');if(m.location)bubble.classList.add('location-message');
+        const a=m.attachment,kind=mediaKind(a.type);bubble.classList.add('attachment-message',kind+'-message');if(a.sticker)bubble.classList.add('sticker-message');if(m.location)bubble.classList.add('location-message');
         if(['image','video'].includes(kind)){
           const preview=node('button','media-preview');preview.type='button';preview.ariaLabel=m.location?'Open location preview':kind==='image'?'Open photo':'Play video';
           if(m.blobURL){const media=node(kind==='image'?'img':'video','chat-media');media.src=m.blobURL;

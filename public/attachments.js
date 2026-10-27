@@ -8,7 +8,7 @@ export const audioTypes=new Set(['audio/mp4','audio/webm','audio/ogg','audio/mpe
 export function mediaKind(type){const base=(type||'').split(';')[0].trim().toLowerCase();return imageTypes.has(base)?'image':videoTypes.has(base)?'video':audioTypes.has(base)?'audio':'file';}
 export function fileSize(size){return size<1024?`${size} B`:size<1024*1024?`${Math.ceil(size/1024)} KB`:`${(size/1024/1024).toFixed(1)} MB`;}
 export function validAttachment(a){
-  return !!a&&uuid.test(a.id)&&typeof a.name==='string'&&a.name.length>0&&a.name.length<=255&&typeof a.type==='string'&&a.type.length<=100&&Number.isSafeInteger(a.size)&&a.size>0&&a.size<=MAX_FILE_SIZE&&a.chunks===Math.ceil(a.size/CHUNK_SIZE)&&typeof a.key==='string'&&/^[A-Za-z0-9_-]{43}$/.test(a.key)&&typeof a.nonce==='string'&&/^[A-Za-z0-9_-]{11}$/.test(a.nonce);
+  return !!a&&(a.sticker===undefined||a.sticker===true&&a.type==='image/webp'&&a.size<=512*1024)&&uuid.test(a.id)&&typeof a.name==='string'&&a.name.length>0&&a.name.length<=255&&typeof a.type==='string'&&a.type.length<=100&&Number.isSafeInteger(a.size)&&a.size>0&&a.size<=MAX_FILE_SIZE&&a.chunks===Math.ceil(a.size/CHUNK_SIZE)&&typeof a.key==='string'&&/^[A-Za-z0-9_-]{43}$/.test(a.key)&&typeof a.nonce==='string'&&/^[A-Za-z0-9_-]{11}$/.test(a.nonce);
 }
 export function newAttachment(file){
   if(!file.size||file.size>MAX_FILE_SIZE)throw new Error('Choose a file between 1 byte and 200 MB.');

@@ -1,0 +1,517 @@
+{
+  "v": 1,
+  "packs": [
+    {
+      "id": "digital-circus",
+      "title": "The Amazing Digital Circus",
+      "source": "https://tgsticker.ru/static/Amaze_Circus/",
+      "telegram": "https://t.me/addstickers/Amaze_Circus",
+      "rights": "Third-party character artwork; original creators/rightsholders retain copyright. Not covered by the application code license.",
+      "stickers": [
+        {
+          "id": "1",
+          "file": "digital-circus/001.webp",
+          "label": "The Amazing Digital Circus sticker 1",
+          "source": "https://tgsticker.ru/wp-content/uploads/Amaze_Circus/Amaze_Circus_001.webp",
+          "sha256": "52245227980a8dcabae6661a8e9d7bff10ce0437a5e3ef1cffdd900cb93e554c",
+          "bytes": 3928,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "2",
+          "file": "digital-circus/002.webp",
+          "label": "The Amazing Digital Circus sticker 2",
+          "source": "https://tgsticker.ru/wp-content/uploads/Amaze_Circus/Amaze_Circus_002.webp",
+          "sha256": "3d60516fe2a81b629cd4d5d67417e766c2e5fd4431406cb9f862a01cf409deb8",
+          "bytes": 3458,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "3",
+          "file": "digital-circus/003.webp",
+          "label": "The Amazing Digital Circus sticker 3",
+          "source": "https://tgsticker.ru/wp-content/uploads/Amaze_Circus/Amaze_Circus_003.webp",
+          "sha256": "242c8b8252f31615319607b4ff6559717160942a4303faf7da4f460cd3091080",
+          "bytes": 2392,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "4",
+          "file": "digital-circus/004.webp",
+          "label": "The Amazing Digital Circus sticker 4",
+          "source": "https://tgsticker.ru/wp-content/uploads/Amaze_Circus/Amaze_Circus_004.webp",
+          "sha256": "66bbaa770c5a5dbab6fee08ae67f6581b47b30c7f9f5acd5ec0210991071e09a",
+          "bytes": 3118,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "5",
+          "file": "digital-circus/005.webp",
+          "label": "The Amazing Digital Circus sticker 5",
+          "source": "https://tgsticker.ru/wp-content/uploads/Amaze_Circus/Amaze_Circus_005.webp",
+          "sha256": "dc171c9e5099c59f77ed9152914731f06393103f250534a738632a54e8627b7d",
+          "bytes": 3582,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        }
+      ]
+    },
+    {
+      "id": "hazbin-hotel",
+      "title": "Hazbin Hotel",
+      "source": "https://tgsticker.ru/static/Hazbin_hotel_p1_keiriststicks/",
+      "telegram": "https://t.me/addstickers/Hazbin_hotel_p1_keiriststicks",
+      "rights": "Third-party character artwork; original creators/rightsholders retain copyright. Not covered by the application code license.",
+      "stickers": [
+        {
+          "id": "1",
+          "file": "hazbin-hotel/001.webp",
+          "label": "Hazbin Hotel sticker 1",
+          "source": "https://tgsticker.ru/wp-content/uploads/Hazbin_hotel_p1_keiriststicks/Hazbin_hotel_p1_keiriststicks_001.webp",
+          "sha256": "2048fa649c15245b9a896299558f055b964908b5f2b0303bea1769692911168c",
+          "bytes": 6052,
+          "width": 128,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "2",
+          "file": "hazbin-hotel/002.webp",
+          "label": "Hazbin Hotel sticker 2",
+          "source": "https://tgsticker.ru/wp-content/uploads/Hazbin_hotel_p1_keiriststicks/Hazbin_hotel_p1_keiriststicks_002.webp",
+          "sha256": "23af47a67c426631ba0fbfc27f7667dfa76c409b25893dcc8cf52e8975ca7b95",
+          "bytes": 5370,
+          "width": 127,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "3",
+          "file": "hazbin-hotel/003.webp",
+          "label": "Hazbin Hotel sticker 3",
+          "source": "https://tgsticker.ru/wp-content/uploads/Hazbin_hotel_p1_keiriststicks/Hazbin_hotel_p1_keiriststicks_003.webp",
+          "sha256": "5859a5c4b47b76d080817962604ce030360a420cbe34c814de55351bb57c6922",
+          "bytes": 4630,
+          "width": 90,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "4",
+          "file": "hazbin-hotel/004.webp",
+          "label": "Hazbin Hotel sticker 4",
+          "source": "https://tgsticker.ru/wp-content/uploads/Hazbin_hotel_p1_keiriststicks/Hazbin_hotel_p1_keiriststicks_004.webp",
+          "sha256": "3ae68dde36180f2a9026e23b70243f30eb1829748feb4ffee4166474e420c110",
+          "bytes": 5122,
+          "width": 122,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "5",
+          "file": "hazbin-hotel/005.webp",
+          "label": "Hazbin Hotel sticker 5",
+          "source": "https://tgsticker.ru/wp-content/uploads/Hazbin_hotel_p1_keiriststicks/Hazbin_hotel_p1_keiriststicks_005.webp",
+          "sha256": "6cf3e59327873028b509210c4171222ab4cd494feca6512752acef7da467e867",
+          "bytes": 4092,
+          "width": 95,
+          "height": 130,
+          "animated": false
+        }
+      ]
+    },
+    {
+      "id": "helluva-boss",
+      "title": "Helluva Boss",
+      "source": "https://tgsticker.ru/static/clownsboss_by_fstikbot/",
+      "telegram": "https://t.me/addstickers/clownsboss_by_fstikbot",
+      "rights": "Third-party character artwork; original creators/rightsholders retain copyright. Not covered by the application code license.",
+      "stickers": [
+        {
+          "id": "1",
+          "file": "helluva-boss/001.webp",
+          "label": "Helluva Boss sticker 1",
+          "source": "https://tgsticker.ru/wp-content/uploads/ClownsBoss_by_fStikBot/ClownsBoss_by_fStikBot_001.webp",
+          "sha256": "d29d5e9afdbd08b414478b11bdc46e3ac1c1f6e9a45d839862dc1c9ef682ff0c",
+          "bytes": 2452,
+          "width": 130,
+          "height": 129,
+          "animated": false
+        },
+        {
+          "id": "2",
+          "file": "helluva-boss/002.webp",
+          "label": "Helluva Boss sticker 2",
+          "source": "https://tgsticker.ru/wp-content/uploads/ClownsBoss_by_fStikBot/ClownsBoss_by_fStikBot_002.webp",
+          "sha256": "5a07e5eed856e5e6d92cf3c6a7c30cf5e36ec4ea997c3993c6f82a8dcf3e84c9",
+          "bytes": 2988,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "3",
+          "file": "helluva-boss/003.webp",
+          "label": "Helluva Boss sticker 3",
+          "source": "https://tgsticker.ru/wp-content/uploads/ClownsBoss_by_fStikBot/ClownsBoss_by_fStikBot_003.webp",
+          "sha256": "54ab140597e63f57d9b013edbc9359edaf2cee1684ab2cd4d598e2cfe95fd114",
+          "bytes": 2468,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "4",
+          "file": "helluva-boss/004.webp",
+          "label": "Helluva Boss sticker 4",
+          "source": "https://tgsticker.ru/wp-content/uploads/ClownsBoss_by_fStikBot/ClownsBoss_by_fStikBot_004.webp",
+          "sha256": "4862ac0de9a6775490d4a3180576d84b506041f7562e3272a3ccc831ec8943ff",
+          "bytes": 1950,
+          "width": 116,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "5",
+          "file": "helluva-boss/005.webp",
+          "label": "Helluva Boss sticker 5",
+          "source": "https://tgsticker.ru/wp-content/uploads/ClownsBoss_by_fStikBot/ClownsBoss_by_fStikBot_005.webp",
+          "sha256": "90c9cbb1992f81927e37afa34e37024e162ab9c47da711718956aa26fbb36759",
+          "bytes": 2776,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        }
+      ]
+    },
+    {
+      "id": "demon-slayer",
+      "title": "Demon Slayer",
+      "source": "https://tgsticker.ru/static/shinobu_kocho_3c57c_by_tgemodzibot/",
+      "telegram": "https://t.me/addstickers/shinobu_kocho_3c57c_by_TgEmodziBot",
+      "rights": "Third-party character artwork; original creators/rightsholders retain copyright. Not covered by the application code license.",
+      "stickers": [
+        {
+          "id": "1",
+          "file": "demon-slayer/001.webp",
+          "label": "Demon Slayer sticker 1",
+          "source": "https://tgsticker.ru/wp-content/uploads/shinobu_kocho_3c57c_by_TgEmodziBot/shinobu_kocho_3c57c_by_TgEmodziBot_001.webp",
+          "sha256": "bca8f4b0c88605eac01b50a3959884bb2b4e6e417a7496b346741c42a2728e02",
+          "bytes": 2948,
+          "width": 74,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "2",
+          "file": "demon-slayer/002.webp",
+          "label": "Demon Slayer sticker 2",
+          "source": "https://tgsticker.ru/wp-content/uploads/shinobu_kocho_3c57c_by_TgEmodziBot/shinobu_kocho_3c57c_by_TgEmodziBot_002.webp",
+          "sha256": "e6641b96989947c244d69cf55e065dc1424efb77e754ca254e6ebbf4ca496cf3",
+          "bytes": 4468,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "3",
+          "file": "demon-slayer/003.webp",
+          "label": "Demon Slayer sticker 3",
+          "source": "https://tgsticker.ru/wp-content/uploads/shinobu_kocho_3c57c_by_TgEmodziBot/shinobu_kocho_3c57c_by_TgEmodziBot_003.webp",
+          "sha256": "0b2aca4c469ef645ad9bb1e43fee2757f268931af3ad055ed14414ff44d63124",
+          "bytes": 2848,
+          "width": 75,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "4",
+          "file": "demon-slayer/004.webp",
+          "label": "Demon Slayer sticker 4",
+          "source": "https://tgsticker.ru/wp-content/uploads/shinobu_kocho_3c57c_by_TgEmodziBot/shinobu_kocho_3c57c_by_TgEmodziBot_004.webp",
+          "sha256": "90b056ddbccd2eb9cdc3144cf55d8b84882358bc41b8aa54a9b46e0729bf1a4f",
+          "bytes": 3982,
+          "width": 93,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "5",
+          "file": "demon-slayer/005.webp",
+          "label": "Demon Slayer sticker 5",
+          "source": "https://tgsticker.ru/wp-content/uploads/shinobu_kocho_3c57c_by_TgEmodziBot/shinobu_kocho_3c57c_by_TgEmodziBot_005.webp",
+          "sha256": "97534af1cbe228adf6e3888a76c559147c85d6b5e2a2d1fc8a4592e8c3fbfb72",
+          "bytes": 4102,
+          "width": 93,
+          "height": 130,
+          "animated": false
+        }
+      ]
+    },
+    {
+      "id": "death-note",
+      "title": "Death Note",
+      "source": "https://tgsticker.ru/static/sameoldshitdeathnote/",
+      "telegram": "https://t.me/addstickers/sameoldshitdeathnote",
+      "rights": "Third-party character artwork; original creators/rightsholders retain copyright. Not covered by the application code license.",
+      "stickers": [
+        {
+          "id": "1",
+          "file": "death-note/001.webp",
+          "label": "Death Note sticker 1",
+          "source": "https://tgsticker.ru/wp-content/uploads/SameOldShitDeathNote/SameOldShitDeathNote_001.webp",
+          "sha256": "dc678998a9e45c7012923936129ac6a3291e7c5b4dcba0d60880de55f665e2db",
+          "bytes": 21818,
+          "width": 512,
+          "height": 512,
+          "animated": false
+        },
+        {
+          "id": "2",
+          "file": "death-note/002.webp",
+          "label": "Death Note sticker 2",
+          "source": "https://tgsticker.ru/wp-content/uploads/SameOldShitDeathNote/SameOldShitDeathNote_002.webp",
+          "sha256": "95b9893a7f115218ffd96e3e1d2b4e9aedccbd32967baaa268c3786445045255",
+          "bytes": 20546,
+          "width": 512,
+          "height": 512,
+          "animated": false
+        },
+        {
+          "id": "3",
+          "file": "death-note/003.webp",
+          "label": "Death Note sticker 3",
+          "source": "https://tgsticker.ru/wp-content/uploads/SameOldShitDeathNote/SameOldShitDeathNote_003.webp",
+          "sha256": "afd715714c8f97cbb83594c804c4759c769265fb25853a649b77083b05fe91fb",
+          "bytes": 21546,
+          "width": 512,
+          "height": 512,
+          "animated": false
+        },
+        {
+          "id": "4",
+          "file": "death-note/004.webp",
+          "label": "Death Note sticker 4",
+          "source": "https://tgsticker.ru/wp-content/uploads/SameOldShitDeathNote/SameOldShitDeathNote_004.webp",
+          "sha256": "088979b9c43d059c7ee9d3da2c1c517f86271043b5308f397d5d2450a9591289",
+          "bytes": 31864,
+          "width": 512,
+          "height": 512,
+          "animated": false
+        },
+        {
+          "id": "5",
+          "file": "death-note/005.webp",
+          "label": "Death Note sticker 5",
+          "source": "https://tgsticker.ru/wp-content/uploads/SameOldShitDeathNote/SameOldShitDeathNote_005.webp",
+          "sha256": "2d5274980d237d6352cfd4cd635b5c01005f33f8fd09d9abef32a314b1b9d283",
+          "bytes": 26114,
+          "width": 512,
+          "height": 512,
+          "animated": false
+        }
+      ]
+    },
+    {
+      "id": "spy-family",
+      "title": "Spy x Family",
+      "source": "https://tgsticker.ru/static/spyxfamilychibi/",
+      "telegram": "https://t.me/addstickers/spyxfamilychibi",
+      "rights": "Third-party character artwork; original creators/rightsholders retain copyright. Not covered by the application code license.",
+      "stickers": [
+        {
+          "id": "1",
+          "file": "spy-family/001.webp",
+          "label": "Spy x Family sticker 1",
+          "source": "https://tgsticker.ru/wp-content/uploads/SpyxFamilyChibi/SpyxFamilyChibi_001.webp",
+          "sha256": "b10f6cf28080d82a6d818d7e59ceaaf70f7bb58606ea7a861ede8cf29c3808ca",
+          "bytes": 3818,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "2",
+          "file": "spy-family/002.webp",
+          "label": "Spy x Family sticker 2",
+          "source": "https://tgsticker.ru/wp-content/uploads/SpyxFamilyChibi/SpyxFamilyChibi_002.webp",
+          "sha256": "e6da4df4e71e7df23abce7418818ef7ef3a7742163c8101cb26ad68f241e514e",
+          "bytes": 3694,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "3",
+          "file": "spy-family/003.webp",
+          "label": "Spy x Family sticker 3",
+          "source": "https://tgsticker.ru/wp-content/uploads/SpyxFamilyChibi/SpyxFamilyChibi_003.webp",
+          "sha256": "bc9bbf05ce7bad3a237fe8e2641766a0e789dd31e54f1f1630aa341245f554af",
+          "bytes": 3624,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "4",
+          "file": "spy-family/004.webp",
+          "label": "Spy x Family sticker 4",
+          "source": "https://tgsticker.ru/wp-content/uploads/SpyxFamilyChibi/SpyxFamilyChibi_004.webp",
+          "sha256": "640acf8659cf69919bea0c85da0e0973ba5ed8d37fa2088f6760c9688a1c475d",
+          "bytes": 5156,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "5",
+          "file": "spy-family/005.webp",
+          "label": "Spy x Family sticker 5",
+          "source": "https://tgsticker.ru/wp-content/uploads/SpyxFamilyChibi/SpyxFamilyChibi_005.webp",
+          "sha256": "31f062f86e1d6d814233aa19209f7ecea6ee4d0fac98ddff18cacf573d1ae669",
+          "bytes": 5358,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        }
+      ]
+    },
+    {
+      "id": "genshin-impact",
+      "title": "Genshin Impact",
+      "source": "https://tgsticker.ru/static/venti_03/",
+      "telegram": "https://t.me/addstickers/venti_03",
+      "rights": "Third-party character artwork; original creators/rightsholders retain copyright. Not covered by the application code license.",
+      "stickers": [
+        {
+          "id": "1",
+          "file": "genshin-impact/001.webp",
+          "label": "Genshin Impact sticker 1",
+          "source": "https://tgsticker.ru/wp-content/uploads/venti_03/venti_03_001.webp",
+          "sha256": "1393699f08a02fab89b3e54c3e22749f208d97c6bb8a2e50055e0d226f89cee9",
+          "bytes": 2592,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "2",
+          "file": "genshin-impact/002.webp",
+          "label": "Genshin Impact sticker 2",
+          "source": "https://tgsticker.ru/wp-content/uploads/venti_03/venti_03_002.webp",
+          "sha256": "a961d95d03a3c3d5195d6dc18b7f78288f9c5d42f730a5d541c4538be1f422c5",
+          "bytes": 2632,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "3",
+          "file": "genshin-impact/003.webp",
+          "label": "Genshin Impact sticker 3",
+          "source": "https://tgsticker.ru/wp-content/uploads/venti_03/venti_03_003.webp",
+          "sha256": "4cfb99781c989da45165fc97b78791dec37b247a77f27b5c56b1996722509fe7",
+          "bytes": 3022,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "4",
+          "file": "genshin-impact/004.webp",
+          "label": "Genshin Impact sticker 4",
+          "source": "https://tgsticker.ru/wp-content/uploads/venti_03/venti_03_004.webp",
+          "sha256": "b5887286662d53c8e0a345943ed20805a7779cd886e4ff6b746b66d45f890f09",
+          "bytes": 3450,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "5",
+          "file": "genshin-impact/005.webp",
+          "label": "Genshin Impact sticker 5",
+          "source": "https://tgsticker.ru/wp-content/uploads/venti_03/venti_03_005.webp",
+          "sha256": "7da2cc6e1e8aaf59b0b3f69b07ab612f7a6f5b06d5b4595c15fd49349b3e1c84",
+          "bytes": 3194,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        }
+      ]
+    },
+    {
+      "id": "my-hero-academia",
+      "title": "My Hero Academia",
+      "source": "https://tgsticker.ru/static/hero_academy_nyasticks/",
+      "telegram": "https://t.me/addstickers/hero_academy_nyasticks",
+      "rights": "Third-party character artwork; original creators/rightsholders retain copyright. Not covered by the application code license.",
+      "stickers": [
+        {
+          "id": "1",
+          "file": "my-hero-academia/001.webp",
+          "label": "My Hero Academia sticker 1",
+          "source": "https://tgsticker.ru/wp-content/uploads/Hero_Academy_Nyasticks/Hero_Academy_Nyasticks_001.webp",
+          "sha256": "b2b91ba281fcf12f1d9fabdf712ea17eb53d416a2997cd2cbbbb999e8f3b1483",
+          "bytes": 5658,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "2",
+          "file": "my-hero-academia/002.webp",
+          "label": "My Hero Academia sticker 2",
+          "source": "https://tgsticker.ru/wp-content/uploads/Hero_Academy_Nyasticks/Hero_Academy_Nyasticks_002.webp",
+          "sha256": "4eb4a668d2cd5b74c46b7f492c2fa66d291863da3e431f787c0f0b34b75502a5",
+          "bytes": 4930,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "3",
+          "file": "my-hero-academia/003.webp",
+          "label": "My Hero Academia sticker 3",
+          "source": "https://tgsticker.ru/wp-content/uploads/Hero_Academy_Nyasticks/Hero_Academy_Nyasticks_003.webp",
+          "sha256": "d5a433154c699396f9cb7966962fa0a56219f26deb48b027e37efc9e3c1d9db5",
+          "bytes": 6438,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "4",
+          "file": "my-hero-academia/004.webp",
+          "label": "My Hero Academia sticker 4",
+          "source": "https://tgsticker.ru/wp-content/uploads/Hero_Academy_Nyasticks/Hero_Academy_Nyasticks_004.webp",
+          "sha256": "f2d6a9b6f742f5036b258c84a93a257b2396b7e6bb825433486bd3dc6835dacb",
+          "bytes": 5186,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        },
+        {
+          "id": "5",
+          "file": "my-hero-academia/005.webp",
+          "label": "My Hero Academia sticker 5",
+          "source": "https://tgsticker.ru/wp-content/uploads/Hero_Academy_Nyasticks/Hero_Academy_Nyasticks_005.webp",
+          "sha256": "3b05980f7ff60211f931b76ccae3a0bca9f05d57a6dde7143248cdb54fb76272",
+          "bytes": 9366,
+          "width": 130,
+          "height": 130,
+          "animated": false
+        }
+      ]
+    }
+  ]
+}

@@ -9,3 +9,7 @@ Use the recursive clone in [Install](docs/INSTALL.md) for complete source. It in
 Run `npm run prepare:source` before hosting or building an image, and again after local code changes. It creates `public/preview-source.tar.gz`, served from the test guide, containing tracked application source and complete checked-out upstream source. Retain that offer, the licenses and notices. Modified deployments must provide their corresponding modified source as required by the license; a link to unrelated stable source is not sufficient.
 
 The packager excludes `.env`, phone keys, databases, private QR links, credentials, backups, node_modules and build output. Dependencies/build inputs are pinned with public upstream locations. [Notices](THIRD_PARTY_NOTICES.md) · [Binding build](third_party/libsignal/README.md).
+
+## Character sticker artwork
+
+Bundled community character artwork is separate from the code grants. Original artists/rightsholders retain their rights; no MIT/AGPL artwork license or official endorsement is asserted. Keep [the asset notice](public/stickers/NOTICE.md) and [source/hash catalog](public/stickers/catalog.json) with any copies. A public catalog's availability alone is not a blanket commercial redistribution grant.

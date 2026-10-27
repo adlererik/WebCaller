@@ -1,5 +1,7 @@
 # Using WebCaller
 
+For stickers, tap the folded-corner icon beside the message field, choose a pack and tap a sticker to send. Use the star for Favorites. Recent/Favorites are saved in encrypted device storage. Stickers support the same original disappearing timer, replies, reactions, forwarding and deletion as other media. See the [sticker guide](STICKERS.md).
+
 This release uses libsignal/PQXDH with Ed25519 application signatures. [Install](INSTALL.md) · [Security](SECURITY.md) · [Olm upgrade planning](APPROVED_CUTOVER.md).
 
 ## Your browser is your device

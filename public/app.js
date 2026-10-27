@@ -29,7 +29,9 @@ import {AudioOutput} from './audio-output.js';
 import { readEntryFragment, clearEntryFragment } from './onboarding.js';
 import {newAttachment,validAttachment,attachmentKey,encryptChunk,decryptChunk,CHUNK_SIZE,mediaKind,fileSize} from './attachments.js';
 import {messageActions} from './message-actions.js';
-import {applyMessageEvent,validMessageId} from './message-state.js';
+import {applyMessageEvent,validMessageId,messageEventLifetime} from './message-state.js';
+import {stickerPicker,stickerDimensions} from './stickers.js';
+import {stickerChannels} from './sticker-channel.js';
 import {drawMessages,emojiPicker} from './chat-ui.js';
 import {chatCapture} from './chat-capture.js';
 import {ntfySetup,ntfyEntry} from './ntfy-setup.js';
@@ -42,6 +44,7 @@ function cacheNotice(ok){
 const $=id=>document.getElementById(id);
 const startupStatus=(state,message='')=>window.dispatchEvent(new CustomEvent('webcaller-startup',{detail:{state,message}}));
 const icons={
+  sticker:'<path d="M5 3h14a2 2 0 0 1 2 2v10l-6 6H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M15 21v-4a2 2 0 0 1 2-2h4M8 9h.01M15 9h.01M8 13c1.5 2 4.5 2 6 0"/>',
   theme:'<circle cx="12" cy="12" r="9"/><path d="M12 3v18a9 9 0 0 0 0-18Z"/>',timer:'<circle cx="12" cy="13" r="8"/><path d="M9 2h6M12 5V2M12 9v5l3 2M18 5l2 2"/>',
   reply:'<path d="m9 4-7 7 7 7v-5c6 0 10 2 13 7v-4C22 8 17 7 9 7Z"/>',edit:'<path d="m3 17 14-14 4 4-14 14-5 1ZM14 6l4 4"/>',forward:'<path d="m15 4 7 7-7 7v-5C9 13 5 15 2 20v-4c0-8 5-9 13-9Z"/>',check:'<circle cx="12" cy="12" r="9"/><path d="m7 12 3 3 7-7"/>',pin:'<path d="m15 3 6 6-4 1-3 5 1 3-3-1-4-4-1-3 3 1 5-3ZM10 14l-7 7"/>',trash:'<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>',
   gallery:'<rect x="3" y="6" width="17" height="15" rx="3"/><path d="m6 6-1-3 15-1 2 15-2 1M3 17l5-5 4 4 3-3 5 5"/><circle cx="8" cy="10" r="1"/>',location:'<circle cx="12" cy="12" r="9"/><path d="m7 11 11-5-5 11-2-4Z"/>',speaker:'<path d="M3 9h4l5-5v16l-5-5H3ZM16 8a6 6 0 0 1 0 8M19 5a10 10 0 0 1 0 14"/>',info:'<circle cx="12" cy="12" r="9"/><path d="M12 10v7M12 7h.01"/>',videoOff:'<path d="M3 3l18 18M3 7v12h12v-4M9 5h6v4l6-3v12l-3-1"/>',
@@ -183,6 +186,7 @@ function showContactOptions(c,block=false){
   $('confirm-remove-contact').disabled=false;if(!$('remove-contact-dialog').open)$('remove-contact-dialog').showModal();
 }
 async function clearContactHistory(id){
+  stickers.close();stickerLinks.reset();
   for(const [key,m]of pendingTransfers)if([m.from,m.to].includes(id))pendingTransfers.delete(key);if(pendingMessageNotice?.peerId===id)pendingMessageNotice=null;
   if(transfer?.peerId===id)transfer.controller.abort();
   if(selected?.id===id){
@@ -199,6 +203,7 @@ async function clearContactHistory(id){
   await messenger.forgetPeer(id); // The separate identity fingerprint survives history deletion.
 }
 function selectContact(c){
+  stickers.close();
   actions.reset();stopTyping();locationShare.close();$('attachment-dialog').close();closeViewer();captures.close();$('draft-dialog').close();$('message-input').value='';updateComposer();selected=c;unread.delete(c.id);renderContacts();$('empty').classList.add('hidden');$('conversation').classList.remove('hidden');document.querySelector('.app').classList.add('chat-open');
   $('peer-name').textContent=contactName(device,c);$('peer-avatar').textContent=initials(contactName(device,c));$('expiry-label').textContent=timerDescription(timerFor(c.id));renderMessages();
   renderRequest();
@@ -255,6 +260,7 @@ function pumpMedia(){
   const bounds=$('messages').getBoundingClientRect();
   if(bounds.height<=0)return;
   const m=[...messages.values()].find(m=>{
+    if(m.attachment?.sticker&&stickerLinks.incoming(m.id))return false;
     if(!m.attachment||mediaKind(m.attachment.type)==='file'||![m.from,m.to].includes(selected.id)||m.expiresAt<=Date.now()||m.blobURL||m.loading||m.loadError)return false;
     const row=[...$('messages').children].find(e=>e.dataset.key===m.id),rect=row?.getBoundingClientRect();
     return rect&&rect.bottom>=bounds.top-150&&rect.top<=bounds.bottom+150;
@@ -361,12 +367,13 @@ async function transferChunk(a,index,state,cipher,signal=state.controller.signal
   }
   return result?.buffer;
 }
-async function sendFile(file,text='',sharedLocation,recipient=selected){
+async function sendFile(file,text='',sharedLocation,recipient=selected,asSticker=false){
   if(sharedLocation&&!validLocation(sharedLocation))return toast('Invalid location.');
   if(!file||!recipient)return false;const peer=recipient;
   let a;try{a=newAttachment(file);}catch(e){return toast(e.message);}
+  if(asSticker){a.sticker=true;if(!validAttachment(a))return toast('Choose a WebP sticker up to 512 KB.');try{stickerDimensions(new Uint8Array(await file.slice(0,65536).arrayBuffer()),file.size);}catch(e){return toast(e.message);}void stickerLinks.prepare(peer);}
   const state=beginTransfer(`Sending ${a.name} to ${contactName(device,peer)}`);if(!state)return;state.peerId=peer.id;
-  let committed=false,writer;const owner=device.user.id;
+  let committed=false,writer;const owner=device.user.id,directChunks=[];
   try{
     const envelope=await seal(device.identity,device.user.id,peer,{kind:'attachment',attachment:a,text,...(sharedLocation?{location:sharedLocation}:{})},timerFor(peer.id),{perView:true}),key=await attachmentKey(a);state.messageId=envelope.id;transferExpiry(state,(await messenger.messageState(envelope)).expiresAt);
     await retryTransfer(state,()=>api('/attachments','POST',{id:a.id,size:a.size,envelope},state.controller.signal));
@@ -375,15 +382,17 @@ async function sendFile(file,text='',sharedLocation,recipient=selected){
     await transferPool(a.chunks,async(index,signal)=>{
       signal.throwIfAborted();const bytes=new Uint8Array(await file.slice(index*CHUNK_SIZE,(index+1)*CHUNK_SIZE).arrayBuffer());
       let cipher;try{cipher=await encryptChunk(key,a,index,envelope.expiresAt,bytes);}finally{bytes.fill(0);}
+      if(asSticker)directChunks[index]=new Uint8Array(cipher);
       await transferChunk(a,index,state,cipher,signal);if(writer)cacheNotice(await writer.put(index,cipher));
     },state.controller.signal);
+    if(asSticker)await stickerLinks.send(peer,envelope,directChunks,state.controller.signal);
     await retryTransfer(state,()=>api('/messages','POST',envelope,state.controller.signal));committed=true;state.committed=true;
     if(!state.controller.signal.aborted)cacheNotice(writer?await writer.commit():false);
     await acceptMessage(envelope);const m=messages.get(envelope.id);
     if(m&&document.visibilityState==='visible'&&!state.controller.signal.aborted){m.blob=file;m.blobURL=URL.createObjectURL(file);if(selected?.id===peer.id)renderMessages();}
-    toast('File sent. It uses this chat’s disappearing timer.');return true;
+    toast(asSticker?'Sticker sent.':'File sent. It uses this chat’s disappearing timer.');return true;
   }catch(e){if(e.name!=='AbortError')toast(e.message);}
-  finally{await writer?.abort();if(!committed)void api(`/attachments/${a.id}`,'DELETE').catch(()=>{});endTransfer(state);}
+  finally{for(const chunk of directChunks)chunk?.fill(0);await writer?.abort();if(!committed)void api(`/attachments/${a.id}`,'DELETE').catch(()=>{});endTransfer(state);}
 }
 function saveAttachment(m){
   if(!m.attachment||m.expiresAt<=Date.now()||!m.blobURL)return toast('This file has expired.');
@@ -418,7 +427,7 @@ async function loadAttachment(m,automatic=false){
     }
     state.controller.signal.throwIfAborted();
     if(m.expiresAt<=Date.now()||messages.get(m.id)!==m)throw new Error('This file has expired or was deleted.');
-    const blob=new Blob(pieces,{type:mediaKind(a.type)==='file'?'application/octet-stream':a.type});m.blob=blob;m.blobURL=URL.createObjectURL(blob);
+    const blob=new Blob(pieces,{type:mediaKind(a.type)==='file'?'application/octet-stream':a.type});if(a.sticker)stickerDimensions(new Uint8Array(await blob.slice(0,65536).arrayBuffer()),a.size);m.blob=blob;m.blobURL=URL.createObjectURL(blob);
     if(!automatic){if(mediaKind(a.type)==='file')saveAttachment(m);else openViewer(m);}
   }catch(e){if(e.name!=='AbortError'){m.loadError=e.message;if(!automatic)toast(e.message);}}
   finally{pieces=[];await writer?.abort();m.loading=false;endTransfer(state);if(selected&&[m.from,m.to].includes(selected.id))renderMessages();}
@@ -456,6 +465,25 @@ $('close-media').onclick=closeViewer;$('media-viewer').addEventListener('close',
 $('draft-dialog').addEventListener('close',clearDraft);
 $('draft-form').onsubmit=e=>{e.preventDefault();if(!draft||draft.peer!==selected?.id)return;const file=draft.file,text=$('draft-caption').value.trim();clearDraft();$('draft-dialog').close();void sendFile(file,text);};
 const chooseEmoji=emojiPicker({input:$('message-input'),changed:inputTyping,toast});
+const stickerLinks=stickerChannels({self:()=>device?.user.id,peer:id=>device?.contacts.find(p=>p.id===id&&!p.request),ice:()=>api('/ice'),
+  signal:async(peer,payload)=>{if(!device||document.visibilityState!=='visible')throw Error('Phone not active');const envelope=await seal(device.identity,device.user.id,peer,payload,90);await api('/sticker-link','POST',{envelope});},
+  pace:(bytes,signal)=>paceTransfer(bytes,signal),
+  receive:async(peer,envelope,chunks)=>{
+    if(!device||document.visibilityState!=='visible'||deletedMessages.has(envelope.id))return;
+    const owner=device.user.id,payload=await open(device.identity,owner,peer,envelope),a=payload.attachment;
+    if(payload.kind!=='attachment'||!validAttachment(a)||a.sticker!==true||chunks.length!==a.chunks)return;
+    const state=await messenger.messageState(envelope);if(state.expiresAt<=Date.now()||deletedMessages.has(envelope.id))return;
+    const key=await attachmentKey(a);
+    for(let i=0;i<chunks.length;i++){const bytes=new Uint8Array(await decryptChunk(key,a,i,envelope.expiresAt,chunks[i]));try{if(i===0)stickerDimensions(bytes,a.size);}finally{bytes.fill(0);}}
+    if(document.visibilityState!=='visible'||device?.user.id!==owner||deletedMessages.has(envelope.id))return;
+    const buffers=chunks.map(c=>c.buffer.slice(c.byteOffset,c.byteOffset+c.byteLength));
+    const cached=await cachedMedia.put(owner,{...envelope,...state,wireExpiresAt:envelope.expiresAt},a,buffers);setTimeout(pumpMedia,0);return cached===true;
+  }
+});
+const stickers=stickerPicker({button:$('stickers'),panel:$('sticker-panel'),peer:()=>selected,send:(file,peer)=>sendFile(file,'',undefined,peer,true),warm:peer=>stickerLinks.prepare(peer),toast,
+  loadPreferences:()=>device?.user?messenger.store.lock(device.user.id,db=>db.read('sticker-preferences')):Promise.resolve(null),
+  savePreferences:value=>{const owner=device?.user.id;if(!owner)return Promise.resolve();return messenger.store.lock(owner,async db=>{if(device?.user.id===owner)await db.commit([await db.record('sticker-preferences',value,{kind:'preferences'})]);});}
+});
 const actions=messageActions({messages:()=>messages,self:()=>device?.user.id,contacts:()=>(device?.contacts||[]).map(c=>({...c,name:contactName(device,c)})),peer:()=>selected,render:renderMessages,event:sendMessageEvent,sendText:sendTextTo,sendFile,load:loadAttachment,remove:async m=>{await api(`/messages/${m.id}`,'DELETE');rememberDeletion(m.id,m.expiresAt);},toast,emoji:chooseEmoji});
 let eventChain=Promise.resolve(),receiptWanted=new Map(),visibleSince=new Map(),pendingMessageEvents=new Map(),receiptTimer,receiptsBusy=false,hydratingMessages=false;
 async function acceptMessageEvent(update){
@@ -473,9 +501,9 @@ async function acceptMessageEvent(update){
 async function eventEnvelope(m,kind,data){
   if(messages.get(m.id)!==m||m.expiresAt-Date.now()<300)throw new Error('Message expired or was deleted');
   const peer=device.contacts.find(c=>c.id===(m.from===device.user.id?m.to:m.from));if(!peer)throw new Error('Contact unavailable');
-  const ttl=m.lifetime||isPermanent(m.expiresAt)?0:Math.floor((m.expiresAt-Date.now()-100)/1000*1000)/1000;
+  const {ttl,maxExpiry}=messageEventLifetime(m);
   const envelope=await seal(device.identity,device.user.id,peer,{kind:`message-${kind}`,target:m.id,...data},ttl);
-  if(envelope.expiresAt>m.expiresAt)throw new Error('Try the update again');return {target:m.id,kind,envelope};
+  if(envelope.expiresAt>maxExpiry)throw new Error('Try the update again');return {target:m.id,kind,envelope};
 }
 function sendMessageEvent(m,kind,data){
   const task=eventChain.catch(()=>{}).then(async()=>{const update=await eventEnvelope(m,kind,data);await api('/message-events','POST',{events:[update]});await acceptMessageEvent(update);});eventChain=task;return task;
@@ -569,6 +597,10 @@ const callLink=signalingLink({
     await sync();
   },
   onPacket:async(b,socket)=>{
+      if(b.type==='sticker-link'){
+        const peer=device?.contacts.find(c=>c.id===b.envelope?.from&&!c.request);if(!peer||document.visibilityState!=='visible')return;
+        const payload=await open(device.identity,device.user.id,peer,b.envelope);if(payload.kind==='sticker-link'&&b.envelope.ratchet?.scope===payload.callId)try{await stickerLinks.accept(peer,payload);}catch{stickerLinks.reset();}return;
+      }
       if(b.type==='transfer')await receiveTransfer(b);
       else if(b.type==='transfer-ended'){if(pendingTransfers.delete(b.id)&&selected)renderMessages();}
       else if(b.type==='message')await acceptMessage(b.envelope);
@@ -623,6 +655,7 @@ function ringBurst(){
 function silenceRing(){for(const oscillator of ringNodes){try{oscillator.stop();}catch{}}ringNodes.clear();$('hear-ringing').classList.add('hidden');navigator.vibrate?.(0);}
 function stopRing(){ringer.stop();}
 function showCall(incoming=false){
+  stickers.close();
   timerUi.dismiss();
   $('answer').disabled=!wsReady;
   dialUi.close();$('dial-settings-dialog').close();$('contact-options-dialog').close();$('remove-contact-dialog').close();
@@ -999,3 +1032,8 @@ unlockSound();
 void boot();
 
 document.addEventListener('close',queueReceipts,true);
+
+// Sticker links carry only bounded encrypted images and never survive suspension.
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){stickers.close();stickerLinks.reset();}});
+window.addEventListener('offline',()=>stickerLinks.reset());
+navigator.connection?.addEventListener('change',()=>stickerLinks.reset());

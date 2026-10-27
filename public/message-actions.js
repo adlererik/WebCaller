@@ -5,7 +5,7 @@ export function messageActions({messages,self,contacts,peer,render,event,sendTex
   const selection=new Set();
   const alive=m=>m&&messages().get(m.id)===m&&m.expiresAt>Date.now();
   const stamp=t=>t?new Date(t).toLocaleString():'Not yet';
-  const summary=m=>m.location?'Current location':m.text||m.attachment?.name||'Message';
+  const summary=m=>m.attachment?.sticker?'Sticker':m.location?'Current location':m.text||m.attachment?.name||'Message';
   function replyBar(){const original=messages().get(replyTo);$('reply-context').classList.toggle('hidden',!replyTo);$('reply-summary').textContent=alive(original)?summary(original).slice(0,120):'Original message unavailable';}
   function selectionBar(){const n=selection.size;$('selection-bar').classList.toggle('hidden',!n);$('selection-count').textContent=`${n} selected`;}
   function close(){for(const id of ['message-dialog','edit-dialog','forward-dialog','message-info-dialog','delete-dialog'])$(id).close();chosen=editing=forwarding=null;deleting=[];$('edit-text').value='';$('forward-people').replaceChildren();$('message-info').replaceChildren();$('quick-reactions').replaceChildren();}
@@ -13,7 +13,7 @@ export function messageActions({messages,self,contacts,peer,render,event,sendTex
   function select(m){if(!alive(m))return;if(selection.has(m.id))selection.delete(m.id);else if(selection.size<20)selection.add(m.id);else return toast('Select up to 20 messages at a time.');selectionBar();render();}
   function show(m){
     if(!alive(m))return;if(selection.size)return select(m);chosen=m;
-    $('message-edit').classList.toggle('hidden',m.from!==self()||!!m.location);
+    $('message-edit').classList.toggle('hidden',m.from!==self()||!!m.location||!!m.attachment?.sticker);
     $('message-pin').lastChild.textContent=m.pinned?'Unpin':'Pin';
     const strip=$('quick-reactions');strip.replaceChildren();
     for(const value of ['❤️','👍','👎','😂','😮','😢']){
@@ -29,7 +29,7 @@ export function messageActions({messages,self,contacts,peer,render,event,sendTex
     for(const c of contacts()){
       const b=document.createElement('button');b.className='secondary full';b.textContent=c.name;b.onclick=async()=>{
         const items=forwarding?.slice();if(!items)return;b.disabled=true;
-        try{for(const m of items){if(!alive(m))continue;if(m.attachment){if(!m.blob)await load(m,true);if(!alive(m)||!m.blob)throw new Error('Open this media first, then try forwarding it.');if(!await sendFile(new File([m.blob],m.attachment.name,{type:m.attachment.type}),m.text,m.location,c))throw new Error('This media was not forwarded. Try again after the call or transfer.');}else await sendText(c,m.text,{forwarded:true});}close();toast('Forwarded.');}catch(e){toast(e.message);}finally{b.disabled=false;}
+        try{for(const m of items){if(!alive(m))continue;if(m.attachment){if(!m.blob)await load(m,true);if(!alive(m)||!m.blob)throw new Error('Open this media first, then try forwarding it.');if(!await sendFile(new File([m.blob],m.attachment.name,{type:m.attachment.type}),m.text,m.location,c,m.attachment.sticker===true))throw new Error('This media was not forwarded. Try again after the call or transfer.');}else await sendText(c,m.text,{forwarded:true});}close();toast('Forwarded.');}catch(e){toast(e.message);}finally{b.disabled=false;}
       };el.append(b);
     }
     $('forward-dialog').showModal();

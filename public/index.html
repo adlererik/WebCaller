@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="./style.css">
   <link rel="stylesheet" href="./sharing.css">
   <link rel="stylesheet" href="./messages.css">
+  <link rel="stylesheet" href="./stickers.css">
   <link rel="stylesheet" href="./home.css">
   <link rel="stylesheet" href="./settings.css">
   <link rel="stylesheet" href="./call-layout.css">
@@ -57,7 +58,8 @@
         <div id="messages" class="messages" role="log" aria-label="Messages"></div>
         <div id="typing-status" class="typing-status hidden" role="status"><span class="typing-bubble"><i></i><i></i><i></i></span><span id="typing-label" class="sr-only"></span></div>
         <div id="reply-context" class="reply-context hidden"><span><strong>Reply</strong><span id="reply-summary"></span></span><button id="cancel-reply" class="icon-button" type="button" aria-label="Cancel reply" data-icon="close"></button></div>
-        <form id="composer" class="composer"><div class="compose-pill"><button id="emoji" class="icon-button" type="button" aria-label="Choose emoji" data-icon="smile"></button><textarea id="message-input" rows="1" maxlength="4000" aria-label="Message" placeholder="Message"></textarea><button id="chat-camera" class="icon-button" type="button" aria-label="Take a photo" data-icon="camera"></button><button id="record-voice" class="icon-button" type="button" aria-label="Record voice message" data-icon="mic"></button></div><button id="attach" class="attach-button" type="button" aria-label="Send files and media" data-icon="plus"></button><button class="send-button hidden" id="send" type="submit" aria-label="Send message" data-icon="send"></button></form>
+        <section id="sticker-panel" class="sticker-panel hidden" aria-label="Sticker picker"><header class="sticker-heading"><strong id="sticker-pack-name">Stickers</strong><button id="close-stickers" type="button" class="icon-button" aria-label="Close stickers" data-icon="close"></button></header><div id="sticker-grid" class="sticker-grid" role="tabpanel"></div><p id="sticker-status" class="sticker-status" role="status"></p><div id="sticker-tabs" class="sticker-tabs" role="tablist" aria-label="Sticker packs"></div></section>
+        <form id="composer" class="composer"><div class="compose-pill"><button id="emoji" class="icon-button" type="button" aria-label="Choose emoji" data-icon="smile"></button><button id="stickers" class="icon-button composer-stickers" type="button" aria-label="Choose stickers" aria-controls="sticker-panel" data-icon="sticker"></button><textarea id="message-input" rows="1" maxlength="4000" aria-label="Message" placeholder="Message"></textarea><button id="chat-camera" class="icon-button" type="button" aria-label="Take a photo" data-icon="camera"></button><button id="record-voice" class="icon-button" type="button" aria-label="Record voice message" data-icon="mic"></button></div><button id="attach" class="attach-button" type="button" aria-label="Send files and media" data-icon="plus"></button><button class="send-button hidden" id="send" type="submit" aria-label="Send message" data-icon="send"></button></form>
         <p id="attachment-progress" class="attachment-progress hidden" role="status"></p><input id="photo-input" type="file" accept="image/*,video/*" hidden><input id="file-input" type="file" hidden><input id="camera-input" type="file" accept="image/*" capture="environment" hidden><div class="composer-note">Messages are encrypted. Set up call alerts in Settings.</div>
       </section>
     </main>

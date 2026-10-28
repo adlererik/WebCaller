@@ -15,10 +15,20 @@ async function exhaust(f){
  assert.equal((await f.apiB('/ratchet/status')).available,0);
 }
 const sticker=()=>({...newAttachment(new File(['Synthetic WebP payload'],'sticker.webp',{type:'image/webp'})),sticker:true});
+async function offlineRecipient(t,f){
+ let connected=true;
+ const client=secureMessaging({...f.optionsB,api:(...args)=>connected?f.apiB(...args):Promise.reject(new TypeError('Synthetic recipient is offline'))});
+ await client.initialize(f.bob);
+ // Stop publication timers even on an assertion failure; this is disposable
+ // fixture storage, never a production identity or database.
+ t.after(()=>client.forget());
+ return {client,disconnect:()=>{connected=false;},open:e=>client.open(f.bob.identity,f.bob.user.id,f.alice.user,e)};
+}
+
 
 test('an offline recipient with no unused prekeys can still receive a burst of stickers through the established chat ratchet',async t=>{
- const f=await fixture(t),first=await f.sendA('Chat already works');await f.openB(first);
- await f.openA(await f.sendB('Reply'));await exhaust(f);
+ const f=await fixture(t),recipient=await offlineRecipient(t,f),first=await f.sendA('Chat already works');await recipient.open(first);
+ await f.openA(await recipient.client.seal(f.bob.identity,f.bob.user.id,f.alice.user,{kind:'text',text:'Reply'},3600));recipient.disconnect();await exhaust(f);
  let claims=0;const sender=secureMessaging({...f.optionsA,api:(p,...args)=>{if(p.startsWith('/ratchet/claim/'))claims++;return f.apiA(p,...args);}});await sender.initialize(f.alice);
  const packets=[];
  for(let i=0;i<40;i++){
@@ -39,7 +49,7 @@ test('an offline recipient with no unused prekeys can still receive a burst of s
 
  // Deliver the latest first, then older ones, just as direct/store delivery may race.
  for(const e of packets.reverse()){
-  const payload=await f.openB(e);assert.equal(payload.attachment.sticker,true);
+  const payload=await recipient.open(e);assert.equal(payload.attachment.sticker,true);
   const key=await attachmentKey(payload.attachment),bytes=new TextEncoder().encode('Synthetic WebP payload'),cipher=await encryptChunk(key,payload.attachment,0,e.expiresAt,bytes);
   assert.deepEqual(new Uint8Array(await decryptChunk(key,payload.attachment,0,e.expiresAt,cipher)),bytes);
  }
@@ -49,15 +59,15 @@ test('an offline recipient with no unused prekeys can still receive a burst of s
 });
 
 test('sticker connection and transfer controls reuse their own ratchets across new attempts and files',async t=>{
- const f=await fixture(t),callId=crypto.randomUUID(),target=crypto.randomUUID();
- const control=await f.a.seal(f.alice.identity,f.alice.user.id,f.bob.user,{kind:'sticker-link',callId,action:'offer'},90);await f.openB(control);
- const transfer=await f.a.seal(f.alice.identity,f.alice.user.id,f.bob.user,{kind:'transfer',target,percent:1},20);await f.openB(transfer);
- await exhaust(f);
+ const f=await fixture(t),recipient=await offlineRecipient(t,f),callId=crypto.randomUUID(),target=crypto.randomUUID();
+ const control=await f.a.seal(f.alice.identity,f.alice.user.id,f.bob.user,{kind:'sticker-link',callId,action:'offer'},90);await recipient.open(control);
+ const transfer=await f.a.seal(f.alice.identity,f.alice.user.id,f.bob.user,{kind:'transfer',target,percent:1},20);await recipient.open(transfer);
+ recipient.disconnect();await exhaust(f);
  for(let i=0;i<6;i++){
   const link=await f.a.seal(f.alice.identity,f.alice.user.id,f.bob.user,{kind:'sticker-link',callId:crypto.randomUUID(),action:'offer'},90);
-  assert.equal(link.ratchet.sessionId,control.ratchet.sessionId);assert.equal(link.ratchet.scope,'sticker-link');assert.equal((await f.openB(link)).action,'offer');
+  assert.equal(link.ratchet.sessionId,control.ratchet.sessionId);assert.equal(link.ratchet.scope,'sticker-link');assert.equal((await recipient.open(link)).action,'offer');
   const progress=await f.a.seal(f.alice.identity,f.alice.user.id,f.bob.user,{kind:'transfer',target:crypto.randomUUID(),percent:2},20);
-  assert.equal(progress.ratchet.sessionId,transfer.ratchet.sessionId);assert.equal(progress.ratchet.scope,'transfer');assert.equal((await f.openB(progress)).percent,2);
+  assert.equal(progress.ratchet.sessionId,transfer.ratchet.sessionId);assert.equal(progress.ratchet.scope,'transfer');assert.equal((await recipient.open(progress)).percent,2);
  }
 });
 
@@ -85,7 +95,7 @@ test('old per-file stickers and per-attempt controls remain readable; non-sticke
 test('missed publication automatically retries without replacing an identity or reviving a claimed key',async t=>{
  const f=await fixture(t);let offline=false,failed=0,successful=0;
  const device=secureMessaging({...f.optionsB,api:async(p,...args)=>{
-  if(offline&&p==='/ratchet/publish'){if(!failed++){throw new TypeError('Synthetic connection loss');}successful++;}
+  if(offline&&p==='/ratchet/publish'){if(!failed++){throw new TypeError('Synthetic connection loss');}const response=await f.apiB(p,...args);successful++;return response;}
   return f.apiB(p,...args);
  }});await device.initialize(f.bob);await exhaust(f);
  const before=f.app.store.get('SELECT identity FROM ratchet_accounts WHERE owner=?',f.bob.user.id).identity;

@@ -2,21 +2,23 @@
 
 Open a chat and tap the folded-corner sticker icon beside the message field. Choose a pack along the bottom, then tap a sticker to send it immediately. Tap a star for Favorites; Recent shows stickers sent in this device. Recent and favorite choices are saved in the existing encrypted device store; no plaintext localStorage history is added.
 
-The collection has **1,117 WebP stickers across 18 packs**, including **221 Angel Dust stickers in three dedicated packs**. Thirteen packs include their complete source snapshot. Five additional collections retain the available source images; missing source files are explicitly recorded in the catalog and never shown as broken tiles. Existing sticker IDs and favorites remain valid.
+The collection has **1,407 WebP stickers across 28 packs**, including **250 Angel Dust stickers in four dedicated packs**. The picker opens in **Cutouts**, showing **690 reviewed transparent stickers** across all eight requested series. Choose **All** for the full collection, including original screenshot stickers. Switching views does not delete Favorites, Recent entries or sent messages. The view choice is saved in the existing encrypted device store.
 
-| Collection | Stickers |
+Ready-made transparent artwork is preferred over automatic extraction. Ten additional community packs supply 290 images; 273 of those are reviewed cutouts. Most cutouts were already transparent. Backgrounds were removed from 57 files: 49 locally segmented and eight AI-assisted derivatives of seven edited illustrations. These have been visually reviewed; AI-assisted edits can change drawing details. Images that could not be cleanly extracted remain accessible under All instead of displaying damaged characters. Rounded corners alone do not qualify an image as a cutout.
+
+| Collection | All stickers |
 | --- | ---: |
-| Angel Dust (three packs) | 221 |
-| Hazbin Hotel | 41 |
-| The Amazing Digital Circus | 33 |
-| Helluva Boss (Blitzo, mixed characters and Loona) | 213 |
-| Demon Slayer (mixed characters and Shinobu) | 118 |
-| Death Note | 87 |
+| Angel Dust (four packs) | 250 |
+| Hazbin Hotel (two packs) | 71 |
+| The Amazing Digital Circus (two packs) | 60 |
+| Helluva Boss (Blitzo, Fizzarolli, Millie, mixed characters and Loona) | 350 |
+| Demon Slayer (mixed characters and Shinobu) | 154 |
+| Death Note (four packs) | 118 |
 | Spy x Family | 120 |
 | Genshin Impact (Venti and chibi characters) | 211 |
 | My Hero Academia (three packs) | 73 |
 
-Images are bundled locally (about 28.2 MiB total). Opening the picker does not download every pack: images are lazy-loaded as you browse. Pack headings show the available sticker count; the bottom strip keeps its position when switching packs or adding Favorites. Opening the picker never contacts an external sticker catalog/CDN or tracking script. Sources, source/available counts, hashes, dimensions and artwork rights are in [the catalog](../public/stickers/catalog.json) and [artwork notice](../public/stickers/NOTICE.md). These are community collections, not official endorsements; artwork is separate from the code license.
+Images are bundled locally (about 37.4 MiB total). Twenty-two packs contain their complete source snapshot; six include the available files only. Missing source files are recorded in the catalog and never shown as broken tiles. Existing sticker IDs remain valid. Opening the picker does not download every pack: images are lazy-loaded as you browse. Pack headings show the count for the selected view; the bottom strip keeps its position when switching packs or adding Favorites. Opening the picker never contacts an external sticker catalog/CDN or tracking script. Sources, source/available counts, hashes, dimensions, cutout classification and edit provenance are in [the catalog](../public/stickers/catalog.json) and [artwork notice](../public/stickers/NOTICE.md). These are community collections, not official endorsements; artwork is separate from the code license.
 
 Stickers render without a colored bubble. Reply, react, forward, pin, message information and deletion for both remain available. Forwarding generates a fresh attachment key and uses the destination chat's current timer. Stickers retain their original per-message disappearing duration, independent sender/recipient countdowns, Off option and encrypted local cache. Browser eviction may require another download.
 
@@ -35,4 +37,4 @@ Tap or long-press a message, then choose a quick reaction or the three dots for 
 
 ## Adding bundled artwork
 
-Put appropriately authorized WebP files under `public/stickers/<pack-id>/<number>.webp` and add metadata to `catalog.json`. Pack IDs use lowercase letters, digits and hyphens; sticker IDs are numeric and filenames have three digits. Images must be at most 512×512 and 512 KiB. Record source, original rights, exact bytes and SHA-256. Paths must remain inside the local directory. Run `node --test tests/stickers.test.mjs` and update the expected inventory when deliberately adding images. Preserve attribution and review redistribution terms before publishing more artwork.
+Put appropriately authorized WebP files under `public/stickers/<pack-id>/<number>.webp` and add metadata to `catalog.json`. Pack IDs use lowercase letters, digits and hyphens; sticker IDs are numeric and filenames have three digits. Images must be at most 512×512 and 512 KiB. Record source, original rights, exact bytes and SHA-256. Set `cutout: true` only after checking the actual transparent silhouette; use `false` for screenshots. For edited artwork, retain the source hash as `originalSha256` and describe `editMethod`. Paths must remain inside the local directory. Run `node --test tests/stickers.test.mjs` and update the expected inventory when deliberately adding images. Preserve attribution and review redistribution terms before publishing more artwork.

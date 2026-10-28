@@ -2,6 +2,8 @@
 
 ## Unreleased — Sticker collections
 
+- Prefer reviewed transparent cutouts in the picker: 690 cutouts across all eight series, ten additional community packs, 290 new images and 57 reviewed background-extracted assets. Keep 1,407 stickers in 28 packs available through All, preserve saved IDs and choices, and record edit provenance. Processing tools/models are not part of the application.
+
 - Expand the local picker from 40 starter stickers to 1,117 WebP images across 18 packs, including 221 Angel Dust stickers. Retain the old sticker IDs, encrypted Favorites/Recent and the existing Signal/AES-GCM/WebRTC delivery. Record source availability and separate artwork rights.
 - Show pack counts, distinguish pack tabs, preserve tab-strip position and reset the grid when choosing another pack. Keep images lazy-loaded to avoid downloading the entire collection on a phone.
 

@@ -1,0 +1,9 @@
+# Sticker cutout preparation
+
+Prefer already transparent community artwork; source URLs and file hashes are recorded per image in the sticker catalog. Cutout selection is reviewed manually: alpha around a rectangular screenshot is insufficient. Artwork that cannot be extracted cleanly remains in All.
+
+Seven illustrations were edited with the built-in image generation tool, in edit/background-extraction mode. Eight bundled derivatives reuse those seven edits (Angel Dust 001 and Angel Dust Cutouts 018 share the same reviewed source scene). The final files are under `public/stickers/angel-dust/{001,002,003,004,005,006}.webp` plus `public/stickers/angel-dust-cutouts/018.webp` and `public/stickers/angel-dust-reactions/033.webp`.
+
+Prompt set: Remove all scenery/background; preserve the visible Angel Dust character, fur, ears, face, expression, pose, clothing, colors and connected handheld props or small animal. Preserve the original illustration. Do not invent missing body parts. Return genuine transparent alpha with crisp edges and opaque character details, a narrow transparent margin, no rectangular backing, checkerboard, frame, shadow, text or watermark. Inputs were the corresponding original sticker illustrations. Outputs were visually reviewed; AI editing can alter details and is not represented as pixel-exact extraction.
+
+Another 49 images were processed with a local segmentation tool and reviewed before inclusion. Tooling and model files stay outside the application and are not needed for installation, sending or receiving stickers. Changed images are normalized to a transparent 512×512 canvas with a small margin and compressed to WebP. The catalog records `originalSha256`, `editMethod`, delivered bytes/hash and `cutout`. No cryptographic or call-processing change is involved.

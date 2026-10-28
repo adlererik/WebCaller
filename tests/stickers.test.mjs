@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 import {once} from 'node:events';
 import {fixture} from './helpers/ratchet-fixture.mjs';
 import {newAttachment,validAttachment,attachmentKey,encryptChunk,decryptChunk} from '../public/attachments.js';
-import {validStickerCatalog,stickerDimensions} from '../public/stickers.js';
+import {validStickerCatalog,stickerDimensions,visibleStickerPacks} from '../public/stickers.js';
 import {messageEventLifetime,applyMessageEvent} from '../public/message-state.js';
 import {NO_EXPIRY} from '../public/message-lifetime.js';
 import {ratchetStatement} from '../public/envelope-auth.js';
@@ -13,12 +13,18 @@ import {signApplication} from '../public/application-signatures.js';
 import {secureMessaging} from '../public/secure-messaging.js';
 const catalog=JSON.parse(fs.readFileSync(new URL('../public/stickers/catalog.json',import.meta.url)));
 test('all expanded bundled packs have locally available, pinned WebP assets and no remote runtime image paths',()=>{
- assert.ok(validStickerCatalog(catalog));assert.equal(catalog.packs.length,18);let count=0;
+ assert.ok(validStickerCatalog(catalog));assert.equal(catalog.packs.length,28);let count=0;
  for(const pack of catalog.packs){assert.ok(pack.source.startsWith('https:'));assert.equal(pack.availableCount,pack.stickers.length);assert.equal(pack.complete,pack.stickers.length===pack.sourceCount);assert.equal(new Set(pack.stickers.map(s=>s.id)).size,pack.stickers.length);for(const s of pack.stickers){
   const data=fs.readFileSync(new URL('../public/stickers/'+s.file,import.meta.url));assert.equal(data.length,s.bytes);assert.equal(data.toString('ascii',0,4),'RIFF');assert.equal(data.toString('ascii',8,12),'WEBP');assert.deepEqual(stickerDimensions(data),{width:s.width,height:s.height});assert.equal(createHash('sha256').update(data).digest('hex'),s.sha256);count++;
- }}assert.equal(count,1117);assert.equal(catalog.packs.filter(p=>p.id.startsWith('angel-dust')).reduce((sum,p)=>sum+p.stickers.length,0),221);assert.equal(catalog.packs.filter(p=>p.complete).length,13);
+ }}assert.equal(count,1407);assert.equal(catalog.packs.filter(p=>p.id.startsWith('angel-dust')).reduce((sum,p)=>sum+p.stickers.length,0),250);assert.equal(catalog.packs.filter(p=>p.complete).length,22);
+ const invalidFlag=structuredClone(catalog);invalidFlag.packs[0].stickers[0].cutout='true';assert.equal(validStickerCatalog(invalidFlag),false);
  const bad=structuredClone(catalog);bad.packs[0].stickers[0].file='https://example.com/tracker.webp';assert.equal(validStickerCatalog(bad),false);
  const traversal=structuredClone(catalog);traversal.packs[0].id='../secrets';assert.equal(validStickerCatalog(traversal),false);
+});
+test('cutout filtering preserves every original ID, saved choices, and legacy catalogs',()=>{
+ const snapshot=JSON.stringify(catalog),all=visibleStickerPacks(catalog,true),cutouts=visibleStickerPacks(catalog);
+ assert.equal(all.reduce((n,p)=>n+p.stickers.length,0),1407);assert.ok(cutouts.reduce((n,p)=>n+p.stickers.length,0)>500);assert.ok(cutouts.every(p=>p.stickers.every(s=>s.cutout===true)));assert.ok(all.some(p=>p.stickers.some(s=>s.cutout===false)));assert.equal(JSON.stringify(catalog),snapshot);
+ const legacy={packs:[{id:'old',stickers:[{id:'1'},{id:'2',cutout:false}]}]};assert.deepEqual(visibleStickerPacks(legacy)[0].stickers,[{id:'1'}]);assert.equal(visibleStickerPacks(legacy,true)[0].stickers.length,2);
 });
 test('sticker classification is authenticated attachment metadata and cannot label a large or non-WebP file',()=>{
  const a={...newAttachment(new File(['Synthetic'],'sample.webp',{type:'image/webp'})),sticker:true};assert.equal(validAttachment(a),true);
@@ -26,7 +32,7 @@ test('sticker classification is authenticated attachment metadata and cannot lab
  assert.equal(validAttachment(newAttachment(new File(['Normal'],'sample.webp',{type:'image/webp'}))),true);
 });
 test('a WebP sticker and key manifest round trip through Signal, server persistence, and authenticated image chunks',async t=>{
- const f=await fixture(t),item=catalog.packs[1].stickers[0],bytes=fs.readFileSync(new URL('../public/stickers/'+item.file,import.meta.url));
+ const f=await fixture(t),item=catalog.packs[0].stickers[0],bytes=fs.readFileSync(new URL('../public/stickers/'+item.file,import.meta.url));
  const a={...newAttachment(new File([bytes],'Synthetic sticker.webp',{type:'image/webp'})),sticker:true};
  const envelope=await f.a.seal(f.alice.identity,f.alice.user.id,f.bob.user,{kind:'attachment',attachment:a,text:''},3600,{perView:true});
  assert.equal(JSON.stringify(envelope).includes(a.key),false);assert.equal(JSON.stringify(envelope).includes('Synthetic sticker'),false);
@@ -61,7 +67,7 @@ test('data-only signaling requires authenticated Signal envelopes and accepted c
  f.app.store.run('DELETE FROM contacts WHERE a=? AND b=?',f.alice.user.id,f.bob.user.id);await assert.rejects(f.apiA('/sticker-link','POST',{envelope}),e=>e.status===403);
 });
 test('recent and favorite sticker choices remain encrypted and survive secure-messaging reload',async t=>{
- const f=await fixture(t),saved={recents:['hazbin-hotel:1'],favorites:['spy-family:3']};
+ const f=await fixture(t),saved={recents:['hazbin-hotel:1'],favorites:['spy-family:3','angel-dust-reactions:1'],includeOriginals:true};
  await f.a.store.lock(f.alice.user.id,async db=>db.commit([await db.record('sticker-preferences',saved,{kind:'preferences'})]));
  const rows=await f.a.store.lock(f.alice.user.id,db=>db.list()),row=rows.find(r=>r.kind==='preferences');assert.ok(row.ciphertext);assert.equal(JSON.stringify(row).includes('hazbin-hotel'),false);assert.equal(JSON.stringify(row).includes('spy-family'),false);
  const reload=secureMessaging(f.optionsA);await reload.initialize(f.alice);assert.deepEqual(await reload.store.lock(f.alice.user.id,db=>db.read('sticker-preferences')),saved);

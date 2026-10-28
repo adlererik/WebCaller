@@ -2,9 +2,9 @@
 
 These are community character-sticker collections from public Telegram sticker catalogs. The original artists and character rightsholders retain copyright. The application code license does not grant a license to this third-party artwork. These are community packs, not official endorsements. No external catalog, analytics, advertisement, or image CDN is contacted by the installed picker.
 
-The collection contains 1,117 WebP files in 18 packs, including 221 Angel Dust stickers. Thirteen packs contain the complete source snapshot; five include available files only. Source counts, available counts, missing IDs and completeness are recorded in catalog.json. Unavailable images are omitted instead of generating broken picker entries. Previously bundled IDs remain stable.
+The collection contains 1,407 WebP files in 28 packs, including 250 Angel Dust stickers. The Cutouts view contains 690 reviewed transparent images. All retains screenshot stickers. Twenty-two packs contain the complete source snapshot; six include available files only. Source counts, available counts, missing IDs and completeness are recorded in catalog.json. Unavailable images are omitted. Previously bundled IDs remain stable.
 
-Each sticker in catalog.json records its source URL, SHA-256, original dimensions and byte size. Files are bundled unchanged as WebP. Recent/favorite selections use encrypted device storage.
+Each catalog entry records the upstream source URL, SHA-256, dimensions, byte size and cutout classification. Most artwork is bundled unchanged. The 57 background-extracted derivatives retain their original source hash and an edit-method label; eight use AI-assisted edits of seven source illustrations, and 49 use local segmentation. AI-assisted edits may alter drawing details. Original creators/rightsholders retain their rights in the source artwork. Recent/favorite selections and the picker view use encrypted device storage. Segmentation models and processing tools are not shipped or run on users' phones.
 
 ## Angel Dust
 
@@ -131,3 +131,73 @@ Bundled: 19 stickers (available source images).
 
 Source: https://chpic.su/en/stickers/Djdiejdjds/
 Original set: https://t.me/addstickers/Djdiejdjds
+
+## Angel Dust · Cutouts
+
+Bundled: 29 stickers (complete source snapshot).
+
+Source: https://tgsticker.ru/static/angel_dust_hh/
+Original set: https://t.me/addstickers/angel_dust_hh
+
+## Hazbin Hotel · Cutouts
+
+Bundled: 30 stickers (complete source snapshot).
+
+Source: https://tgsticker.ru/static/zhmyakajhazbinhotelstickers/
+Original set: https://t.me/addstickers/ZHMYAKAJHazbinHotelStickers
+
+## Digital Circus · Cutouts
+
+Bundled: 27 stickers (complete source snapshot).
+
+Source: https://tgsticker.ru/static/stickercircus/
+Original set: https://t.me/addstickers/StickerCircus
+
+## Demon Slayer · Cutouts
+
+Bundled: 36 stickers (available source images).
+
+Source: https://tgsticker.ru/static/kimetsunoyaibabycortiz0l/
+Original set: https://t.me/addstickers/KimetsuNoYaibaByCortiZ0l
+
+## Death Note · L Cutouts
+
+Bundled: 22 stickers (complete source snapshot).
+
+Source: https://tgsticker.ru/static/llawlietstickers/
+Original set: https://t.me/addstickers/LLawlietStickers
+
+## Death Note · Expressions
+
+Bundled: 9 stickers (complete source snapshot).
+
+Source: https://tgsticker.ru/static/deathnotefilosof/
+Original set: https://t.me/addstickers/DeathNoteFilosof
+
+## Helluva Boss · Fizzarolli
+
+Bundled: 25 stickers (complete source snapshot).
+
+Source: https://tgsticker.ru/static/fizzarolli0/
+Original set: https://t.me/addstickers/Fizzarolli0
+
+## Helluva Boss · Millie
+
+Bundled: 34 stickers (complete source snapshot).
+
+Source: https://tgsticker.ru/static/millie_by_be3un4ik/
+Original set: https://t.me/addstickers/Millie_By_Be3un4ik
+
+## Helluva Boss · Blitz Cutouts
+
+Bundled: 10 stickers (complete source snapshot).
+
+Source: https://tgsticker.ru/static/blitzo16/
+Original set: https://t.me/addstickers/BlitzO16
+
+## Helluva Boss · Ensemble
+
+Bundled: 68 stickers (complete source snapshot).
+
+Source: https://tgsticker.ru/static/helluva_bosz/
+Original set: https://t.me/addstickers/Helluva_bosz

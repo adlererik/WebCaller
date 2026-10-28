@@ -1,4 +1,4 @@
-# WebCaller feature reference — v0.18.0
+# WebCaller feature reference — v0.19.0
 
 A browser phone for one-to-one calls and conversations on Android, iPhone and desktop. The UI follows familiar Signal-style patterns; it is not an official Signal client. [User guide](USER_GUIDE.md) · [Security](SECURITY.md).
 
@@ -44,7 +44,9 @@ See [Call networking](CALL_NETWORK.md) for exact policies, diagnostics and real-
 
 ## Timers and deletion
 
-New conversations default to **one hour**. Options include Off, presets and custom number/unit wheels for seconds, minutes, hours, days and weeks, up to **four weeks**. Existing messages keep their own lifetime rules.
+The [sticker picker](STICKERS.md) adds 28 local packs (1,407 WebP images), including four dedicated Angel Dust sets (250 images), a default Cutouts view with 690 transparent stickers, an All view preserving screenshot stickers, pack tabs, encrypted local Recent/Favorites, one-tap sending and borderless rendering. Stickers retain attachment encryption, timers, reactions, replies, forwarding, caching and deletion. Signal-authenticated data-only WebRTC connections carry encrypted chunks; the usual encrypted attachment store supports offline clients and fallback. No external sticker service is contacted at runtime. Artwork provenance and separate rights accompany the assets.
+
+New conversations default to **one hour**. Options include Off, presets and custom number/unit wheels for seconds, minutes, hours, days and weeks, up to **four weeks**. Changing your setting affects only new messages you send. Every existing message keeps its original authenticated duration, including when either person chooses a different timer or Off; opening the chat or refreshing never replaces that duration with the current preference.
 
 The sender countdown starts at send; the recipient's starts at first actual viewing. An unread copy can remain after the sender's visible copy disappears. Per-message countdowns, first-view state and pending read-start updates survive refresh/reconnection. Off retains messages until deletion. Pins never extend lifetime.
 

@@ -1,6 +1,6 @@
 # Source review and limits
 
-Reviewed against the libsignal/PQXDH integration, Ed25519 application signatures and v0.18.0 release changes through 20 October 2026. This is a maintainer-assisted implementation review and test record, **not an independent audit, proof or Signal endorsement**. Historical stable Olm reviews do not certify this adapter.
+Reviewed against the libsignal/PQXDH integration, Ed25519 application signatures and v0.19.0 release changes through 28 October 2026. This is a maintainer-assisted implementation review and test record, **not an independent audit, proof or Signal endorsement**. Historical stable Olm reviews do not certify this adapter.
 
 ## Protections checked
 
@@ -26,3 +26,6 @@ Real-device microphone quality, power, locked-screen sound, storage eviction, me
 The release adds authenticated same-page handover recovery, acknowledged dead-socket detection, fresh correlated ICE generations and audio-gated video recovery. These change transport reliability, not cryptographic keys/algorithms. Retired routes reject old HTTP/WS paths without revealing the replacement, and push migration replaces only an authenticated owner's previous endpoints after the new subscription is accepted. Public source examples contain no deployment-specific paths.
 
 Release-matched Docker bundles explicitly select the libsignal engine and use a new bundle format so old Olm updaters cannot silently cross the protocol boundary. Complete source archives expand the pinned upstream gitlink and include the hosted corresponding-source offer. Independent review of the composition is still outstanding.
+
+
+The sticker update additionally checks authenticated AES-GCM/Signal manifests, bounded encrypted data-channel frames and cache acknowledgements; zero-unused-prekey sending through an established chat; backwards reading of old file-scoped stickers; rejected context substitutions without committing state; automatic publication retries without identity replacement/prekey resurrection; and fail-closed wording for a genuinely new session without starter material. Physical-phone acceptance and an independent composition audit remain separate from these checks.

@@ -11,8 +11,17 @@ const enc=new TextEncoder();
 const digest=async value=>b64(await crypto.subtle.digest('SHA-256',enc.encode(JSON.stringify(value))));
 export const identityStatement=(owner,identity)=>JSON.stringify({v:2,owner,identity});
 export const prekeyStatement=(owner,identity,id,key)=>JSON.stringify({v:2,owner,identity,id,key});
-const laneFor=p=>p.kind==='attachment'?'files':p.kind==='text'?'chat':p.kind==='typing'?'typing':p.kind==='transfer'?'transfer':p.kind?.startsWith('message-')?'events':'signal';
-const scopeFor=(p,e)=>p.kind==='attachment'?e.id:p.kind==='transfer'?p.target:p.callId||laneFor(p);
+// Sticker manifests belong to the ongoing chat ratchet, like text. Legacy
+// per-file envelopes remain readable without changing their authenticated lane.
+const laneFor=(p,e)=>p.kind==='attachment'?(p.attachment?.sticker===true&&(!e?.ratchet||e.ratchet.lane==='chat')?'chat':'files'):p.kind==='text'?'chat':p.kind==='typing'?'typing':p.kind==='transfer'?'transfer':p.kind?.startsWith('message-')?'events':'signal';
+const scopeFor=(p,e)=>{
+  if(p.kind==='attachment')return laneFor(p,e)==='chat'?'chat':e.id;
+  // Reuse auxiliary ratchets instead of claiming a new one-time bundle for
+  // every file-progress update or abandoned sticker-connection attempt.
+  if(p.kind==='transfer')return e.ratchet?.scope===p.target?p.target:'transfer';
+  if(p.kind==='sticker-link')return e.ratchet?.scope===p.callId?p.callId:'sticker-link';
+  return p.callId||laneFor(p,e);
+};
 // Short-lived signaling also needs a sealed local copy: a notification/reload
 // can reopen the same offer after its transport key has already been discarded.
 // The optional call check has no saved transcript or verification record.
@@ -29,8 +38,13 @@ function validate(e,self,peer,now){
 }
 export function secureMessaging({api,store=secureStore(),now=Date.now,olm=loadSignal}={}){
   let device,O,initializing,replenishTimer,applicationSigner;
-  function replenish(){
-    if(replenishTimer)return;replenishTimer=setTimeout(()=>{replenishTimer=null;if(device)void publish().catch(()=>{});},200);
+  function replenish(attempt=0){
+    if(replenishTimer||!device)return;
+    const current=device;
+    replenishTimer=setTimeout(()=>{
+      replenishTimer=null;if(device!==current)return;
+      void publish().catch(()=>{if(device===current&&attempt<3)replenish(attempt+1);});
+    },attempt?Math.min(8000,1000*2**(attempt-1)):200);
   }
   const owner=()=>device?.user.id;
   const views=viewState({store,owner,now,digest});
@@ -155,7 +169,7 @@ export function secureMessaging({api,store=secureStore(),now=Date.now,olm=loadSi
       let bundle;
       if(needsSession){
         for(let attempt=0;;attempt++)try{bundle=await api('/ratchet/claim/'+peer.id,'POST',{});break;}
-        catch(error){if(error.status!==503||attempt>=3)throw error;await new Promise(resolve=>setTimeout(resolve,500*2**attempt));}
+        catch(error){if(error.status!==503||attempt>=4){if([426,503].includes(error.status))throw Object.assign(new Error('Waiting for their phone to reconnect. Please try again shortly.'),{status:error.status,cause:error});throw error;}await new Promise(resolve=>setTimeout(resolve,500*2**attempt));}
         if(bundle.v!==2||!bundle.prekey)throw new Error(`Ask ${peer.name||'the other person'} to reopen WebCaller to update secure messaging.`);
         await verify(peer.keys.sign,peer.id,identityStatement(peer.id,bundle.identity),bundle.signature);
         await verify(peer.keys.sign,peer.id,prekeyStatement(peer.id,bundle.identity,bundle.prekey.id,bundle.prekey.key),bundle.prekey.signature);
@@ -216,7 +230,7 @@ export function secureMessaging({api,store=secureStore(),now=Date.now,olm=loadSi
           consumed=true;
         }
         const decoded=JSON.parse(plaintext);
-        if(decoded.header!==header(e)||laneFor(decoded.payload)!==r.lane||scopeFor(decoded.payload,e)!==r.scope)throw new Error('Invalid authenticated message context.');
+        if(decoded.header!==header(e)||laneFor(decoded.payload,e)!==r.lane||scopeFor(decoded.payload,e)!==r.scope)throw new Error('Invalid authenticated message context.');
         const puts=r.lane==='files'?[]:[await db.record('session/'+r.sessionId,{...state,...pack(session)},{kind:'session',peer:peer.id,expiresAt:sessionDeadline(r.lane)})];
         if(!prior)puts.push(await db.record('account',data,{kind:'account'}));if(peerRecord)puts.push(peerRecord);
         const stream=peer.id+'/'+r.lane+'/'+r.scope,preferred=await db.read('preferred/'+stream);
@@ -240,5 +254,5 @@ export function secureMessaging({api,store=secureStore(),now=Date.now,olm=loadSi
   });}
   async function forget(){if(!owner())return;clearTimeout(replenishTimer);replenishTimer=null;await store.lock(owner(),async db=>{await db.commit([],(await db.list()).filter(r=>r.kind!=='lease').map(r=>r.id));});device=null;O=null;applicationSigner=null;initializing=null;}
   async function viewReceipt(value,peer){return seal(device.identity,owner(),peer,{kind:'message-read',target:value.id,deliveredAt:value.deliveredAt,readAt:value.readAt},0,{viewReceipt:{target:value.id,startedAt:value.readAt}});}
-  return {initialize,seal,open,trust,publish,purge,remove,forgetPeer,forget,store,messageState:views.inspect,markViewed:views.mark,pendingViews:views.pending,viewReceipt,ackView:views.acknowledge};
+  return {initialize,seal,open,trust,publish,refresh:replenish,purge,remove,forgetPeer,forget,store,messageState:views.inspect,markViewed:views.mark,pendingViews:views.pending,viewReceipt,ackView:views.acknowledge};
 }

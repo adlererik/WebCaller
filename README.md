@@ -2,19 +2,27 @@
 
 **A Signal-like WebRTC phone for Android, iPhone and desktop.** High-quality adaptive voice/video, end-to-end encrypted messages and media, simple invitations and optional calling codes. No SIM card, phone number or account password is required. The phone runs in your browser; you host the server.
 
-[Install on your server](docs/INSTALL.md) · [Download v0.18.0](https://github.com/adlererik/WebCaller/releases/tag/v0.18.0) · [All features](docs/FEATURES.md) · [How to use it](docs/USER_GUIDE.md) · [Security explained](docs/SECURITY.md)
+[Install on your server](docs/INSTALL.md) · [Download v0.19.0](https://github.com/adlererik/WebCaller/releases/tag/v0.19.0) · [All features](docs/FEATURES.md) · [How to use it](docs/USER_GUIDE.md) · [Security explained](docs/SECURITY.md)
 
-**v0.18.0 brings the official libsignal core, PQXDH and Triple Ratchet to the main release.** The cryptographic core is upstream Signal code; its browser binding, storage integration and optional call-verification exchange are WebCaller code and remain unaudited. This is an independent project, not an official Signal client. It cannot call Signal or WhatsApp users, and using the same core does not give it Signal's overall security assurance. Earlier Olm installations need a planned migration, not an ordinary overwrite. [Upgrade guide](docs/APPROVED_CUTOVER.md).
+**v0.19.0 adds stickers and fixes sticker sending, emoji reactions and disappearing-message countdowns.** This is a normal source/native release; the last prebuilt Docker release remains [v0.18.0](https://github.com/adlererik/WebCaller/releases/tag/v0.18.0). The official libsignal core, PQXDH and Triple Ratchet introduced in v0.18.0 remain in use. The cryptographic core is upstream Signal code; its browser binding, storage integration and optional call-verification exchange are WebCaller code and remain unaudited. This is an independent project, not an official Signal client. It cannot call Signal or WhatsApp users, and using the same core does not give it Signal's overall security assurance. Earlier Olm installations need a planned migration, not an ordinary overwrite. [Upgrade guide](docs/APPROVED_CUTOVER.md).
 
 ## Why I built it this way
 
 I wanted something a nontechnical relative could open and understand: accept an invitation, choose a name and talk. I also wanted control over my own server, good sound on poor connections and no compulsory telephone-number directory. The interface follows familiar Signal-style calling and messaging patterns, with extra controls tucked into Settings.
 
-I started with Olm Double Ratchet for classical forward secrecy. This release moves new message and signaling sessions to the official **libsignal 0.105.1** implementation, with **PQXDH and Triple Ratchet/SPQR**. I chose an established protocol implementation instead of inventing a message cipher. The application around that library still needs careful testing and independent review.
+I started with Olm Double Ratchet for classical forward secrecy. The v0.18.0 release moved new message and signaling sessions to the official **libsignal 0.105.1** implementation, with **PQXDH and Triple Ratchet/SPQR**. I chose an established protocol implementation instead of inventing a message cipher. The application around that library still needs careful testing and independent review.
 
 **I chose not to depend on a third-party key-transparency service or its auditors.** WebCaller instead combines trusted invitations, locally pinned identities, a full pairwise safety fingerprint and an optional four-word check during calls. That is a deliberate dependency/usability choice, not a claim that human checks provide key transparency's automatic, directory-wide consistency guarantees. Key transparency does not inherently require a phone number. [What this choice protects—and what it leaves to you](docs/SECURITY.md#identity-verification-without-key-transparency).
 
 Against a nation-state adversary, I would worry about a compromised phone or malicious website update as much as cryptanalysis. An exploit such as Pegasus can get at the microphone or plaintext without breaking the encryption. This applies to excellent messengers too; it is not evidence that Signal's protocol is broken. Don't assume anything on an owned phone is safe. **Stay tuned… I'm working on an embedded device for encrypted calls, much like a Trezor hardware wallet—but for calls ;)** That is a separate project in development.
+
+## I was asked to add stickers, so I added them :)
+
+There are now **1,407 bundled WebP stickers in 28 packs**, with **690 transparent cutouts** in the default view. The collections cover The Amazing Digital Circus, Hazbin Hotel, Helluva Boss, Demon Slayer, Death Note, Spy x Family, Genshin Impact and My Hero Academia, including **250 Angel Dust stickers** across four dedicated packs. Most cutouts came ready-made from community packs; sources and artwork rights are included.
+
+Open a chat, tap the sticker icon next to the message field, choose a pack and tap a sticker. It sends immediately. **Cutouts** shows the transparent stickers; **All** includes the original screenshot stickers too. Stars keep Favorites, and Recent remembers what you sent. The picker follows familiar WhatsApp-style sticker patterns, with borderless images in the conversation. [How it works and all the packs](docs/STICKERS.md).
+
+Stickers use the existing **libsignal chat ratchet** for their encrypted manifests and a fresh **AES-256-GCM** key for every image. Encrypted WebRTC data channels carry them when possible; the ordinary encrypted attachment store handles offline delivery and fallback. I also fixed a problem where each sticker started a new session and could exhaust an asleep phone's starter-key supply. Existing chats now keep sending stickers without asking the other person to manage keys. Reconnect/resume handles publication retries automatically. Both phones need to reload once after this update. [Encryption and limits](docs/SECURITY.md).
 
 ## What is included
 
@@ -28,13 +36,14 @@ Against a nation-state adversary, I would worry about a compromised phone or mal
 | Practical mobile budgets | Up to 500 kbps sent and 500 kbps received for video when either end is cellular/unknown. Confirmed Wi-Fi can use 900 kbps per direction. Audio/headers/files are additional. |
 | Modern call screen | Immersive upright view, square layout when either screen is sideways, fading controls/codec rows, persistent SAS/quality/timer and a draggable fixed-size self preview. |
 | Encrypted chat | Text, typing animation, replies, sender-only edits, reactions, forwarding, copy, selection, pinning, message information and deletion for both people. |
+| Stickers | 690 transparent cutouts across all eight series; 1,407 local WebP stickers in 28 packs through All, including four Angel Dust packs; pack tabs, encrypted local Recent/Favorites, one-tap sending and borderless rendering. Signal-protected keys, encrypted WebRTC data-channel delivery and stored encrypted fallback. [Guide](docs/STICKERS.md). |
 | Media and files | Up to 200 MiB per item; inline pictures/video/audio, full-screen viewer, captions, gallery/file picker, front/back photo capture, voice notes and current-location map cards. |
 | Sharing while talking | Up to four paced encrypted upload/download workers, weak-link parts, retry/cancellation and percentage placeholders. Video temporarily yields capacity; poor audio pauses file traffic. |
 | Media that stays available | Complete encrypted local media caching avoids another transfer when reopening a chat, until expiry/deletion or browser storage eviction. |
 | Disappearing messages | One-hour default for new conversations; Off, presets and custom number/unit wheels through four weeks. Separate sender/send and recipient/first-view countdowns. |
 | Call and message alerts | Neutral message notifications open the intended chat. Web Push requests call sound and Answer/Decline where supported. Optional self-hosted ntfy priority-5 alerts avoid duplicate browser call pushes, with failure fallback. |
 | Appearance and privacy controls | System/light/dark appearance, configurable local page title, settings behind a cog, no plaintext message content in notifications, no application asset cache in the service worker. |
-| Self-hosting | Native Node/SQLite, source-built Docker or the guided prebuilt Docker bundle; HTTPS/WSS, STUN/ICE, authenticated TURN and optional Cloudflare Tunnel. Configurable paths and safe retirement of previous routes. |
+| Self-hosting | Native Node/SQLite, source-built containers or the previous v0.18.0 prebuilt Docker bundle; HTTPS/WSS, STUN/ICE, authenticated TURN and optional Cloudflare Tunnel. Configurable paths and safe retirement of previous routes. |
 
 [Complete feature reference](docs/FEATURES.md). Browser restrictions still matter: a website cannot guarantee ringing after the OS suspends it, force an unexposed earpiece, prevent every screenshot or erase browser/OS history. iPhone browser call alerts require a Home Screen web app. Optional ntfy requires its client; stock iPhone ntfy wake-up also uses platform push infrastructure. [Alerts](docs/CALL_ALERTS.md) · [ntfy](docs/EXTRA_RINGING.md).
 
@@ -68,7 +77,7 @@ SAS is fresh per accepted media context, survives ordinary ICE handovers and is 
 
 ### How it compares with Signal
 
-| Property | WebCaller v0.18.0 | Signal |
+| Property | WebCaller v0.19.0 | Signal |
 |---|---|---|
 | Protocol core | Pinned official libsignal through a custom WASM/storage adapter | Official maintained clients and protocol integration |
 | Message forward secrecy/PQ | PQXDH + Double/Triple Ratchet; persistence, history and recovery limits apply | Maintained protocol with supported clients and much wider scrutiny |
@@ -91,11 +100,13 @@ High compression leaves more bandwidth for a clear picture, but software encodin
 
 ## Get it running
 
+**For the latest v0.19.0 features, use the source/native release.** It includes the complete source, bundled browser crypto, sticker artwork and beginner setup guides. No Docker image or prebuilt Docker bundle is published for v0.19.0.
+
 Choose **one** installation method:
 
-- **Guided prebuilt Docker bundle:** download `WebCaller-Docker-v0.18.0.tar.gz` from the release, extract it, then run `./webcaller setup`, `./webcaller start` and `./webcaller qr`. The wizard configures the optional HTTPS/TURN/ntfy services. [Step-by-step guide](docker/README.md).
+- **Previous prebuilt Docker release (v0.18.0):** download `WebCaller-Docker-v0.18.0.tar.gz` from [that release](https://github.com/adlererik/WebCaller/releases/tag/v0.18.0), extract it, then run `./webcaller setup`, `./webcaller start` and `./webcaller qr`. The wizard configures the optional HTTPS/TURN/ntfy services. [Step-by-step guide](docker/README.md).
 - **Native Debian, no Docker:** use the complete [native guide](docs/INSTALL_NATIVE.md) for Node, private configuration, HTTPS, boot service, TURN and the private first-phone QR.
-- **Build from source:** recursively clone the tagged release, install dependencies, generate private setup keys and build the source offer. The root Compose file can also build a container locally. [Installation choices](docs/INSTALL.md).
+- **Build from source (v0.19.0):** download the uploaded `WebCaller-v0.19.0.tar.gz`/`.zip` or recursively clone the tagged release, install dependencies, generate private setup keys and retain the included source offer (or build it from the Git checkout). The root Compose file can also build a container locally. [Installation choices](docs/INSTALL.md).
 
 You need a server, a domain/HTTPS address and a reachable TURN relay for reliable calls across difficult networks. A Cloudflare Tunnel can carry the website and WebSockets; it cannot relay WebRTC media. CGNAT usually requires a separate public TURN server. A successful relay allocation is useful but not a complete call test.
 

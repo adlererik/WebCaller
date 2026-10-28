@@ -1,3 +1,4 @@
+import {NO_EXPIRY} from './message-lifetime.js';
 export const validMessageId=id=>typeof id==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(id);
 export function validReaction(emoji){
   if(emoji==='')return true;
@@ -5,13 +6,20 @@ export function validReaction(emoji){
   return [...new Intl.Segmenter(undefined,{granularity:'grapheme'}).segment(emoji)].length===1;
 }
 export const compareVersion=(a,b)=>a.createdAt-b.createdAt||a.id.localeCompare(b.id);
+export function messageEventLifetime(message,now=Date.now()){
+  // A per-view message's wire sentinel and local countdown are different.
+  // Reactions/edits bind to the original signed wire deadline; local expiry
+  // still decides whether the UI is allowed to issue an update at all.
+  const maxExpiry=message.wireExpiresAt??message.expiresAt;
+  return {maxExpiry,ttl:maxExpiry===NO_EXPIRY?0:Math.max(0,(maxExpiry-now-100)/1000)};
+}
 export function applyMessageEvent(m,event,payload,now=Date.now()){
   const e=event.envelope,actor=e.from,other=actor===m.from?m.to:m.from;
   if(m.expiresAt<=now||e.expiresAt<=now||e.expiresAt>(m.wireExpiresAt||m.expiresAt)||e.createdAt<m.createdAt||e.to!==other||![m.from,m.to].includes(actor)||payload.target!==m.id||payload.kind!==`message-${event.kind}`)return false;
   const key=actor+':'+event.kind,prior=m.versions?.[key];
   if(prior&&compareVersion(e,prior)<=0)return false;
   if(event.kind==='edit'){
-    if(actor!==m.from||m.location||typeof payload.text!=='string'||payload.text.length>4000||!m.attachment&&!payload.text.trim())return false;
+    if(actor!==m.from||m.location||m.attachment?.sticker||typeof payload.text!=='string'||payload.text.length>4000||!m.attachment&&!payload.text.trim())return false;
     m.text=payload.text;m.editedAt=e.createdAt;
   }else if(event.kind==='reaction'){
     if(!validReaction(payload.emoji))return false;

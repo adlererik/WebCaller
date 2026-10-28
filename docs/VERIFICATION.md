@@ -1,4 +1,4 @@
-# Release verification — v0.18.0
+# Release verification — v0.19.0
 
 Verification checks the implementation at a reviewed revision; it is not an independent audit or a guarantee for every phone. Do not point tests at real accounts, notifications or production databases.
 
@@ -30,7 +30,10 @@ The pinned official source must be pristine. Source verification checks its comm
 - Docker setup input validation, preserved private config/volumes, explicit Olm-upgrade refusal, version/checksum/digest/tamper checks; disposable runtime smoke tests for app health, WS authentication, ntfy ACL/priority/test delivery, TURN allocation, QR and restart persistence.
 - Syntax, source packaging, private-data publishing guard and reviewed dependency/provenance checks.
 
-The v0.18.0 application suite passed 302 tests (299 passes, zero failures, three explicit old-Olm migration skips), including the release-specific distribution/update checks. GitHub Actions and the final release notes record the published build result. Three native interoperability tests are separate. Skipped old Olm cases are not proof that Olm histories/sessions migrate automatically.
+The v0.19.0 application run completed 321 tests: **318 passed, zero failed, three explicit old-Olm migration cases skipped**. The separate official-native libsignal interoperability run passed all **three** tests. Syntax, native installer checks, pinned source/binding provenance and publishing checks also passed. GitHub Actions records the published revision checks. Skipped migration cases do not prove automatic migration of Olm histories/sessions.
+
+Added checks include all 1,407 asset hashes/dimensions, the 690-item Cutouts filter, encrypted Recent/Favorites, signed data-only signaling, bounded encrypted channel framing, store fallback, timer-safe reactions, zero-unused-prekey sticker bursts in an established chat, legacy sticker/control compatibility, context rejection without state mutation, publication retry without identity/prekey reset and fail-closed new-session wording. A disposable browser also transferred an actual sticker over two real peer connections with new handshakes unavailable, authenticated/cache-acknowledged it and applied a timed emoji reaction. These are synthetic checks, not an independent audit.
+
 
 ## Browser and physical-device distinction
 
@@ -40,6 +43,6 @@ On real Android/iPhone/desktop devices, test message/reload, calls both directio
 
 ## Published artifacts
 
-Release source archives are generated from the audited tag, expand the exact public upstream submodule and include a source manifest and corresponding-source download. Ordinary GitHub automatic archives omit the submodule. Docker bundles contain only launcher/Compose/version/license/reference files and pin release images by digest. Checksums accompany uploaded archives. Private configuration, identities, database files, screenshots, logs, owner links, notification capabilities and deployment URLs are excluded.
+Release source archives are generated from the audited tag, expand the exact public upstream submodule and include a source manifest and corresponding-source download. Ordinary GitHub automatic archives omit the submodule. This release uploads complete source TAR/ZIP archives and SHA256SUMS.txt only. No v0.19.0 prebuilt Docker bundle/image is published. Earlier Docker bundles contain only launcher/Compose/version/license/reference files and pin their own release images by digest. Checksums accompany uploaded archives. Private configuration, identities, database files, screenshots, logs, owner links, notification capabilities and deployment URLs are excluded.
 
 Public CI runs application and native interoperability/source checks. Native amd64/arm64 image builds and disposable container smoke checks must succeed before the matching prebuilt bundle is published. Rebuilding or testing an established core does not independently validate WebCaller's composition. [Security review and limits](SECURITY_REVIEW.md).

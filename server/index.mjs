@@ -186,6 +186,13 @@ export function createApp(options = {}) {
           return json(201, result);
         }
         const u = auth(req);
+        if(route==='/sticker-link'&&req.method==='POST'){
+          rate('sticker-link:'+u.id,100);const b=await body(req);validateEnvelope(b.envelope,u.id,true);
+          if(b.envelope.v!==2||b.envelope.ratchet?.lane!=='signal'||!related(u.id,b.envelope.to))fail(403,'Sticker connection requires an accepted contact');
+          // Only opaque signed/encrypted session descriptions and candidates.
+          // No call record, ringtone, notification, route or media setting changes.
+          emit(b.envelope.to,{type:'sticker-link',envelope:b.envelope});return json(202,{ok:true});
+        }
         if(route.startsWith('/attachments')){
           const release=acquireTransfer(u.id);res.once('finish',release);res.once('close',release);
         }else rate(u.id);
@@ -359,7 +366,7 @@ export function createApp(options = {}) {
       const relative = decodeURIComponent(path.slice(base.length + 1)) || 'index.html';
       const file = resolve(root, relative);
       if (!file.startsWith(root) || !(await stat(file)).isFile()) fail(404, 'Not found');
-      const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.wasm':'application/wasm' };
+      const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp':'image/webp', '.wasm':'application/wasm' };
       const data = await readFile(file);
       if(extname(file)==='.wasm'&&/\bgzip\b/.test(req.headers['accept-encoding']||'')){
         const compressed=gzipSync(data);res.writeHead(200,{'Content-Type':'application/wasm','Content-Encoding':'gzip','Vary':'Accept-Encoding','Content-Length':compressed.length});return res.end(req.method==='HEAD'?undefined:compressed);

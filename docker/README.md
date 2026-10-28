@@ -1,5 +1,7 @@
 # Guided Docker installation — WebCaller v0.18.0
 
+**Version note:** this guide and the prebuilt images remain at v0.18.0. The v0.19.0 sticker release is source/native only and does not include a Docker update bundle. Use the [native/source guide](../docs/INSTALL.md) for those features; do not pass v0.19.0 to this prebuilt updater.
+
 This small download installs the **libsignal/PQXDH v0.18.0** application. It pulls matching prebuilt images from GitHub Container Registry (GHCR); you do not need Node, npm or Rust on the host. Native amd64/arm64 images support Linux servers, including common x86 VPSs and 64-bit ARM servers.
 
 The bundle includes the phone, setup wizard/private QR and optional coturn, ntfy, Caddy HTTPS and Cloudflare connector. You still supply a server, domain, network access and any required router/DNS configuration. It does not register domains or replace another website automatically.

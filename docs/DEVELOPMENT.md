@@ -29,3 +29,8 @@ The application suite includes explicit skips for three old Olm-account migratio
 CI runs source/syntax/tests/publishing and source-offer checks on this branch. Release-matched prebuilt images are published explicitly after CI tests on amd64/arm64; a branch push alone does not overwrite a published version. Container tests use disposable volumes. Generated-phone media tests cannot establish audible quality, battery use, OS routing or locked-device alerts.
 
 Original WebCaller source keeps its MIT notice; the combined libsignal distribution/integration uses AGPL-3.0-only. Preserve [licensing](../LICENSING.md), corresponding source and dependency notices. Report vulnerabilities privately via [SECURITY.md](../SECURITY.md).
+
+
+## Source-only releases
+
+The application package and the last published prebuilt Docker bundle may have different versions. v0.19.0 publishes source/native archives; `docker/VERSION` and `docker/images.env` remain pinned to the published v0.18.0 images. Do not label an older image as the new source release. `node scripts/package-release.mjs v0.19.0` creates the complete source TAR/ZIP and checksums without a Docker bundle. Supplying image digests additionally requires a matching Docker bundle version. Container publishing remains an explicit workflow dispatch, separate from ordinary CI builds.

@@ -1,6 +1,6 @@
 # WebCaller security and encryption
 
-This is the security model for **v0.18.0**, which uses official libsignal **0.105.1**, pinned to commit `1738ead8a12ffe539f6309958123dadb16dc3b95`. It supersedes descriptions of the earlier Olm message transport. The upstream protocol source is unmodified. WebCaller's WASM adapter, storage, application signatures, call handling and SAS composition remain **unaudited**. This document describes mechanisms and boundaries, not a security certification.
+This is the security model for **v0.19.0**, which uses official libsignal **0.105.1**, pinned to commit `1738ead8a12ffe539f6309958123dadb16dc3b95`. It supersedes descriptions of the earlier Olm message transport. The upstream protocol source is unmodified. WebCaller's WASM adapter, storage, application signatures, call handling and SAS composition remain **unaudited**. This document describes mechanisms and boundaries, not a security certification.
 
 ## What end-to-end encryption means here
 
@@ -103,3 +103,10 @@ A random URL path discourages blind discovery but is a shareable address, not ac
 ## Review and reporting
 
 Review provenance and run the tests in [Verification](VERIFICATION.md). Independent review should focus on adapter/store serialization, signature composition, prekey lifetime/consumption, identity continuity, SAS/media binding, retained-history exposure and deployment/code delivery. [Review record](SECURITY_REVIEW.md) distinguishes tests from an audit. Report vulnerabilities privately as described in [SECURITY.md](../SECURITY.md).
+
+## Sticker delivery
+
+Stickers reuse authenticated AES-256-GCM attachment chunks and Signal-ratcheted key manifests. The sticker marker is encrypted with the manifest. A data-only WebRTC connection carries ciphertext; its SDP/ICE are signed and encrypted through pinned Signal identities. The server authorizes only accepted contacts, with bounded requests. Data frames, buffering, size, replay and idle lifetime are bounded. Ciphertext also remains in the ordinary attachment service for offline delivery and cache recovery. This adds no custom ratchet, changes no call SAS or media encryption, and does not make browser DTLS itself post-quantum. Public artwork requests and network/routing metadata remain visible to the host/CDN, and direct ICE may disclose IP addresses to the accepted contact. Recent/favorite sticker IDs use the existing AES-GCM encrypted device store. See [the sticker guide](STICKERS.md).
+
+
+Sticker manifests now use the existing chat ratchet rather than consuming a new one-time PQXDH bundle for each image. Each sticker still has its own random AES-256-GCM attachment key. Auxiliary sticker-link and file-progress streams are separate per-contact ratchets; authenticated payloads retain their call/transfer identifiers and receivers reject mismatched contexts. Old per-file manifests and per-attempt control envelopes remain readable. Reconnect/resume schedules bounded publication retries without resetting identity pins, reusing claimed prekeys or falling back to plaintext. Starting a genuinely new session with no authenticated starter material still fails closed. This application-session change does not alter libsignal, its WASM binding, media encryption or SAS. Both browsers must load the updated client to receive the new shared-session sticker format.

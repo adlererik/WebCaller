@@ -5,6 +5,15 @@ export function remainingTime(expiresAt,now=Date.now()){
   const days=Math.floor(seconds/86400),hours=Math.floor(seconds%86400/3600),minutes=Math.floor(seconds%3600/60);
   return days?`${days}d ${hours}h`:hours?`${hours}h ${minutes}m`:minutes?`${minutes}m ${seconds%60}s`:`${seconds}s`;
 }
+// Rows are reused to keep media playing. Refresh their countdown metadata from
+// this message's saved policy, never from the chat's current timer preference.
+export function syncMessageCountdown(row,message,self){
+  const node=row.querySelector('.message-expiry');if(!node)return;
+  const waiting=!!message.lifetime&&!message.viewedAt&&message.from!==self;
+  node.dataset.expires=String(message.expiresAt);node.dataset.waiting=String(waiting);
+  if(waiting)node.dataset.seconds=String(message.lifetime.seconds);else delete node.dataset.seconds;
+  node.title=waiting?'Countdown starts when you view this message':'Disappears '+new Date(message.expiresAt).toLocaleString();
+}
 // Update just these spans: media elements and their playback state stay untouched.
 export function updateCountdowns(container,now=Date.now()){
   for(const node of container.querySelectorAll('.message-expiry')){

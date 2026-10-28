@@ -40,6 +40,18 @@ Replace the version placeholder with a reviewed actual tag. Preserve any local m
 
 For Docker, use its explicit-version updater and [volume/config backup guidance](../docker/README.md). The new bundle format deliberately blocks the old Olm updater from blindly applying this protocol change. `down -v` deletes volumes; do not use it as a restart command.
 
+## Update to v0.19.0
+
+For existing v0.18.0 libsignal installations, this is a normal backed-up source/native update: preserve `.env`, the database, browser site data, identities, service/proxy, TURN and ntfy configuration. No conversation purge or new phone enrollment is required. Reload both browsers once after the code update so they understand the shared-chat sticker context. Old per-file stickers remain readable.
+
+There is no v0.19.0 prebuilt Docker bundle or image. The v0.18.0 Docker release remains available; its updater cannot apply a source-only release. A native source update does not require switching to Docker.
+
+### Sticker sending or reactions
+
+If an older client asks the other person to refresh secure keys while sending stickers, update the source and reload both phones once. The fix uses an established chat session rather than consuming a new starter bundle for every sticker, and retries publication on reconnect/resume. A new conversation without any authenticated starter bundle still needs the other phone to reconnect; keep its existing identity/site data. A plain reconnect message does not mean the application sent plaintext.
+
+For a reaction, tap/long-press the bubble and choose an emoji; tap your current reaction to remove it. Updating the chat timer affects future messages only. Older bubbles retain their original duration.
+
 ## Olm to libsignal is a migration
 
 v0.17.1 and earlier use a different message transport. Read [Approved cutover](APPROVED_CUTOVER.md). Stage/rehearse on a copied database, preserve device identities/contacts/alert registrations and networking secrets, explicitly remove incompatible mailbox/session data while stopped, and keep a tested rollback. Both peers must reload the new client. This is not an automatic import of Olm sessions/history and must not be hidden inside a normal image pull.

@@ -5,9 +5,11 @@ import {readFileSync,mkdtempSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {audit} from '../scripts/audit-source.mjs';
-test('release bundle references its own version and refuses startup without private setup',()=>{
- const version=JSON.parse(readFileSync('package.json')).version;
- assert.equal(readFileSync('docker/VERSION','utf8').trim(),version);
+test('prebuilt bundle pins its own published version independently of newer source releases and requires private setup',()=>{
+ const source=JSON.parse(readFileSync('package.json')).version,version=readFileSync('docker/VERSION','utf8').trim();
+ assert.match(version,/^\d+\.\d+\.\d+$/);
+ const a=version.split('.').map(Number),b=source.split('.').map(Number);
+ assert.ok(a[0]<b[0]||a[0]===b[0]&&(a[1]<b[1]||a[1]===b[1]&&a[2]<=b[2]),'prebuilt release cannot claim a future source version');
  const images=readFileSync('docker/images.env','utf8');
  for(const suffix of ['','-setup','-turn'])assert.ok(images.includes('ghcr.io/adlererik/webcaller:'+version+suffix+'\n'));
  assert.match(images,/BUNDLE_FORMAT=2/);

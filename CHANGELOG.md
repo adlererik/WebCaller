@@ -1,13 +1,17 @@
 # Changelog
 
-## Unreleased — Sticker collections
+## 0.19.0 — Stickers, reactions and reliable sending — 2026-10-28
 
-- Fix sticker failures when an offline recipient exhausts one-time keys: advance the established chat ratchet for sticker manifests, reuse separate auxiliary sticker/transfer ratchets, and retry publication on reconnect/resume. Keep old envelopes readable, preserve identity pins and per-file AES-GCM keys, and use a plain reconnect message for a genuinely new session that cannot yet be established. Both clients must reload once for the updated sticker context.
+I was asked to add stickers, so I added them. This is a source/native release; no new prebuilt Docker image or Docker bundle is published.
 
-- Prefer reviewed transparent cutouts in the picker: 690 cutouts across all eight series, ten additional community packs, 290 new images and 57 reviewed background-extracted assets. Keep 1,407 stickers in 28 packs available through All, preserve saved IDs and choices, and record edit provenance. Processing tools/models are not part of the application.
-
-- Expand the local picker from 40 starter stickers to 1,117 WebP images across 18 packs, including 221 Angel Dust stickers. Retain the old sticker IDs, encrypted Favorites/Recent and the existing Signal/AES-GCM/WebRTC delivery. Record source availability and separate artwork rights.
-- Show pack counts, distinguish pack tabs, preserve tab-strip position and reset the grid when choosing another pack. Keep images lazy-loaded to avoid downloading the entire collection on a phone.
+- Add 1,407 local WebP stickers across 28 community packs covering The Amazing Digital Circus, Hazbin Hotel, Helluva Boss, Demon Slayer, Death Note, Spy x Family, Genshin Impact and My Hero Academia. Include four dedicated Angel Dust sets (250 images). Bundle sources, hashes, artwork rights and edit provenance.
+- Default the picker to 690 reviewed transparent cutouts. All keeps screenshot stickers available. Add pack tabs, encrypted local Recent/Favorites, one-tap sending, lazy loading, pack counts and borderless chat rendering. Retain existing sticker IDs and saved choices; most cutouts are ready-made community artwork.
+- Encrypt each sticker with a fresh AES-256-GCM attachment key protected by libsignal. Add bounded low-priority WebRTC data-channel delivery with signed/encrypted SDP/ICE, authenticated receive/cache acknowledgement and the normal encrypted attachment-store fallback for offline clients or failed connections. Preserve voice-first transfer pacing, calls, SAS and notifications.
+- Fix exhausted starter keys while sending stickers: reuse the established chat ratchet for image manifests and separate per-contact auxiliary ratchets for sticker connections/progress. Reconnect/resume schedules bounded publication retries. Keep identity pins and one-use prekey enforcement; new sessions with no authenticated starter material still fail closed with plain reconnect wording. Existing per-file sticker envelopes remain readable. Both clients must reload once.
+- Fix emoji reactions on timed messages by binding updates to the original signed wire lifetime without resetting either device's countdown.
+- Keep older bubbles' original disappearing duration when either person changes the timer for future messages, including refresh/reopen. Preserve separate sender/recipient countdowns and Off.
+- Replace the old experimental-encryption footer with **Coded by Erik Adler**, linked to this repository. Rewrite sticker usage, installation/update choices, architecture, security and verification documentation for this release.
+- Keep the pinned libsignal core/binding and all existing encryption algorithms unchanged. Preserve the v0.18.0 prebuilt Docker references independently of the source version; release packaging refuses a mismatched optional Docker bundle.
 
 ## 0.18.0 — 2026-10-20
 

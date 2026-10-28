@@ -22,6 +22,10 @@ Images are bundled locally (about 37.4 MiB total). Twenty-two packs contain thei
 
 Stickers render without a colored bubble. Reply, react, forward, pin, message information and deletion for both remain available. Forwarding generates a fresh attachment key and uses the destination chat's current timer. Stickers retain their original per-message disappearing duration, independent sender/recipient countdowns, Off option and encrypted local cache. Browser eviction may require another download.
 
+## Size and layout
+
+Artwork is WebP at up to 512×512 pixels and 512 KiB per sticker. The chat gives each sticker a transparent area up to 200 CSS pixels high and `min(200px, 50vw)` wide, preserving its aspect ratio. The responsive picker uses a grid, a bottom pack strip and stars for Favorites. This follows familiar WhatsApp-style patterns; it is not a pixel-for-pixel clone or a connection to WhatsApp/Signal accounts.
+
 ## Encryption and delivery
 
 1. Sticker manifests advance the existing chat ratchet instead of claiming a fresh one-time bundle per image. Previously sent per-file stickers remain readable. Connection-control and transfer-progress packets reuse their own per-contact ratchets, while call signaling stays separate. A sticker is an authenticated attachment with an encrypted `sticker: true` marker. That marker, filename and random **AES-256-GCM** file key are inside the existing **libsignal PQXDH/Triple Ratchet** message. Image chunks use the existing attachment encryption and expiry binding. No new cryptographic algorithm or custom ratchet is introduced.
@@ -38,3 +42,7 @@ Tap or long-press a message, then choose a quick reaction or the three dots for 
 ## Adding bundled artwork
 
 Put appropriately authorized WebP files under `public/stickers/<pack-id>/<number>.webp` and add metadata to `catalog.json`. Pack IDs use lowercase letters, digits and hyphens; sticker IDs are numeric and filenames have three digits. Images must be at most 512×512 and 512 KiB. Record source, original rights, exact bytes and SHA-256. Set `cutout: true` only after checking the actual transparent silhouette; use `false` for screenshots. For edited artwork, retain the source hash as `originalSha256` and describe `editMethod`. Paths must remain inside the local directory. Run `node --test tests/stickers.test.mjs` and update the expected inventory when deliberately adding images. Preserve attribution and review redistribution terms before publishing more artwork.
+
+## Updating an existing installation
+
+Follow the normal [source update guide](OPERATIONS.md#native-libsignal-updates) and reload both browsers once. Accounts, identities, existing stickers and Favorites remain valid; this update does not require deleting conversations or resetting browser data. There is no new prebuilt Docker bundle for v0.19.0. The ready-made pack images are served by your own installation, so no sticker-provider account, bot token or external image API is required.

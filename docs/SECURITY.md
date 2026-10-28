@@ -1,6 +1,6 @@
 # WebCaller security and encryption
 
-This is the security model for **v0.18.0**, which uses official libsignal **0.105.1**, pinned to commit `1738ead8a12ffe539f6309958123dadb16dc3b95`. It supersedes descriptions of the earlier Olm message transport. The upstream protocol source is unmodified. WebCaller's WASM adapter, storage, application signatures, call handling and SAS composition remain **unaudited**. This document describes mechanisms and boundaries, not a security certification.
+This is the security model for **v0.19.0**, which uses official libsignal **0.105.1**, pinned to commit `1738ead8a12ffe539f6309958123dadb16dc3b95`. It supersedes descriptions of the earlier Olm message transport. The upstream protocol source is unmodified. WebCaller's WASM adapter, storage, application signatures, call handling and SAS composition remain **unaudited**. This document describes mechanisms and boundaries, not a security certification.
 
 ## What end-to-end encryption means here
 

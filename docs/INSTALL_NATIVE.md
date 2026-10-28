@@ -9,9 +9,11 @@ sudo apt update
 sudo apt install -y git ca-certificates curl xz-utils nano python3 python3-venv
 if sudo test -e /opt/webcaller; then echo 'Stop: the target directory already exists.'; exit 1; fi
 sudo install -d -m 755 -o "$(id -un)" -g "$(id -gn)" /opt/webcaller
-git clone --recurse-submodules --branch v0.18.0 https://github.com/adlererik/WebCaller.git /opt/webcaller
+git clone --recurse-submodules --branch v0.19.0 https://github.com/adlererik/WebCaller.git /opt/webcaller
 cd /opt/webcaller
 ```
+
+**Release archive alternative:** instead of the `git clone` command, extract the uploaded `WebCaller-v0.19.0.tar.gz`/`.zip` into the empty `/opt/webcaller` folder. Use the uploaded release asset rather than GitHub's automatic Source code archive, and check its SHA-256 against the release's `SHA256SUMS.txt`. The uploaded asset includes pinned upstream source and `public/preview-source.tar.gz`. Skip `npm run prepare:source` below when using an extracted archive without `.git`; it is a Git-checkout build step. [Download choices](INSTALL.md).
 
 Run each command only after the previous succeeds. If the existence check fails, stop: review the existing directory rather than overwriting it. For an existing Olm deployment, stop here and read [the migration guide](APPROVED_CUTOVER.md). Use a different new folder if needed and substitute that path throughout this guide. GitHub ZIPs omit source submodules; the recursive clone includes the exact official source needed for the source offer.
 

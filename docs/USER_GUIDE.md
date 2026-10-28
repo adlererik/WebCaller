@@ -1,7 +1,5 @@
 # Using WebCaller
 
-For stickers, tap the folded-corner icon beside the message field, choose a pack and tap a sticker to send. Use the star for Favorites. Recent/Favorites are saved in encrypted device storage. Stickers support the same original disappearing timer, replies, reactions, forwarding and deletion as other media. See the [sticker guide](STICKERS.md).
-
 This release uses libsignal/PQXDH with Ed25519 application signatures. [Install](INSTALL.md) · [Security](SECURITY.md) · [Olm upgrade planning](APPROVED_CUTOVER.md).
 
 ## Your browser is your device
@@ -36,7 +34,7 @@ Type a message and use the send button. Text is encrypted for sender and recipie
 
 Open a chat, tap its **Settings** cog, then **Disappearing messages**. Choose **Off**, **4 weeks**, **1 week**, **1 day**, **8 hours**, **1 hour** (the default), **5 minutes**, or **30 seconds**, then **Save**. New chats default to disappearing messages after one hour; explicitly saved timer choices remain in effect. For an exact time, tap **Custom time**, scroll the left wheel to a number and the right wheel to seconds, minutes, hours, days or weeks, tap **Set**, then **Save**. **Cancel** leaves the custom choice unchanged; going back without Save discards the draft. The longest timer is four weeks.
 
-This applies only to new messages you send in that conversation. Your countdown starts **when sent**. On the recipient’s phone, the full countdown starts **when they view the message in the chat**, even if your own copy has already disappeared. First viewing is remembered on that device: closing or refreshing the chat does not restart it. Visible messages are marked viewed after a brief on-screen check; opening a message’s actions or its media also counts. This applies to new timed text and media after this update. Older messages keep their original shared expiry.
+A timer change applies only to messages sent after it is saved, regardless of which person changes it. Older bubbles keep their own original duration across chat changes, edits and refreshes. Your countdown starts **when sent**. On the recipient’s phone, the full countdown starts **when they view the message in the chat**, even if your own copy has already disappeared. First viewing is remembered on that device: closing or refreshing the chat does not restart it. Visible messages are marked viewed after a brief on-screen check; opening a message’s actions or its media also counts. This applies to new timed text and media after this update. Older messages keep their original shared expiry.
 
 **Off** keeps new text and media until deleted; it does not restore expired messages. Changing the setting does not extend existing messages or override the other sender’s choice. Either participant can still deliberately delete for both phones. To make delayed viewing possible, the server keeps the recipient’s encrypted unread copy until it is viewed or deleted. Read acknowledgements retry after reconnection; browser suspension or no connection can delay server cleanup. Copying/screenshotting content can preserve it outside WebCaller. Refresh both phones after updating; an older open version cannot read the new timing envelopes. The current mailbox view loads the latest 500 available messages for the device, rather than unlimited scrollback.
 
@@ -65,6 +63,19 @@ Map previews use OpenStreetMap by default. After your explicit location tap, the
 Long-press a bubble, right-click it on a computer, or tap its little **…** button. Choose **Delete for both**. Either participant can remove a sent or received text/media message. The server removes the message and encrypted media chunks; connected phones remove the bubble and close its viewer. An offline phone learns the deletion on reconnect. A minimal deletion marker (message ID, participant IDs and original expiry) remains until the original timer expires, preventing an old envelope from being uploaded again. It contains no message text, filename or media key.
 
 A website cannot reliably prevent operating-system screenshots or another camera photographing the screen. Background previews are cleared and chat is hidden when printing. External copies cannot be recalled.
+
+## Send a sticker
+
+1. Open the person's conversation.
+2. Tap the **folded-corner sticker icon** beside the message field. The circled **+** is for ordinary photos/files/location.
+3. Swipe the pack strip at the bottom and choose a collection.
+4. Tap a sticker to send it immediately. No caption or extra confirmation is needed.
+
+The default **Cutouts** view shows 690 transparent stickers. Choose **All** to see the complete 1,407-image collection, including screenshot stickers. Tap a star to keep a Favorite; **Recent** shows stickers you sent. These choices are saved encrypted on this device. Switching views does not delete Favorites or messages. Stickers display without a colored bubble; tap for the media view, or use message options to reply, react, forward, pin, inspect or delete for both people. Sticker images themselves are not editable messages.
+
+Stickers follow the timer that was selected when they were sent. Your countdown starts when sent; the recipient's starts when viewed. Reopening a chat uses its encrypted media cache where available, subject to the browser's storage limits. Your browser still needs a connection to send; the recipient can be offline and receive the stored encrypted copy later.
+
+**Updating to v0.19.0:** reload WebCaller once on both phones. Ordinary sticker sending in an established chat no longer needs a fresh starter key for every image. The app handles reconnect/retry automatically; nobody needs to copy, reset or manage encryption keys. A truly new conversation with no usable starter material still needs the other phone to reconnect before it can start safely. [All packs and details](STICKERS.md).
 
 ## Typing indicators
 

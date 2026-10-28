@@ -21,6 +21,8 @@ for (const [format,suffix] of [['tar.gz','tar.gz'],['zip','zip']]) {
 // A small optional deployment bundle, independent of source/runtime directories.
 const digestFile=process.argv[3];
 if(digestFile){
+  const bundleVersion=execFileSync('git',['show',`${tag}:docker/VERSION`]).toString().trim();
+  if(bundleVersion!==pkg.version)throw new Error('No matching prebuilt Docker bundle for this source release. Package source without image digests.');
   const digests=JSON.parse(readFileSync(digestFile,'utf8'));
   const dir=mkdtempSync(out+'/bundle-'),prefix=`WebCaller-Docker-${tag}`;mkdirSync(`${dir}/${prefix}`);
   try{

@@ -42,9 +42,11 @@ See [Call networking](CALL_NETWORK.md) for exact policies, diagnostics and real-
 - Current-location action requests a fresh high-accuracy fix with OS permission, builds a pin/map preview and sends coordinates/accuracy/capture time/attribution inside encrypted media. Google Maps links on Android and Apple Maps links on Apple devices. No live tracking or reverse geocoder. Tile/map providers can see their own requests.
 - Encrypted local media cache avoids another transfer after closing/reopening a chat, subject to expiry/deletion, integrity checks and storage quotas/eviction. Attachment keys/filenames/plaintext are not added to the chunk cache; retained message records still contain the necessary file key.
 
-## Timers and deletion
+## Stickers
 
-The [sticker picker](STICKERS.md) adds 28 local packs (1,407 WebP images), including four dedicated Angel Dust sets (250 images), a default Cutouts view with 690 transparent stickers, an All view preserving screenshot stickers, pack tabs, encrypted local Recent/Favorites, one-tap sending and borderless rendering. Stickers retain attachment encryption, timers, reactions, replies, forwarding, caching and deletion. Signal-authenticated data-only WebRTC connections carry encrypted chunks; the usual encrypted attachment store supports offline clients and fallback. No external sticker service is contacted at runtime. Artwork provenance and separate rights accompany the assets.
+The [sticker picker](STICKERS.md) supports transparent cutouts, pack tabs, encrypted local Recent/Favorites, one-tap sending and borderless rendering. Stickers retain attachment encryption, timers, reactions, replies, forwarding, caching and deletion. Signal-authenticated data-only WebRTC connections carry encrypted chunks; the usual encrypted attachment store supports offline clients and fallback. No external sticker service is contacted at runtime. Artwork provenance and separate rights accompany the assets.
+
+## Timers and deletion
 
 New conversations default to **one hour**. Options include Off, presets and custom number/unit wheels for seconds, minutes, hours, days and weeks, up to **four weeks**. Changing your setting affects only new messages you send. Every existing message keeps its original authenticated duration, including when either person chooses a different timer or Off; opening the chat or refreshing never replaces that duration with the current preference.
 

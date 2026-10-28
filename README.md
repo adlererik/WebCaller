@@ -8,7 +8,7 @@
 
 ## Why I built it this way
 
-I wanted something a nontechnical relative could open and understand: accept an invitation, choose a name and talk. I also wanted control over my own server, good sound on poor connections and no compulsory telephone-number directory. The interface follows familiar Signal-style calling and messaging patterns, with extra controls tucked into Settings.
+I wanted calling and messaging to be straightforward: open a link, choose a name and talk. I also wanted control over my own server, good sound on poor connections and no compulsory telephone-number directory. The interface follows familiar Signal-style calling and messaging patterns, with extra controls tucked into Settings.
 
 I started with Olm Double Ratchet for classical forward secrecy. The v0.18.0 release moved new message and signaling sessions to the official **libsignal 0.105.1** implementation, with **PQXDH and Triple Ratchet/SPQR**. I chose an established protocol implementation instead of inventing a message cipher. The application around that library still needs careful testing and independent review.
 
@@ -16,13 +16,9 @@ I started with Olm Double Ratchet for classical forward secrecy. The v0.18.0 rel
 
 Against a nation-state adversary, I would worry about a compromised phone or malicious website update as much as cryptanalysis. An exploit such as Pegasus can get at the microphone or plaintext without breaking the encryption. This applies to excellent messengers too; it is not evidence that Signal's protocol is broken. Don't assume anything on an owned phone is safe. **Stay tuned… I'm working on an embedded device for encrypted calls, much like a Trezor hardware wallet—but for calls ;)** That is a separate project in development.
 
-## I was asked to add stickers, so I added them :)
+## Stickers
 
-There are now **1,407 bundled WebP stickers in 28 packs**, with **690 transparent cutouts** in the default view. The collections cover The Amazing Digital Circus, Hazbin Hotel, Helluva Boss, Demon Slayer, Death Note, Spy x Family, Genshin Impact and My Hero Academia, including **250 Angel Dust stickers** across four dedicated packs. Most cutouts came ready-made from community packs; sources and artwork rights are included.
-
-Open a chat, tap the sticker icon next to the message field, choose a pack and tap a sticker. It sends immediately. **Cutouts** shows the transparent stickers; **All** includes the original screenshot stickers too. Stars keep Favorites, and Recent remembers what you sent. The picker follows familiar WhatsApp-style sticker patterns, with borderless images in the conversation. [How it works and all the packs](docs/STICKERS.md).
-
-Stickers use the existing **libsignal chat ratchet** for their encrypted manifests and a fresh **AES-256-GCM** key for every image. Encrypted WebRTC data channels carry them when possible; the ordinary encrypted attachment store handles offline delivery and fallback. I also fixed a problem where each sticker started a new session and could exhaust an asleep phone's starter-key supply. Existing chats now keep sending stickers without asking the other person to manage keys. Reconnect/resume handles publication retries automatically. Both phones need to reload once after this update. [Encryption and limits](docs/SECURITY.md).
+WebCaller supports stickers with one-tap sending, Favorites, Recent and borderless chat images. Tap the sticker icon beside the message field to choose one. Stickers use the same end-to-end encryption and disappearing-message settings as other media. [Sticker guide](docs/STICKERS.md).
 
 ## What is included
 
@@ -36,7 +32,7 @@ Stickers use the existing **libsignal chat ratchet** for their encrypted manifes
 | Practical mobile budgets | Up to 500 kbps sent and 500 kbps received for video when either end is cellular/unknown. Confirmed Wi-Fi can use 900 kbps per direction. Audio/headers/files are additional. |
 | Modern call screen | Immersive upright view, square layout when either screen is sideways, fading controls/codec rows, persistent SAS/quality/timer and a draggable fixed-size self preview. |
 | Encrypted chat | Text, typing animation, replies, sender-only edits, reactions, forwarding, copy, selection, pinning, message information and deletion for both people. |
-| Stickers | 690 transparent cutouts across all eight series; 1,407 local WebP stickers in 28 packs through All, including four Angel Dust packs; pack tabs, encrypted local Recent/Favorites, one-tap sending and borderless rendering. Signal-protected keys, encrypted WebRTC data-channel delivery and stored encrypted fallback. [Guide](docs/STICKERS.md). |
+| Stickers | Encrypted stickers, one-tap sending, Favorites, Recent and borderless chat images. [Guide](docs/STICKERS.md). |
 | Media and files | Up to 200 MiB per item; inline pictures/video/audio, full-screen viewer, captions, gallery/file picker, front/back photo capture, voice notes and current-location map cards. |
 | Sharing while talking | Up to four paced encrypted upload/download workers, weak-link parts, retry/cancellation and percentage placeholders. Video temporarily yields capacity; poor audio pauses file traffic. |
 | Media that stays available | Complete encrypted local media caching avoids another transfer when reopening a chat, until expiry/deletion or browser storage eviction. |

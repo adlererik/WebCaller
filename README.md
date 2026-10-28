@@ -106,7 +106,7 @@ Choose **one** installation method:
 
 - **Previous prebuilt Docker release (v0.18.0):** download `WebCaller-Docker-v0.18.0.tar.gz` from [that release](https://github.com/adlererik/WebCaller/releases/tag/v0.18.0), extract it, then run `./webcaller setup`, `./webcaller start` and `./webcaller qr`. The wizard configures the optional HTTPS/TURN/ntfy services. [Step-by-step guide](docker/README.md).
 - **Native Debian, no Docker:** use the complete [native guide](docs/INSTALL_NATIVE.md) for Node, private configuration, HTTPS, boot service, TURN and the private first-phone QR.
-- **Build from source (v0.19.0):** download the uploaded `WebCaller-v0.19.0.tar.gz`/`.zip` or recursively clone the tagged release, install dependencies, generate private setup keys and build the source offer. The root Compose file can also build a container locally. [Installation choices](docs/INSTALL.md).
+- **Build from source (v0.19.0):** download the uploaded `WebCaller-v0.19.0.tar.gz`/`.zip` or recursively clone the tagged release, install dependencies, generate private setup keys and retain the included source offer (or build it from the Git checkout). The root Compose file can also build a container locally. [Installation choices](docs/INSTALL.md).
 
 You need a server, a domain/HTTPS address and a reachable TURN relay for reliable calls across difficult networks. A Cloudflare Tunnel can carry the website and WebSockets; it cannot relay WebRTC media. CGNAT usually requires a separate public TURN server. A successful relay allocation is useful but not a complete call test.
 

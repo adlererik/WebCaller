@@ -595,11 +595,14 @@ const callLink=signalingLink({
     if(recovering)await recovering.signalingRestored();
     if(ws!==socket)return;
     await sync();
+    // Resume key publication after missed/offline notifications. Keep it out
+    // of the call-recovery critical path and retry on the next reconnect.
+    messenger.refresh();
   },
   onPacket:async(b,socket)=>{
       if(b.type==='sticker-link'){
         const peer=device?.contacts.find(c=>c.id===b.envelope?.from&&!c.request);if(!peer||document.visibilityState!=='visible')return;
-        const payload=await open(device.identity,device.user.id,peer,b.envelope);if(payload.kind==='sticker-link'&&b.envelope.ratchet?.scope===payload.callId)try{await stickerLinks.accept(peer,payload);}catch{stickerLinks.reset();}return;
+        const payload=await open(device.identity,device.user.id,peer,b.envelope);if(payload.kind==='sticker-link'&&[payload.callId,'sticker-link'].includes(b.envelope.ratchet?.scope))try{await stickerLinks.accept(peer,payload);}catch{stickerLinks.reset();}return;
       }
       if(b.type==='transfer')await receiveTransfer(b);
       else if(b.type==='transfer-ended'){if(pendingTransfers.delete(b.id)&&selected)renderMessages();}
@@ -608,7 +611,7 @@ const callLink=signalingLink({
       else if(b.type==='message-deleted')rememberDeletion(b.id,b.expires);
       else if(b.type==='typing')await receiveTyping(b.envelope);
       else if(b.type==='contacts')await sync();
-      else if(b.type==='secure-keys-needed')await messenger.publish();
+      else if(b.type==='secure-keys-needed')messenger.refresh();
       else if(b.type==='signal')await receiveSignal(b);
       else if(['busy','call-ended','call-expired','call-answered','error'].includes(b.type))await callInbox(()=>{
         if(ws!==socket||b.callId&&b.callId!==call?.id)return;
@@ -1018,7 +1021,7 @@ $('confirm-forget').onclick=async()=>{
 };
 function clearMessage(m){m.reactions=null;m.receipt=null;m.versions=null;m.pinVersion=null;m.replyTo=null;if(viewerMessage?.id===m.id)closeViewer();if(m.blobURL)URL.revokeObjectURL(m.blobURL);m.blobURL=null;m.blob=null;m.location=null;m.text='';m.attachment=null;}
 setInterval(()=>{if(purgeTransfers(pendingTransfers)&&selected)renderMessages();if(selected&&document.visibilityState==='visible')updateCountdowns($('messages'));for(const [id,updates]of pendingMessageEvents)if(!updates.some(e=>e.envelope.expiresAt>Date.now()))pendingMessageEvents.delete(id);queueReceipts();void pumpViewOutbox();for(const [id,expiry]of deletedMessages)if(expiry<=Date.now())deletedMessages.delete(id);for(const [id,expiry]of typingSeen)if(expiry<=Date.now())typingSeen.delete(id);renderTyping();let changed=false;for(const [id,m]of messages)if(m.expiresAt<=Date.now()){void cachedMedia.remove(device?.user.id,id,m.wireExpiresAt||m.expiresAt);if(m.lifetime){deletedMessages.set(id,m.wireExpiresAt);void messenger.purge().catch(()=>{});}clearMessage(m);messages.delete(id);receiptWanted.delete(id);visibleSince.delete(id);changed=true;}if(changed&&selected)renderMessages();},1000);
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&device?.user){void consumeMessageNotice();void consumeNotificationAnswer();void cachedMedia.purge();unlockSound();if(!wsReady)connect();else{callLink.probe(true);if(!call)sync().catch(()=>{});}if(call?.started)navigator.wakeLock?.request('screen').then(lock=>wakeLock=lock).catch(()=>{});}if(document.visibilityState==='hidden'){timerUi.dismiss();pendingTransfers.clear();actions.reset();clearTimeout(receiptTimer);receiptTimer=null;receiptWanted.clear();visibleSince.clear();pendingMessageEvents.clear();locationShare.close();$('attachment-dialog').close();stopTyping();typingPeers.clear();renderTyping();captures.close();closeViewer();clearDraft();$('draft-dialog').close();$('emoji-dialog').close();transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();$('messages').replaceChildren();$('pinned-message').textContent='';$('pinned-message').onclick=null;$('pinned-message').classList.add('hidden');}});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&device?.user){void consumeMessageNotice();void consumeNotificationAnswer();void cachedMedia.purge();unlockSound();if(!wsReady)connect();else{messenger.refresh();callLink.probe(true);if(!call)sync().catch(()=>{});}if(call?.started)navigator.wakeLock?.request('screen').then(lock=>wakeLock=lock).catch(()=>{});}if(document.visibilityState==='hidden'){timerUi.dismiss();pendingTransfers.clear();actions.reset();clearTimeout(receiptTimer);receiptTimer=null;receiptWanted.clear();visibleSince.clear();pendingMessageEvents.clear();locationShare.close();$('attachment-dialog').close();stopTyping();typingPeers.clear();renderTyping();captures.close();closeViewer();clearDraft();$('draft-dialog').close();$('emoji-dialog').close();transfer?.controller.abort();for(const m of messages.values())clearMessage(m);messages.clear();$('messages').replaceChildren();$('pinned-message').textContent='';$('pinned-message').onclick=null;$('pinned-message').classList.add('hidden');}});
 let previousNetwork=navigator.connection?.type;
 function networkChanged(online=false){
   const next=navigator.connection?.type,changed=!!next&&!!previousNetwork&&next!==previousNetwork;previousNetwork=next;

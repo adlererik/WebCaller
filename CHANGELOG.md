@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Anchor the app and credit footer inside the usable screen area. Resize the chat above mobile keyboards, account for safe areas and focus panning, and restore the page after keyboard dismissal without moving an older-message scroll position. Preserve pinch zoom and independent message/dialog scrolling.
+
 ## 0.19.0 — Stickers, reactions and reliable sending — 2026-10-28
 
 I was asked to add stickers, so I added them. This is a source/native release; no new prebuilt Docker image or Docker bundle is published.

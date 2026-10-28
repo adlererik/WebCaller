@@ -1,0 +1,22 @@
+/* Only the conversation and contact list scroll; the document is an app shell.
+   VisualViewport supplies the keyboard's usable area on iOS and Android. */
+html { height:100%; overflow:hidden; overscroll-behavior:none; }
+body {
+  position:fixed; top:var(--app-viewport-top,0px); left:0; width:100%;
+  height:100vh; height:var(--app-viewport-height,100dvh);
+  display:flex; flex-direction:column; overflow:hidden;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.app { flex:1; width:100%; height:auto; min-height:0; overflow:hidden; }
+.main,.conversation,.messages { min-height:0; }
+.conversation { overflow:hidden; }
+.chat-header,.privacy-strip,.selection-bar { flex-shrink:0; }
+.empty { height:100%; overflow-y:auto; }
+.preview-disclosure { flex:none; padding:3px 10px 5px; text-align:center; font-size:10px; line-height:1.5; background:var(--surface,#fafbfe); }
+.preview-disclosure a { color:var(--soft-ink,#69727e); text-decoration:none; }
+.preview-disclosure a:hover { text-decoration:underline; }
+/* The shell already reserves the home indicator inset. */
+:root .composer-note { padding-bottom:8px; }
+@media(max-width:760px) {
+  :root .sidebar { padding-bottom:18px; overflow-y:auto; overscroll-behavior:contain; }
+}

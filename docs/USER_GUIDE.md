@@ -71,11 +71,11 @@ A website cannot reliably prevent operating-system screenshots or another camera
 3. Swipe the pack strip at the bottom and choose a collection.
 4. Tap a sticker to send it immediately. No caption or extra confirmation is needed.
 
-The default **Cutouts** view shows 690 transparent stickers. Choose **All** to see the complete 1,407-image collection, including screenshot stickers. Tap a star to keep a Favorite; **Recent** shows stickers you sent. These choices are saved encrypted on this device. Switching views does not delete Favorites or messages. Stickers display without a colored bubble; tap for the media view, or use message options to reply, react, forward, pin, inspect or delete for both people. Sticker images themselves are not editable messages.
+The default **Cutouts** view shows transparent stickers. Choose **All** to browse the full collection. Tap a star to keep a Favorite; **Recent** shows stickers you sent. These choices are saved encrypted on this device. Switching views does not delete Favorites or messages. Stickers display without a colored bubble; tap for the media view, or use message options to reply, react, forward, pin, inspect or delete for both people. Sticker images themselves are not editable messages.
 
 Stickers follow the timer that was selected when they were sent. Your countdown starts when sent; the recipient's starts when viewed. Reopening a chat uses its encrypted media cache where available, subject to the browser's storage limits. Your browser still needs a connection to send; the recipient can be offline and receive the stored encrypted copy later.
 
-**Updating to v0.19.0:** reload WebCaller once on both phones. Ordinary sticker sending in an established chat no longer needs a fresh starter key for every image. The app handles reconnect/retry automatically; nobody needs to copy, reset or manage encryption keys. A truly new conversation with no usable starter material still needs the other phone to reconnect before it can start safely. [All packs and details](STICKERS.md).
+**Updating to v0.19.0:** reload WebCaller once on both phones. Ordinary sticker sending in an established chat no longer needs a fresh starter key for every image. The app handles reconnect/retry automatically; nobody needs to copy, reset or manage encryption keys. A truly new conversation with no usable starter material still needs the other phone to reconnect before it can start safely. [Sticker guide](STICKERS.md).
 
 ## Typing indicators
 

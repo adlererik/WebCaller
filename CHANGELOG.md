@@ -6,10 +6,9 @@
 
 ## 0.19.0 — Stickers, reactions and reliable sending — 2026-10-28
 
-I was asked to add stickers, so I added them. This is a source/native release; no new prebuilt Docker image or Docker bundle is published.
+This is a source/native release; no new prebuilt Docker image or Docker bundle is published.
 
-- Add 1,407 local WebP stickers across 28 community packs covering The Amazing Digital Circus, Hazbin Hotel, Helluva Boss, Demon Slayer, Death Note, Spy x Family, Genshin Impact and My Hero Academia. Include four dedicated Angel Dust sets (250 images). Bundle sources, hashes, artwork rights and edit provenance.
-- Default the picker to 690 reviewed transparent cutouts. All keeps screenshot stickers available. Add pack tabs, encrypted local Recent/Favorites, one-tap sending, lazy loading, pack counts and borderless chat rendering. Retain existing sticker IDs and saved choices; most cutouts are ready-made community artwork.
+- Add sticker support with transparent cutouts, pack tabs, encrypted local Recent/Favorites, one-tap sending, lazy loading and borderless chat images. Preserve existing sticker IDs and saved choices; artwork attribution and source records accompany the assets.
 - Encrypt each sticker with a fresh AES-256-GCM attachment key protected by libsignal. Add bounded low-priority WebRTC data-channel delivery with signed/encrypted SDP/ICE, authenticated receive/cache acknowledgement and the normal encrypted attachment-store fallback for offline clients or failed connections. Preserve voice-first transfer pacing, calls, SAS and notifications.
 - Fix exhausted starter keys while sending stickers: reuse the established chat ratchet for image manifests and separate per-contact auxiliary ratchets for sticker connections/progress. Reconnect/resume schedules bounded publication retries. Keep identity pins and one-use prekey enforcement; new sessions with no authenticated starter material still fail closed with plain reconnect wording. Existing per-file sticker envelopes remain readable. Both clients must reload once.
 - Fix emoji reactions on timed messages by binding updates to the original signed wire lifetime without resetting either device's countdown.

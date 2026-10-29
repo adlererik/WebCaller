@@ -15,6 +15,7 @@ const compose=(...args)=>docker('compose','--project-name',project,'--project-di
 const settings={host:'calls.example.test',mode:'proxy',relay:'self',publicIP:'1.1.1.1',appPort:18180,ntfyPort:18194,ntfy:true,ntfyHost:'notify.example.test',ios:false};
 try{
  execFileSync('docker',['run','--rm','-i','--user',`${process.getuid()}:${process.getgid()}`,'--mount',`type=bind,src=${dir},dst=/bundle`,'webcaller-ci:setup','init','--settings','/dev/stdin'],{input:JSON.stringify(settings),encoding:'utf8',stdio:['pipe','pipe','pipe']});
+ writeFileSync(join(dir,'.env'),readFileSync(join(dir,'.env'),'utf8').replace(/^COMPOSE_PROJECT_NAME=.*$/m,'COMPOSE_PROJECT_NAME='+project));
  compose('config','--quiet');
  const upstream=Object.fromEntries(images.split('\n').filter(v=>v.includes('=')&&!v.startsWith('#')).map(v=>v.split(/=(.*)/s).slice(0,2)));
  docker('run','--rm','--mount',`type=bind,src=${dir}/config/Caddyfile,dst=/etc/caddy/Caddyfile,readonly`,upstream.CADDY_IMAGE,'caddy','validate','--config','/etc/caddy/Caddyfile');
@@ -46,7 +47,17 @@ try{
  compose('down');compose('up','-d','--wait','--wait-timeout','180');
  const after=compose('exec','-T','webcaller','node','-e',"process.stdout.write(require('fs').readFileSync('/run/webcaller-ntfy/publisher.token'))");assert.equal(after,before);
  assert.equal((await api('/ntfy')).topic,topic);assert.equal((await api('/ntfy')).confirmed,true);assert.equal((await(await fetch(base+'/api/config')).json()).bootstrap,false);
- console.log('PASS disposable Docker stack: setup, health, no-store, WebSocket auth, ntfy ACL/priority delivery, TURN allocation, private QR and restart persistence.');
+ // Exercise the shipped assistant and an actual consistent backup/restore.
+ execFileSync(join(dir,'webcaller'),['status'],{cwd:dir,encoding:'utf8',timeout:10000});
+ execFileSync('script',['-q','-e','-c','./webcaller backup','/dev/null'],{cwd:dir,input:'y\n',encoding:'utf8',timeout:180000});
+ const backupFiles=(await import('node:fs')).readdirSync(join(dir,'backups')).filter(f=>f.endsWith('.tar.gz'));assert.equal(backupFiles.length,1);
+ compose('exec','-T','webcaller','node','-e',"require('fs').writeFileSync('/app/data/after-backup-fixture','later')");
+ compose('stop');
+ execFileSync('python3',['-c',"import importlib.machinery,importlib.util,pathlib; loader=importlib.machinery.SourceFileLoader('assistant','webcaller'); spec=importlib.util.spec_from_loader('assistant',loader); m=importlib.util.module_from_spec(spec); loader.exec_module(m); m.restore_snapshot(pathlib.Path('backups').resolve()/"+JSON.stringify(backupFiles[0])+"); m.start()"],{cwd:dir,encoding:'utf8',timeout:180000});
+ assert.equal(compose('exec','-T','webcaller','node','-e',"process.stdout.write(String(require('fs').existsSync('/app/data/after-backup-fixture'))) ").trim(),'false');
+ assert.equal((await api('/ntfy')).topic,topic);assert.equal((await api('/ntfy')).confirmed,true);
+ const restored=compose('exec','-T','webcaller','node','-e',"process.stdout.write(require('fs').readFileSync('/run/webcaller-ntfy/publisher.token'))");assert.equal(restored,before);
+ console.log('PASS disposable Linux stack: setup, HTTPS config, WS auth, ntfy ACL/priority, TURN allocation, private QR, restart persistence and consistent backup/restore preserving credentials and registrations.');
 }catch(error){
  console.error('Disposable Docker smoke failed. Inspect synthetic container status below; credentials are omitted.');
  // Synthetic fixture only; never output config, tokens, QR, topic IDs or command buffers.

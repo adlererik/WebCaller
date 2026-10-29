@@ -1,33 +1,274 @@
-#!/bin/sh
-set -eu
-bundle_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-cd "$bundle_dir"
-image_value() { sed -n "s/^$1=//p" images.env; }
-setup_image=$(image_value SETUP_IMAGE)
-if test -z "$setup_image"; then echo 'Missing images.env. Extract the complete Docker bundle.' >&2; exit 1; fi
-compose() { docker compose --project-directory "$bundle_dir" --env-file images.env --env-file .env -f compose.yaml "$@"; }
-helper() {
- if test -t 0; then tty_arg=-it; else tty_arg=-i; fi
- docker run --rm "$tty_arg" --user "$(id -u):$(id -g)" --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true --mount "type=bind,src=$bundle_dir,dst=/bundle" "$setup_image" "$@"
-}
-need_setup() { test -f .env && test -f config/app.env || { echo 'Run ./webcaller setup first.' >&2; exit 1; }; }
-case "${1:-help}" in
- setup) test "$(uname -s)" = Linux || { echo 'The complete relay stack supports Linux amd64/arm64.'; exit 1; }; helper init ;;
- qr) need_setup; helper qr ;;
- start) need_setup; compose up -d --wait --wait-timeout 180 ;;
- stop) need_setup; compose stop ;;
- status) need_setup; compose ps ;;
- logs) need_setup; compose logs --tail=100 ;;
- update)
-  need_setup
-  version=${2:-};case "$version" in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo 'Usage: ./webcaller update vX.Y.Z [--yes]'; exit 1 ;; esac
-  echo 'Read the release notes and make any private backup you need first. Updating can interrupt calls. Database rollback is not automatic.'
-  if test "${3:-}" != --yes; then printf 'Continue? [y/N] '; read -r answer; case "$answer" in y|Y|yes) ;; *) exit 0 ;; esac; fi
-  helper prepare-update "$version"
-  docker compose --project-directory "$bundle_dir" --env-file ".updates/$version/images.env" --env-file .env -f ".updates/$version/compose.yaml" pull
-  helper apply-update "$version"
-  compose up -d --wait --wait-timeout 180
-  echo 'Containers are running/healthy. Test the public page, a call and locked-phone alerts.'
-  ;;
- *) echo 'WebCaller: setup | start | qr | status | logs | stop | update vX.Y.Z [--yes]';;
-esac
+#!/usr/bin/env python3
+"""WebCaller Linux server assistant. Requires Python 3 and Docker Engine + Compose."""
+import contextlib,fcntl,json,os,pathlib,platform,re,socket,subprocess,sys,urllib.parse,urllib.request
+from datetime import datetime,timezone
+ROOT=pathlib.Path(__file__).resolve().parent
+VOLUMES={'app_data','ntfy_state','publisher','caddy_data','caddy_config'}
+class FriendlyError(Exception):pass
+
+def env(path):
+ try:return dict(l.split('=',1) for l in pathlib.Path(path).read_text().splitlines() if '=' in l and not l.startswith('#'))
+ except OSError:raise FriendlyError('An installation file is missing. Extract the complete WebCaller Docker bundle first.')
+def image():return env(ROOT/'images.env')['SETUP_IMAGE']
+def configured():return (ROOT/'.env').is_file() and (ROOT/'config/app.env').is_file()
+def project():
+ value=env(ROOT/'.env').get('COMPOSE_PROJECT_NAME','webcaller-prebuilt')
+ if not re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,62}',value):raise FriendlyError('Invalid installation project name. Restore your private configuration.')
+ return value
+
+def run(args,capture=False,input=None,check=True,timeout=600):
+ try:
+  r=subprocess.run(args,cwd=ROOT,input=input,text=True,stdout=subprocess.PIPE if capture else None,stderr=subprocess.PIPE if capture else None,timeout=timeout)
+ except FileNotFoundError:raise FriendlyError('Docker was not found. Install Docker Engine and its Compose plugin using https://docs.docker.com/engine/install/ then run this command again.')
+ except subprocess.TimeoutExpired:raise FriendlyError('The command timed out. Your saved configuration is still present; use status or doctor to inspect it.')
+ if check and r.returncode:raise FriendlyError('A Docker command failed. Follow the explanation above, then run ./webcaller doctor. Your settings have not been regenerated.')
+ return r.stdout if capture and check else r
+
+def docker(*args,**kw):return run(['docker',*args],**kw)
+def compose(*args,stage=None,**kw):return docker('compose','--project-name',project(),'--project-directory',str(ROOT),'--env-file',str((stage or ROOT)/'images.env'),'--env-file',str(ROOT/'.env'),'-f',str((stage or ROOT)/'compose.yaml'),*args,**kw)
+def helper(action,*args,root=False,volumes=None,archive=None,capture=False,setup_image=None,input=None):
+ cmd=['run','--rm','-i']
+ if input is None and not capture and sys.stdin.isatty():cmd+=['-t']
+ cmd+=['--user','0:0' if root else str(os.getuid())+':'+str(os.getgid()),'--read-only','--tmpfs','/tmp','--cap-drop','ALL','--security-opt','no-new-privileges:true']
+ if root:
+  for cap in ['CHOWN','DAC_OVERRIDE','FOWNER']:cmd+=['--cap-add',cap]
+ if action in ['snapshot','backup-info','restore','restore-seed','qr']:cmd+=['--network','none']
+ cmd+=['--env','WEBCALLER_OWNER_UID='+str(os.getuid()),'--env','WEBCALLER_OWNER_GID='+str(os.getgid()),'--mount','type=bind,src='+str(ROOT)+',dst=/bundle']
+ if archive:cmd+=['--mount','type=bind,src='+str(archive.parent)+',dst=/backup'+(',readonly' if action!='snapshot' else '')]
+ for key,value in (volumes or {}).items():
+  if key not in VOLUMES or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]+',value):raise FriendlyError('Unexpected volume mapping. Nothing was restored.')
+  cmd+=['--mount','type=volume,src='+value+',dst=/volumes/'+key+(',readonly' if action=='snapshot' else '')]
+ cmd+=[setup_image or image(),action,*args]
+ if archive:cmd+=['--archive','/backup/'+archive.name]
+ if volumes is not None:cmd+=['--volumes',json.dumps({k:'/volumes/'+k for k in volumes})]
+ return docker(*cmd,capture=capture,input=input,timeout=1800)
+
+def preflight():
+ if platform.system()!='Linux':raise FriendlyError('This complete installer supports Linux only. Use a Linux server or virtual machine, not Docker Desktop on Windows/macOS.')
+ if platform.machine() not in ['x86_64','aarch64','arm64']:raise FriendlyError('Use a 64-bit x86-64 or ARM64 Linux server. This release does not support 32-bit ARM.')
+ docker('compose','version',capture=True)
+ info=json.loads(docker('info','--format','{{json .}}',capture=True))
+ endpoint=os.environ.get('DOCKER_HOST') or json.loads(docker('context','inspect','--format','{{json .Endpoints.docker.Host}}',capture=True))
+ if not endpoint.startswith('unix://'):raise FriendlyError('Use Docker Engine on this Linux server. Remote Docker contexts and Docker Desktop are not supported by the local-folder installer.')
+ if 'Docker Desktop' in str(info.get('OperatingSystem','')):raise FriendlyError('Use Docker Engine directly on Linux; this relay recipe does not support Docker Desktop.')
+ if configured():
+  dirs=docker('ps','-a','--filter','label=com.docker.compose.project='+project(),'--format','{{.Label "com.docker.compose.project.working_dir"}}',capture=True).splitlines()
+  if any(p and pathlib.Path(p).resolve()!=ROOT for p in dirs):raise FriendlyError('This project is already attached to another installation folder. Do not start a copied installation on the same server; use its original folder.')
+ return info
+
+def need_setup():
+ if not configured():raise FriendlyError('Run ./webcaller setup first. For a saved installation, restore its private config folder and .env; do not create new phone keys.')
+def confirm(text,token=None):
+ if not sys.stdin.isatty():raise FriendlyError('This action needs an interactive terminal for confirmation.')
+ answer=input(text+(' Type '+token+': ' if token else ' [y/N]: ')).strip()
+ return answer==token if token else answer.lower() in ['y','yes']
+def ports():
+ s=env(ROOT/'.env');profiles=s.get('COMPOSE_PROFILES','').split(',');used=[]
+ for port in ([80,443] if 'https' in profiles else [])+[int(s.get('APP_PORT',8080))]+([int(s.get('NTFY_PORT',8094))] if 'ntfy' in profiles else []):
+  with socket.socket() as sock:
+   try:sock.bind(('0.0.0.0',port))
+   except PermissionError:continue
+   except OSError:used.append(str(port))
+ if 'turn' in profiles:
+  for kind in [socket.SOCK_STREAM,socket.SOCK_DGRAM]:
+   with socket.socket(socket.AF_INET,kind) as sock:
+    try:sock.bind(('0.0.0.0',3478))
+    except OSError:used.append('3478')
+ if used:raise FriendlyError('Ports already in use: '+', '.join(sorted(set(used)))+'. Existing services were not changed. Run ./webcaller configure to select different local ports or your existing HTTPS proxy.')
+
+def running():return bool(compose('ps','--services','--status','running',capture=True).strip())
+def start(check_ports=False):
+ if check_ports:ports()
+ compose('config','--quiet');compose('up','-d','--remove-orphans','--wait','--wait-timeout','180')
+
+def mappings(create=False,names=None):
+ config=json.loads(compose('config','--format','json',capture=True));result={}
+ for key in sorted(names if names is not None else VOLUMES):
+  if key not in VOLUMES or key not in config['volumes']:raise FriendlyError('The backup contains an unsupported volume.')
+  name=config['volumes'][key]['name']
+  r=docker('volume','inspect',name,capture=True,check=False)
+  if r.returncode:
+   if not create:continue
+   docker('volume','create','--label','com.docker.compose.project='+project(),'--label','com.docker.compose.volume='+key,name,capture=True)
+  else:
+   labels=json.loads(r.stdout)[0].get('Labels') or {}
+   if labels.get('com.docker.compose.project')!=project() or labels.get('com.docker.compose.volume')!=key:raise FriendlyError('A volume belongs to another installation. It was not modified.')
+  result[key]=name
+ return result
+
+def snapshot(stopped=False):
+ was_running=running();folder=ROOT/'backups';folder.mkdir(mode=0o700,exist_ok=True)
+ archive=folder/('WebCaller-'+(ROOT/'VERSION').read_text().strip()+'-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')+'.tar.gz')
+ if not stopped:compose('stop')
+ try:helper('snapshot',root=True,volumes=mappings(),archive=archive)
+ finally:
+  if was_running and not stopped:start()
+ print('Private backup: '+str(archive)+'\nIt contains credentials. Keep it on protected storage; this archive is not password-encrypted.')
+ return archive
+
+def restore_snapshot(archive,setup_image=None):
+ metadata=json.loads(helper('backup-info',archive=archive,capture=True,setup_image=setup_image))
+ if metadata['project']!=project():raise FriendlyError('This backup belongs to a different installation. Restore it into its matching folder/server, not over this project.')
+ helper('restore',root=True,volumes=mappings(create=True,names=metadata['volumes']),archive=archive,setup_image=setup_image)
+
+def request_json(url):
+ with urllib.request.urlopen(urllib.request.Request(url,headers={'User-Agent':'WebCaller-Linux-installer','Accept':'application/vnd.github+json'}),timeout=15) as r:
+  data=r.read(2*1024*1024+1)
+ if len(data)>2*1024*1024:raise FriendlyError('The update response is unexpectedly large.')
+ return json.loads(data)
+def updates():
+ current=tuple(map(int,(ROOT/'VERSION').read_text().strip().split('.')));releases=request_json('https://api.github.com/repos/adlererik/WebCaller/releases?per_page=20');available=[]
+ for r in releases:
+  tag=r.get('tag_name','')
+  if r.get('draft') or r.get('prerelease') or not re.fullmatch(r'v\d+\.\d+\.\d+',tag):continue
+  if tuple(map(int,tag[1:].split('.')))<=current:continue
+  if any(a.get('name')=='WebCaller-Docker-'+tag+'.tar.gz' for a in r.get('assets',[])):available.append(tag)
+ return max(available,key=lambda v:tuple(map(int,v[1:].split('.')))) if available else None
+
+def doctor():
+ print('\nWEBCALLER · CONNECTION CHECK\nOnly this Docker installation is inspected.')
+ compose('ps');app=env(ROOT/'config/app.env');s=env(ROOT/'.env');path=urllib.parse.urlsplit(app['PUBLIC_URL']).path.rstrip('/');failures=0
+ for label,url in [('Local app','http://127.0.0.1:'+s.get('APP_PORT','8080')+path+'/health'),('Public HTTPS',app['PUBLIC_URL'].rstrip('/')+'/health')]:
+  try:
+   r=request_json(url)
+   if r.get('ok') is not True:raise ValueError()
+   print('  OK   '+label)
+  except (OSError,ValueError):
+   failures+=1;print('  WAIT '+label+' — check DNS, your HTTPS route and firewall. Run ./webcaller instructions for exact routes.')
+ if app.get('TURN_URLS'):
+  print('  INFO TURN relay addresses are configured. A browser call across two networks is still required to prove media delivery.')
+ else:print('  WAIT No call relay configured. Run ./webcaller configure before relying on calls between different networks.');failures+=1
+ print('  INFO Phone alerts depend on permissions and OS settings. Test with the phone locked.\n  Next: ./webcaller instructions | ./webcaller qr')
+ return failures
+
+def instructions():
+ s=env(ROOT/'.env');app=env(ROOT/'config/app.env');profiles=s.get('COMPOSE_PROFILES','').split(',');host=urllib.parse.urlsplit(app['PUBLIC_URL']).hostname
+ print('\nYOUR SETUP CHECKLIST\nWebsite: '+app['PUBLIC_URL']+'/')
+ if 'https' in profiles:print('1. Point the hostname DNS at your server’s public IP. Allow TCP 80 and 443 through the server firewall/router. Caddy obtains and renews HTTPS certificates automatically.')
+ else:
+  target='webcaller:8080' if 'tunnel' in profiles else '127.0.0.1:'+s.get('APP_PORT','8080')
+  print('1. In your existing HTTPS proxy/Tunnel add hostname '+host+' → HTTP '+target+'. Allow WebSocket upgrades; preserve other websites and routes.')
+ if 'turn' in profiles:print('2. Allow TCP/UDP 3478 and UDP 49160–49260. Behind a home router, forward them to this Linux server. An HTTP Tunnel does not carry TURN. TURN-TLS on 5349 needs separate certificates/forwarding; see the guide for restricted networks.')
+ elif app.get('TURN_URLS'):print('2. Your existing TURN REST relay is configured. Confirm its public endpoints are reachable.')
+ else:print('2. Add a reachable TURN relay with ./webcaller configure. A website behind CGNAT needs a public relay elsewhere.')
+ if 'ntfy' in profiles:
+  target='ntfy:8094' if 'tunnel' in profiles else '127.0.0.1:'+s.get('NTFY_PORT','8094')
+  print('3. Extra ringing: '+app['NTFY_PUBLIC_URL']+' → HTTP '+target+'. '+('Caddy manages this hostname too.' if 'https' in profiles else 'Add this separate HTTPS route as well.'))
+ print('Then run ./webcaller doctor. Scan ./webcaller qr for the first phone; invite other people from that phone. Test messages, calls both ways and a call across Wi-Fi/mobile data.\nGuide: https://github.com/adlererik/WebCaller/blob/main/docker/README.md')
+
+HELP='''WebCaller · Linux server assistant
+
+  ./webcaller setup                  Guided first installation
+  ./webcaller start                  Start this installation
+  ./webcaller status                 Show services and version
+  ./webcaller doctor                 Check local/public HTTPS
+  ./webcaller instructions           Your DNS, port and proxy checklist
+  ./webcaller qr                     Private first-phone QR
+  ./webcaller configure              Change settings with a safety backup
+  ./webcaller check-update           Look for a newer Docker release
+  ./webcaller update [vX.Y.Z]         Back up and install a reviewed release
+  ./webcaller backup                 Consistent private snapshot
+  ./webcaller restore backups/FILE   Restore matching bundle/config/data
+  ./webcaller stop                   Stop this installation; retain data
+  ./webcaller logs                   Recent diagnostics
+
+Requires Linux x86-64/ARM64, Python 3, Docker Engine and Compose v2.20+.
+No Docker Desktop, remote Docker contexts or Windows/macOS support.
+'''
+
+def main(argv=None):
+ args=list(sys.argv[1:] if argv is None else argv)
+ if not args:
+  if not sys.stdin.isatty():print(HELP);return
+  print(HELP);options=['setup','start','status','doctor','instructions','qr','configure','check-update','update','backup','restore','stop','logs']
+  print('\n'+ '\n'.join(str(i)+'. '+v for i,v in enumerate(options,1)))
+  selected=input('Choose a number (Enter to exit): ').strip()
+  if not selected:return
+  if not selected.isdigit() or not 1<=int(selected)<=len(options):raise FriendlyError('Choose one of the displayed numbers.')
+  args=[options[int(selected)-1]]
+ command=args[0]
+ if command in ['help','--help','-h']:print(HELP);return
+ if command=='version':print((ROOT/'VERSION').read_text().strip());return
+ if command not in ['setup','start','status','doctor','instructions','qr','configure','check-update','update','backup','restore','stop','logs']:raise FriendlyError('Unknown command. Run ./webcaller help.')
+ fresh_restore=command=='restore' and not configured()
+ if command!='setup' and not fresh_restore:need_setup()
+ info=preflight()
+ if fresh_restore:
+  value=args[1] if len(args)>1 else input('Path to your private backup archive: ').strip();archive=pathlib.Path(value).expanduser().resolve()
+  if not archive.is_file():raise FriendlyError('Backup file not found.')
+  old_image=image();meta=json.loads(helper('backup-info',archive=archive,capture=True))
+  if docker('ps','-a','--filter','label=com.docker.compose.project='+meta['project'],'--format','{{.ID}}',capture=True).strip() or docker('volume','ls','--filter','label=com.docker.compose.project='+meta['project'],'-q',capture=True).strip():raise FriendlyError('That installation already exists on this server. Use its original folder instead of creating a second copy.')
+  print('Recover version '+meta['version']+' from '+meta['created']+'. Only use a private backup you trust. No phone keys will be generated.')
+  if not confirm('Restore this installation onto this Linux server?',token='RESTORE'):return
+  helper('restore-seed',root=True,archive=archive,setup_image=old_image)
+  restore_snapshot(archive,setup_image=old_image);ports();start()
+  print('Recovered. Run ./webcaller doctor and keep existing phone browser data. The backup cannot recover private keys lost from a phone.')
+  return
+ if command=='setup':
+  if configured():raise FriendlyError('Already set up. Use configure to change settings or start to start it; do not regenerate credentials.')
+  helper('init')
+  print('\nConfiguration saved. Checking local ports…')
+  ports()
+  if 'turn' in env(ROOT/'.env').get('COMPOSE_PROFILES','') and 'rootless' in str(info.get('SecurityOptions','')):raise FriendlyError('Rootless Docker cannot use this host-network TURN recipe. Use configure to choose an external relay, or install standard Docker Engine.')
+  if confirm('Start WebCaller now?'):
+   start(check_ports=True);doctor();instructions();helper('qr')
+  else:instructions();print('When ready, run ./webcaller start.')
+ elif command=='start':
+  start(check_ports=not running());print('WebCaller started. Run ./webcaller doctor, then ./webcaller qr.')
+ elif command=='status':print('WebCaller '+(ROOT/'VERSION').read_text().strip());compose('ps')
+ elif command=='logs':print('Check logs for identifiers before sharing them. Press Ctrl+C to leave.');compose('logs','--tail=80')
+ elif command=='stop':compose('stop');print('Stopped. Saved data and settings remain. Start again with ./webcaller start.')
+ elif command=='qr':helper('qr')
+ elif command=='instructions':instructions()
+ elif command=='doctor':return 1 if doctor() else 0
+ elif command=='check-update':
+  new=updates();print('New Docker release: '+new+'\nRead: https://github.com/adlererik/WebCaller/releases/tag/'+new+'\nInstall: ./webcaller update '+new if new else 'You have the newest published stable Docker bundle. Source-only releases are not Docker updates.')
+ elif command=='backup':
+  if confirm('A consistent backup briefly stops this installation and interrupts calls. Continue?'):snapshot()
+ elif command in ['configure','update','restore']:
+  if command=='update':
+   version=args[1] if len(args)>1 else updates()
+   if not version:print('No newer stable Docker release is available.');return
+   if not re.fullmatch(r'v\d+\.\d+\.\d+',version):raise FriendlyError('Use an actual release version, such as v0.20.0.')
+   print('Release notes: https://github.com/adlererik/WebCaller/releases/tag/'+version)
+   helper('prepare-update',version);stage=ROOT/'.updates'/version;compose('pull',stage=stage)
+  archive=None
+  if command=='restore':
+   value=args[1] if len(args)>1 else input('Path to your private backup archive: ').strip();archive=pathlib.Path(value).expanduser();archive=(ROOT/archive).resolve() if not archive.is_absolute() else archive.resolve()
+   if not archive.is_file():raise FriendlyError('Backup file not found.')
+   meta=json.loads(helper('backup-info',archive=archive,capture=True))
+   if meta['project']!=project():raise FriendlyError('This backup belongs to another installation. Use the matching installation folder.')
+   print('Restore version '+meta['version']+' from '+meta['created']+'. Only use a backup you trust. Restoring discards server changes made since that snapshot.')
+  if not confirm('This briefly stops WebCaller. A safety backup is made first. Continue?',token='RESTORE' if command=='restore' else None):return
+  old_image=image();was_running=running();compose('stop')
+  try:backup=snapshot(stopped=True)
+  except BaseException:
+   if was_running:start()
+   raise
+  try:
+   if command=='update':helper('apply-update',version)
+   elif command=='configure':helper('configure');ports()
+   else:restore_snapshot(archive)
+   if was_running:start()
+  except BaseException:
+   print('The change did not complete. Restoring the safety snapshot…')
+   try:
+    compose('stop');restore_snapshot(backup,setup_image=old_image)
+    if was_running:start()
+   except BaseException:raise FriendlyError('Automatic recovery needs attention. Keep the private backup at '+str(backup)+' and follow the restore guide. No other installation was modified.')
+   raise FriendlyError('The change failed or was cancelled. Previous bundle, settings and data were restored. Backup: '+str(backup))
+  print('Completed. Phone identities were not regenerated. Refresh WebCaller without clearing browser site data.')
+  if command=='configure':instructions()
+ return 0
+
+if __name__=='__main__':
+ try:
+  ROOT.mkdir(exist_ok=True)
+  if len(sys.argv)>1 and sys.argv[1] in ['--help','-h','help','version']:sys.exit(main() or 0)
+  with (ROOT/'.webcaller.lock').open('a') as lock:
+   try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+   except BlockingIOError:raise FriendlyError('Another WebCaller maintenance command is running. Let it finish first.')
+   sys.exit(main() or 0)
+ except KeyboardInterrupt:print('\nCancelled. Check ./webcaller status before trying again.');sys.exit(1)
+ except (FriendlyError,OSError,ValueError,KeyError) as e:
+  print('\n'+('ACTION NEEDED: '+str(e) if isinstance(e,FriendlyError) else 'The operation could not complete. Check Docker access, your connection and ./webcaller doctor. Credentials were not printed.'),file=sys.stderr);sys.exit(1)

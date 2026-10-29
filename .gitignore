@@ -25,3 +25,10 @@ __pycache__/
 docker/config/
 docker/.updates/
 docker/.setup-*/
+
+# Private Linux assistant state
+docker/backups/
+docker/.webcaller.lock
+docker/.env.new
+docker/.previous-config/
+docker/.restore-*/

@@ -18,7 +18,7 @@ RUN case "$TARGETARCH" in \
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts
-COPY scripts/docker-setup.py scripts/docker-ntfy-init.mjs ./scripts/
+COPY scripts/docker-setup.py scripts/docker_backup.py scripts/docker-ntfy-init.mjs ./scripts/
 COPY docker/VERSION ./VERSION
 USER node
 ENTRYPOINT ["/opt/qr/bin/python", "/app/scripts/docker-setup.py"]

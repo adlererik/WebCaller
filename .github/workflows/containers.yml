@@ -1,7 +1,7 @@
 name: Prebuilt Docker images
 on:
   push:
-    branches: [main]
+    branches: [main, codex/linux-turnkey-release]
   pull_request:
   workflow_dispatch:
     inputs:
@@ -13,7 +13,6 @@ permissions:
   contents: read
 jobs:
   build:
-    if: github.ref == 'refs/heads/main'
     strategy:
       fail-fast: false
       matrix:

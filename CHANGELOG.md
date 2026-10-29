@@ -1,8 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.20.0 — Guided Linux server edition — 2026-10-29
 
 - Anchor the app and credit footer inside the usable screen area. Resize the chat above mobile keyboards, account for safe areas and focus panning, and restore the page after keyboard dismissal without moving an older-message scroll position. Preserve pinch zoom and independent message/dialog scrolling.
+- Publish matching Linux x86-64/ARM64 app, setup and coturn images with a digest-pinned installation bundle. Keep the native/source option independent.
+- Add a numbered maintenance menu, four-part setup with validated answers, contextual DNS/port/proxy instructions, local/public HTTPS checks and stable Docker-release discovery.
+- Add credential-preserving reconfiguration, per-installation Compose identities, local-engine/Linux checks, occupied-port detection, maintenance locking and consistent private server snapshots.
+- Add allowlisted backup verification, trusted snapshot restore on the same/replacement server and backup-first updates with matching bundle/config/data recovery on startup failure. Keep protocol-boundary guards and manual migration requirements.
+- Update the Linux/beginner/operations/security documentation and show actual mobile/desktop interfaces with synthetic data in the README. Preserve artwork attribution; describe stickers without pack inventories.
+- Keep libsignal, application encryption, live media encryption, SAS and adaptive voice/video policies unchanged. This release does not convert existing native services to Docker.
 
 ## 0.19.0 — Stickers, reactions and reliable sending — 2026-10-28
 

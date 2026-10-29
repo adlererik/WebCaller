@@ -32,3 +32,4 @@ docker/.webcaller.lock
 docker/.env.new
 docker/.previous-config/
 docker/.restore-*/
+docker/.planned-settings.json

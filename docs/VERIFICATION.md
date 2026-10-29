@@ -46,3 +46,9 @@ On real Android/iPhone/desktop devices, test message/reload, calls both directio
 Release source archives are generated from the audited tag, expand the exact public upstream submodule and include a source manifest and corresponding-source download. Ordinary GitHub automatic archives omit the submodule. This release uploads complete source TAR/ZIP archives and SHA256SUMS.txt only. No v0.19.0 prebuilt Docker bundle/image is published. Earlier Docker bundles contain only launcher/Compose/version/license/reference files and pin their own release images by digest. Checksums accompany uploaded archives. Private configuration, identities, database files, screenshots, logs, owner links, notification capabilities and deployment URLs are excluded.
 
 Public CI runs application and native interoperability/source checks. Native amd64/arm64 image builds and disposable container smoke checks must succeed before the matching prebuilt bundle is published. Rebuilding or testing an established core does not independently validate WebCaller's composition. [Security review and limits](SECURITY_REVIEW.md).
+
+## v0.20.0 Linux distribution
+
+`tests/linux-assistant.test.mjs` exercises credential/instance preservation, snapshot restore/empty-folder recovery, archive corruption/path/link bounds and failed-change recovery. `scripts/docker-smoke.mjs` runs only against a disposable synthetic Compose project, builds the app/setup/relay stack on x86-64 and ARM64, and checks HTTP/WSS, ntfy ACL/priority, TURN allocation, restart persistence and consistent snapshot restoration. CI does not connect to a maintainer's deployed server.
+
+The README screenshots use the real shipped UI components with fictional contacts/messages and an original landscape illustration. They establish appearance, not physical-phone call quality or a cryptographic audit. Reproduce with `node scripts/preview-release.mjs` on loopback; see [image provenance](images/README.md).

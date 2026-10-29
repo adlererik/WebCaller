@@ -25,7 +25,7 @@ def run(args,capture=False,input=None,check=True,timeout=600):
  return r.stdout if capture and check else r
 
 def docker(*args,**kw):return run(['docker',*args],**kw)
-def compose(*args,stage=None,**kw):return docker('compose','--project-name',project(),'--project-directory',str(ROOT),'--env-file',str((stage or ROOT)/'images.env'),'--env-file',str(ROOT/'.env'),'-f',str((stage or ROOT)/'compose.yaml'),*args,**kw)
+def compose(*args,stage=None,**kw):return docker('compose','--ansi','never','--project-name',project(),'--project-directory',str(ROOT),'--env-file',str((stage or ROOT)/'images.env'),'--env-file',str(ROOT/'.env'),'-f',str((stage or ROOT)/'compose.yaml'),*args,**kw)
 def helper(action,*args,root=False,volumes=None,archive=None,capture=False,setup_image=None,input=None):
  cmd=['run','--rm','-i']
  if input is None and not capture and sys.stdin.isatty():cmd+=['-t']
@@ -60,10 +60,10 @@ def preflight():
 
 def need_setup():
  if not configured():raise FriendlyError('Run ./webcaller setup first. For a saved installation, restore its private config folder and .env; do not create new phone keys.')
-def confirm(text,token=None):
+def confirm(text,token=None,default=False):
  if not sys.stdin.isatty():raise FriendlyError('This action needs an interactive terminal for confirmation.')
- answer=input(text+(' Type '+token+': ' if token else ' [y/N]: ')).strip()
- return answer==token if token else answer.lower() in ['y','yes']
+ answer=input(text+(' Type '+token+': ' if token else ' [Y/n]: ' if default else ' [y/N]: ')).strip()
+ return answer==token if token else (default if not answer else answer.lower() in ['y','yes'])
 def ports():
  s=env(ROOT/'.env');profiles=s.get('COMPOSE_PROFILES','').split(',');used=[]
  for port in ([80,443] if 'https' in profiles else [])+[int(s.get('APP_PORT',8080))]+([int(s.get('NTFY_PORT',8094))] if 'ntfy' in profiles else []):
@@ -84,7 +84,7 @@ def start(check_ports=False):
  compose('config','--quiet');compose('up','-d','--remove-orphans','--wait','--wait-timeout','180')
 
 def mappings(create=False,names=None):
- config=json.loads(compose('config','--format','json',capture=True));result={}
+ config=json.loads(compose('--profile','*','config','--format','json',capture=True));result={}
  for key in sorted(names if names is not None else VOLUMES):
   if key not in VOLUMES or key not in config['volumes']:raise FriendlyError('The backup contains an unsupported volume.')
   name=config['volumes'][key]['name']
@@ -212,7 +212,7 @@ def main(argv=None):
   print('\nConfiguration saved. Checking local ports…')
   ports()
   if 'turn' in env(ROOT/'.env').get('COMPOSE_PROFILES','') and 'rootless' in str(info.get('SecurityOptions','')):raise FriendlyError('Rootless Docker cannot use this host-network TURN recipe. Use configure to choose an external relay, or install standard Docker Engine.')
-  if confirm('Start WebCaller now?'):
+  if confirm('Start WebCaller now?',default=True):
    start(check_ports=True);doctor();instructions();helper('qr')
   else:instructions();print('When ready, run ./webcaller start.')
  elif command=='start':
@@ -228,6 +228,7 @@ def main(argv=None):
  elif command=='backup':
   if confirm('A consistent backup briefly stops this installation and interrupts calls. Continue?'):snapshot()
  elif command in ['configure','update','restore']:
+  if command=='configure':helper('plan-configure')
   if command=='update':
    version=args[1] if len(args)>1 else updates()
    if not version:print('No newer stable Docker release is available.');return
@@ -249,7 +250,7 @@ def main(argv=None):
    raise
   try:
    if command=='update':helper('apply-update',version)
-   elif command=='configure':helper('configure');ports()
+   elif command=='configure':helper('configure','--settings','/bundle/.planned-settings.json');ports()
    else:restore_snapshot(archive)
    if was_running:start()
   except BaseException:
@@ -270,7 +271,8 @@ if __name__=='__main__':
   with (ROOT/'.webcaller.lock').open('a') as lock:
    try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
    except BlockingIOError:raise FriendlyError('Another WebCaller maintenance command is running. Let it finish first.')
-   sys.exit(main() or 0)
+   try:sys.exit(main() or 0)
+   finally:(ROOT/'.planned-settings.json').unlink(missing_ok=True)
  except KeyboardInterrupt:print('\nCancelled. Check ./webcaller status before trying again.');sys.exit(1)
  except (FriendlyError,OSError,ValueError,KeyError) as e:
   print('\n'+('ACTION NEEDED: '+str(e) if isinstance(e,FriendlyError) else 'The operation could not complete. Check Docker access, your connection and ./webcaller doctor. Credentials were not printed.'),file=sys.stderr);sys.exit(1)

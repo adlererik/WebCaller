@@ -29,3 +29,6 @@ test('Linux, local-engine and instance-folder checks prevent operating on a diff
 test('guided answers retry invalid choices rather than crashing or treating them as acceptance',()=>{
  python(`answers=iter(['nope','4','2']);s.input=lambda label:next(answers);assert s.choice('Choose',[('a','one'),('b','two')],'a')=='b'\nanswers=iter(['maybe','yes']);s.input=lambda label:next(answers);assert s.yes('Continue?') is True\n`);
 });
+test('snapshots discover declared optional volumes even when their service profile is disabled',()=>{
+ python(`import types\nc.project=lambda:'webcaller-fixture'\ndef compose(*a,**kw):\n # Compose drops inactive service volumes unless all profiles are requested.\n return json.dumps({'volumes':{k:{'name':'webcaller-fixture_'+k} for k in (c.VOLUMES if '*' in a else ['app_data'])}})\nc.compose=compose\ndef docker(*a,**kw):\n name=a[-1]\n if name.endswith('app_data'):return types.SimpleNamespace(returncode=0,stdout=json.dumps([{'Labels':{'com.docker.compose.project':'webcaller-fixture','com.docker.compose.volume':'app_data'}}]))\n return types.SimpleNamespace(returncode=1,stdout='')\nc.docker=docker\nassert c.mappings()=={'app_data':'webcaller-fixture_app_data'}\n`);
+});

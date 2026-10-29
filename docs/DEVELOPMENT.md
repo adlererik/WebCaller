@@ -33,4 +33,10 @@ Original WebCaller source keeps its MIT notice; the combined libsignal distribut
 
 ## Source-only releases
 
-The application package and the last published prebuilt Docker bundle may have different versions. v0.19.0 publishes source/native archives; `docker/VERSION` and `docker/images.env` remain pinned to the published v0.18.0 images. Do not label an older image as the new source release. `node scripts/package-release.mjs v0.19.0` creates the complete source TAR/ZIP and checksums without a Docker bundle. Supplying image digests additionally requires a matching Docker bundle version. Container publishing remains an explicit workflow dispatch, separate from ordinary CI builds.
+The source package and prebuilt bundle must agree for a Docker release. v0.19.0 was source-only; v0.20.0 refreshes the matching Linux bundle/images. The packager refuses a mismatched optional Docker bundle. Container publishing remains an explicit workflow dispatch, separate from ordinary CI builds.
+
+## Linux release and screenshot development (v0.20.0)
+
+The source package, `docker/VERSION` and project image tags match at v0.20.0. Publish reviewed x86-64/ARM64 images through the explicit prebuilt workflow after CI and the release tag are ready, then supply their manifest digests to `node scripts/package-release.mjs v0.20.0 IMAGE-DIGESTS.json`. The generated Docker TAR/ZIP pins project/supporting images; no deployment configuration is packaged. Build the complete source offer before container/release assembly. Never overwrite a published version tag/image.
+
+`node scripts/preview-release.mjs` serves synthetic screenshot fixtures only on loopback. It strips application startup and uses the shipped styles/icons/message renderer without API requests, real accounts, keys, service worker or notifications. Browser-capture desktop 1280×820 and mobile 390×844 views, then the overview composition. See [image provenance](images/README.md). These scripts are development previews, not a server installation.

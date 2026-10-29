@@ -2,9 +2,15 @@
 
 **A Signal-like WebRTC phone for Android, iPhone and desktop.** High-quality adaptive voice/video, end-to-end encrypted messages and media, simple invitations and optional calling codes. No SIM card, phone number or account password is required. The phone runs in your browser; you host the server.
 
-[Install on your server](docs/INSTALL.md) · [Download v0.19.0](https://github.com/adlererik/WebCaller/releases/tag/v0.19.0) · [All features](docs/FEATURES.md) · [How to use it](docs/USER_GUIDE.md) · [Security explained](docs/SECURITY.md)
+[Install on your server](docs/INSTALL.md) · [Download v0.20.0](https://github.com/adlererik/WebCaller/releases/tag/v0.20.0) · [All features](docs/FEATURES.md) · [How to use it](docs/USER_GUIDE.md) · [Security explained](docs/SECURITY.md)
 
-**v0.19.0 adds stickers and fixes sticker sending, emoji reactions and disappearing-message countdowns.** This is a normal source/native release; the last prebuilt Docker release remains [v0.18.0](https://github.com/adlererik/WebCaller/releases/tag/v0.18.0). The official libsignal core, PQXDH and Triple Ratchet introduced in v0.18.0 remain in use. The cryptographic core is upstream Signal code; its browser binding, storage integration and optional call-verification exchange are WebCaller code and remain unaudited. This is an independent project, not an official Signal client. It cannot call Signal or WhatsApp users, and using the same core does not give it Signal's overall security assurance. Earlier Olm installations need a planned migration, not an ordinary overwrite. [Upgrade guide](docs/APPROVED_CUTOVER.md).
+![WebCaller on desktop and mobile](docs/images/overview.jpg)
+
+**v0.20.0 brings the guided Linux server edition:** setup, connection checks, reconfiguration, consistent backups, restore and backup-first updates. Prebuilt images support Linux x86-64 and ARM64. A native installation remains available; existing native servers are not converted to Docker. [Start the guided install](docker/README.md).
+
+Desktop chat and mobile dark appearance use the actual interface with fictional contacts/messages and an original illustration. These screenshots contain no real conversations, phone identities or deployment addresses. [Mobile contacts](docs/images/mobile-home.jpg) · [Mobile chat](docs/images/mobile-chat.jpg) · [Desktop chat](docs/images/desktop-chat.jpg).
+
+The official libsignal core, PQXDH and Triple Ratchet introduced in v0.18.0 remain in use. The cryptographic core is upstream Signal code; its browser binding, storage integration and optional call-verification exchange are WebCaller code and remain unaudited. This is an independent project, not an official Signal client. It cannot call Signal or WhatsApp users, and using the same core does not give it Signal's overall security assurance. Earlier Olm installations need a planned migration, not an ordinary overwrite. [Upgrade guide](docs/APPROVED_CUTOVER.md).
 
 ## Why I built it this way
 
@@ -39,7 +45,7 @@ WebCaller supports stickers with one-tap sending, Favorites, Recent and borderle
 | Disappearing messages | One-hour default for new conversations; Off, presets and custom number/unit wheels through four weeks. Separate sender/send and recipient/first-view countdowns. |
 | Call and message alerts | Neutral message notifications open the intended chat. Web Push requests call sound and Answer/Decline where supported. Optional self-hosted ntfy priority-5 alerts avoid duplicate browser call pushes, with failure fallback. |
 | Appearance and privacy controls | System/light/dark appearance, configurable local page title, settings behind a cog, no plaintext message content in notifications, no application asset cache in the service worker. |
-| Self-hosting | Native Node/SQLite, source-built containers or the previous v0.18.0 prebuilt Docker bundle; HTTPS/WSS, STUN/ICE, authenticated TURN and optional Cloudflare Tunnel. Configurable paths and safe retirement of previous routes. |
+| Self-hosting | Guided Linux Docker edition, native Node/SQLite or source-built containers; HTTPS/WSS, STUN/ICE, authenticated TURN and optional Cloudflare Tunnel. Configurable paths and safe retirement of previous routes. |
 
 [Complete feature reference](docs/FEATURES.md). Browser restrictions still matter: a website cannot guarantee ringing after the OS suspends it, force an unexposed earpiece, prevent every screenshot or erase browser/OS history. iPhone browser call alerts require a Home Screen web app. Optional ntfy requires its client; stock iPhone ntfy wake-up also uses platform push infrastructure. [Alerts](docs/CALL_ALERTS.md) · [ntfy](docs/EXTRA_RINGING.md).
 
@@ -73,7 +79,7 @@ SAS is fresh per accepted media context, survives ordinary ICE handovers and is 
 
 ### How it compares with Signal
 
-| Property | WebCaller v0.19.0 | Signal |
+| Property | WebCaller v0.20.0 | Signal |
 |---|---|---|
 | Protocol core | Pinned official libsignal through a custom WASM/storage adapter | Official maintained clients and protocol integration |
 | Message forward secrecy/PQ | PQXDH + Double/Triple Ratchet; persistence, history and recovery limits apply | Maintained protocol with supported clients and much wider scrutiny |
@@ -96,17 +102,31 @@ High compression leaves more bandwidth for a clear picture, but software encodin
 
 ## Get it running
 
-**For the latest v0.19.0 features, use the source/native release.** It includes the complete source, bundled browser crypto, sticker artwork and beginner setup guides. No Docker image or prebuilt Docker bundle is published for v0.19.0.
+Choose the installation that fits your server:
 
-Choose **one** installation method:
+| Installation | Best for |
+|---|---|
+| **[Guided Linux Docker edition](docker/README.md)** | A ready-made server package: no Node, npm or Rust installation. Four-part setup, HTTPS/relay options, private QR, diagnostics, settings changes, backups and update recovery. Linux x86-64/ARM64 only. |
+| **[Native Debian/source](docs/INSTALL_NATIVE.md)** | Operators who want regular system services without Docker. Existing native installations can stay native. |
+| **[Build from source](docs/DEVELOPMENT.md)** | Developers who want to inspect, modify or build the project themselves. |
 
-- **Previous prebuilt Docker release (v0.18.0):** download `WebCaller-Docker-v0.18.0.tar.gz` from [that release](https://github.com/adlererik/WebCaller/releases/tag/v0.18.0), extract it, then run `./webcaller setup`, `./webcaller start` and `./webcaller qr`. The wizard configures the optional HTTPS/TURN/ntfy services. [Step-by-step guide](docker/README.md).
-- **Native Debian, no Docker:** use the complete [native guide](docs/INSTALL_NATIVE.md) for Node, private configuration, HTTPS, boot service, TURN and the private first-phone QR.
-- **Build from source (v0.19.0):** download the uploaded `WebCaller-v0.19.0.tar.gz`/`.zip` or recursively clone the tagged release, install dependencies, generate private setup keys and retain the included source offer (or build it from the Git checkout). The root Compose file can also build a container locally. [Installation choices](docs/INSTALL.md).
+Download the uploaded `WebCaller-Docker-v0.20.0.tar.gz` and `SHA256SUMS.txt`, check the checksum, extract into a new empty folder and run:
 
-You need a server, a domain/HTTPS address and a reachable TURN relay for reliable calls across difficult networks. A Cloudflare Tunnel can carry the website and WebSockets; it cannot relay WebRTC media. CGNAT usually requires a separate public TURN server. A successful relay allocation is useful but not a complete call test.
+```sh
+./webcaller setup
+```
 
-Scan the private owner QR with the first phone. Other people use invitations or an optional calling code; **never send them server passwords or owner setup credentials**. On iPhone follow Add to Home Screen and use that icon for calls/alerts. Then test messages, a call both ways, all four words, a photo during a call, locked-screen alerts and a Wi-Fi/cellular transition.
+The assistant explains each choice and prints the DNS/ports/proxy checklist for your answers. You still need a server, a hostname and a reachable call relay; it does not buy a domain, bypass CGNAT or replace another website. [Step-by-step Linux guide](docker/README.md).
+
+After setup, `./webcaller` opens a numbered menu. `./webcaller check-update` finds stable Docker releases; `./webcaller update` downloads first, makes a consistent private snapshot and restores the matching prior state if startup fails. `./webcaller configure`, `backup`, `restore`, `doctor` and `instructions` make everyday maintenance approachable. Backups contain credentials, are not password-encrypted and belong on protected storage. Updates and restores interrupt calls; phone private keys remain on the phones.
+
+Complete source TAR/ZIP downloads include the pinned upstream source and matching source offer. GitHub's automatic Source code archives omit submodules; use the uploaded release assets. [All install choices and checksums](docs/INSTALL.md).
+
+| Mobile contacts | Mobile chat · dark appearance |
+|---|---|
+| ![Mobile contacts, example data](docs/images/mobile-home.jpg) | ![Mobile chat, example data](docs/images/mobile-chat.jpg) |
+
+![Desktop chat with encrypted media, reactions and disappearing timers; example data](docs/images/desktop-chat.jpg)
 
 ## Documentation and verification
 

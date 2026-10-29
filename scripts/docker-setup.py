@@ -101,7 +101,18 @@ def ask(label,default='',check=None,secret=False):
   suffix=' [Enter to keep]' if secret and default else ' ['+str(default)+']' if str(default) else ''
   value=(getpass.getpass if secret else input)(label+suffix+': ').strip() or default
   try:return check(value) if check else value
-  except (ValueError,TypeError):print('  Please check that answer and try again. Type the value shown in the example.')
+  except (ValueError,TypeError):print('  Please check that answer and try again. Use the format in the explanation above.')
+def localport(v):
+ value=int(v)
+ if not 1024<=value<=65535:raise ValueError('Use a local port from 1024 to 65535.')
+ return value
+def public4(v):
+ ip=ipaddress.IPv4Address(v)
+ if not ip.is_global:raise ValueError('A public IPv4 is needed; choose an external relay for CGNAT.')
+ return str(ip)
+def secret_value(v,pattern):
+ if not re.fullmatch(pattern,v):raise ValueError('Check the secret format.')
+ return v
 def choice(label,options,default):
  print('\n'+label)
  for i,(key,text) in enumerate(options,1):print('  '+str(i)+'. '+text)
@@ -132,25 +143,25 @@ def wizard(prior=None):
  s['mode']=choice('How should people reach the website?',[('https','Automatic HTTPS for a fresh server (ports 80 and 443)'),('proxy','I already have an HTTPS website, reverse proxy or Tunnel'),('tunnel','Use my existing Cloudflare account with a new connector')],old.get('mode','https'))
  if s['mode']=='tunnel':
   print('Create the connector in Cloudflare, then paste its token here. This does not register a domain or change existing routes.')
-  s['tunnelToken']=ask('Connector token',old.get('tunnelToken',''),secret=True)
- s['appPort']=ask('Local website port (keep the default unless it is busy)',old.get('appPort',8080),int)
+  s['tunnelToken']=ask('Connector token',old.get('tunnelToken',''),lambda v:secret_value(v,r'[A-Za-z0-9+/=_-]{20,4096}'),secret=True)
+ s['appPort']=ask('Local website port (keep the default unless it is busy)',old.get('appPort',8080),localport)
  print('\n3 OF 4 · RELIABLE CALLS')
  print('TURN is a relay that helps phones on different networks connect. It cannot be replaced by an ordinary website Tunnel.')
  s['relay']=choice('Where should the call relay run?',[('self','On this Linux server (public IPv4 or router forwarding required)'),('existing','Use a TURN REST relay I already have'),('none','Set up the website first; configure the relay later')],old.get('relay','self'))
  if s['relay']=='self':
   print('At home: forward TCP/UDP 3478 and UDP 49160–49260 to this server. Compare your router WAN address with the suggested public IP. If they differ or the WAN address is private/100.64–100.127, you may have CGNAT; use a public relay instead. Do not use a Cloudflare proxy IP.')
-  s['publicIP']=ask('Public IPv4 of the relay/router',old.get('publicIP') or public_ip(),lambda v:str(ipaddress.IPv4Address(v)))
+  s['publicIP']=ask('Public IPv4 of the relay/router',old.get('publicIP') or public_ip(),public4)
   print('On a public VPS leave the next answer empty. Behind a home router enter this server’s fixed LAN address.')
   s['lanIP']=ask('Fixed LAN IPv4 (optional)',old.get('lanIP',''),lambda v:str(ipaddress.IPv4Address(v)) if v else '')
  elif s['relay']=='existing':
   print('Use the relay’s TURN URLs and REST shared secret. A normal username/password account is not the same thing.')
-  s['turnURLs']=ask('TURN URLs (comma separated)',old.get('turnURLs',''));s['turnSecret']=ask('REST shared secret',old.get('turnSecret',''),secret=True)
+  s['turnURLs']=ask('TURN URLs (comma separated)',old.get('turnURLs',''));s['turnSecret']=ask('REST shared secret',old.get('turnSecret',''),lambda v:secret_value(v,r'[A-Za-z0-9_-]{32,256}'),secret=True)
  print('\n4 OF 4 · OPTIONAL EXTRA RINGING')
  print('Browser alerts are included. ntfy is an optional extra for people able to install its phone app; it is not needed for chat/calls.')
  s['ntfy']=yes('Add a self-hosted ntfy alert server?',old.get('ntfy',False))
  if s['ntfy']:
   s['ntfyHost']=ask('Separate alert hostname (for example notify.example.com)',old.get('ntfyHost',''),hostname)
-  s['ntfyPort']=ask('Local alert port',old.get('ntfyPort',8094),int)
+  s['ntfyPort']=ask('Local alert port',old.get('ntfyPort',8094),localport)
   print('Stock iPhone ntfy needs a wake-up metadata relay through ntfy.sh and Apple. Message/call contents and keys are not sent there.')
   s['ios']=yes('Enable that optional iPhone ntfy wake-up?',old.get('ios',False))
  s=validate(s)
@@ -210,9 +221,11 @@ def apply_update(bundle,version):
  print('Bundle updated. Private configuration and data volumes were preserved; no database rollback is attempted.')
 
 def main():
- p=argparse.ArgumentParser(description=__doc__);p.add_argument('action',choices=['init','configure','qr','prepare-update','apply-update','snapshot','backup-info','restore','restore-seed']);p.add_argument('version',nargs='?');p.add_argument('--bundle',type=pathlib.Path,default=pathlib.Path('/bundle'));p.add_argument('--settings',type=pathlib.Path);p.add_argument('--archive',type=pathlib.Path);p.add_argument('--volumes',default='{}')
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('action',choices=['init','configure','plan-configure','qr','prepare-update','apply-update','snapshot','backup-info','restore','restore-seed']);p.add_argument('version',nargs='?');p.add_argument('--bundle',type=pathlib.Path,default=pathlib.Path('/bundle'));p.add_argument('--settings',type=pathlib.Path);p.add_argument('--archive',type=pathlib.Path);p.add_argument('--volumes',default='{}')
  a=p.parse_args();os.umask(0o077)
- if a.action in ['init','configure']:
+ if a.action=='plan-configure':
+  settings=wizard(current(a.bundle));write(a.bundle/'.planned-settings.json',json.dumps(settings)+'\n');print('Choices prepared. The current services have not been stopped yet.')
+ elif a.action in ['init','configure']:
   s=json.loads(a.settings.read_text()) if a.settings else wizard(current(a.bundle) if a.action=='configure' else None)
   result=install(s,a.bundle,replace=a.action=='configure');print('Settings saved. Phone address: '+result['url']+'/')
  elif a.action=='qr':qr(a.bundle)

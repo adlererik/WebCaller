@@ -1,6 +1,6 @@
 # Source review and limits
 
-Reviewed against the libsignal/PQXDH integration, Ed25519 application signatures and v0.19.0 release changes through 28 October 2026. This is a maintainer-assisted implementation review and test record, **not an independent audit, proof or Signal endorsement**. Historical stable Olm reviews do not certify this adapter.
+Reviewed against the libsignal/PQXDH integration, Ed25519 application signatures and v0.20.0 release changes through 29 October 2026. This is a maintainer-assisted implementation review and test record, **not an independent audit, proof or Signal endorsement**. Historical stable Olm reviews do not certify this adapter.
 
 ## Protections checked
 
@@ -29,3 +29,7 @@ Release-matched Docker bundles explicitly select the libsignal engine and use a 
 
 
 The sticker update additionally checks authenticated AES-GCM/Signal manifests, bounded encrypted data-channel frames and cache acknowledgements; zero-unused-prekey sending through an established chat; backwards reading of old file-scoped stickers; rejected context substitutions without committing state; automatic publication retries without identity replacement/prekey resurrection; and fail-closed wording for a genuinely new session without starter material. Physical-phone acceptance and an independent composition audit remain separate from these checks.
+
+## Linux assistant review additions
+
+Added checks cover credential-preserving configuration changes, persistent installation identities, matching snapshot round trips/fresh-folder seeding, rejection of archive traversal/links/special files/duplicates/corruption, maintenance recovery on failed changes and refusal of unsupported hosts/remote engines. Disposable Linux container tests exercise setup, relay/alert configuration, persistence and backup/restore with synthetic identities. This is implementation testing, not an independent audit; backups remain sensitive plaintext archives protected by filesystem permissions and external storage policy.

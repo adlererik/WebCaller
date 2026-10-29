@@ -95,3 +95,13 @@ A randomly generated path reduces blind discovery, not endpoint/traffic exposure
 New conversation defaults are one-hour disappearing messages; Off retains until deletion. Sender countdown starts at send, recipient countdown at first view, so unread encrypted recipient copies can remain longer. Cached ciphertext is reused until its participant deadline/deletion or browser eviction. The server applies quotas and expiration; phones physically purge only when running. Downloads/screenshots/backups remain outside recall.
 
 Keep only installations you need enabled. Stopping an optional test service does not require deleting its data or changing production routes. Do not run native and Docker instances against the same SQLite path/port, or restore state while a process still uses it.
+
+## Guided Linux Docker maintenance (v0.20.0)
+
+The [Linux assistant](../docker/README.md) handles only its own Docker project. `./webcaller` opens its menu; `status`, `doctor` and `instructions` explain current state and networking. `configure` starts with current answers, preserves credentials and takes a full safety snapshot before recreating services. Changing the hostname changes the phone browser origin and can require re-enrollment.
+
+`backup` briefly stops services for a consistent snapshot of bundle files, private config and existing named volumes, then resumes a previously running stack. The resulting archive contains credentials, is mode 0600 and is not password-encrypted. Copy it to protected off-server storage. `restore backups/FILE.tar.gz` verifies hashes, paths and project identity, takes a safety snapshot and requires an explicit RESTORE confirmation. A fresh replacement server can restore a trusted snapshot into an unconfigured bundle before setup; duplicate project resources are refused.
+
+`check-update` discovers stable releases with actual Docker bundles; `update` downloads/verifies images before downtime, snapshots the complete matching server state and recovers it on failed startup. No automatic downgrade across an unreviewed protocol/bundle boundary is supported. Recovery restores server state at the snapshot; it does not roll back phone ratchets or preserve later server changes. If recovery also fails, keep the backup and follow the full restore guide. Existing native services are never changed.
+
+The old v0.18.0 launcher predates automatic snapshots: make a consistent private manual backup before using its updater to reach v0.20.0. Do not claim the new safeguards apply retroactively to that first upgrade. Keep prior images available for offline recovery, enough disk for snapshots and the same browser site data on phones.

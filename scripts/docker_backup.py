@@ -78,6 +78,8 @@ def verify(archive):
  if small.get('bundle/VERSION','').strip()!=manifest['version']:raise ValueError('Backup version mismatch.')
  values=dict(l.split('=',1) for l in small['bundle/.env'].splitlines() if '=' in l and not l.startswith('#'))
  if values.get('COMPOSE_PROJECT_NAME','webcaller-prebuilt')!=manifest['project']:raise ValueError('Backup project mismatch.')
+ actual_volumes={pathlib.PurePosixPath(n).parts[1] for n in seen if n.startswith('volumes/')}
+ if actual_volumes!=set(manifest['volumes']):raise ValueError('Backup volume entries do not match the manifest.')
  for n in manifest['volumes']:
   if 'volumes/'+n not in dirs:raise ValueError('Missing backup volume.')
  # Reject paths nested beneath a regular file before changing any destination.

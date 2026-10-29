@@ -13,6 +13,7 @@ const project='webcaller-ci-'+randomBytes(6).toString('hex');
 const docker=(...args)=>execFileSync('docker',args,{cwd:dir,encoding:'utf8',maxBuffer:8*1024*1024,timeout:240000});
 const compose=(...args)=>docker('compose','--project-name',project,'--project-directory',dir,'--env-file','images.env','--env-file','.env','-f','compose.yaml',...args);
 const settings={host:'calls.example.test',mode:'proxy',relay:'self',publicIP:'1.1.1.1',appPort:18180,ntfyPort:18194,ntfy:true,ntfyHost:'notify.example.test',ios:false};
+let phase='setup';
 try{
  execFileSync('docker',['run','--rm','-i','--user',`${process.getuid()}:${process.getgid()}`,'--mount',`type=bind,src=${dir},dst=/bundle`,'webcaller-ci:setup','init','--settings','/dev/stdin'],{input:JSON.stringify(settings),encoding:'utf8',stdio:['pipe','pipe','pipe']});
  writeFileSync(join(dir,'.env'),readFileSync(join(dir,'.env'),'utf8').replace(/^COMPOSE_PROJECT_NAME=.*$/m,'COMPOSE_PROJECT_NAME='+project));
@@ -48,17 +49,22 @@ try{
  const after=compose('exec','-T','webcaller','node','-e',"process.stdout.write(require('fs').readFileSync('/run/webcaller-ntfy/publisher.token'))");assert.equal(after,before);
  assert.equal((await api('/ntfy')).topic,topic);assert.equal((await api('/ntfy')).confirmed,true);assert.equal((await(await fetch(base+'/api/config')).json()).bootstrap,false);
  // Exercise the shipped assistant and an actual consistent backup/restore.
+ phase='assistant status';console.log('Checking assistant status');
  execFileSync(join(dir,'webcaller'),['status'],{cwd:dir,encoding:'utf8',timeout:10000});
+ phase='consistent backup';console.log('Checking consistent backup');
  execFileSync('script',['-q','-e','-c','./webcaller backup','/dev/null'],{cwd:dir,input:'y\n',encoding:'utf8',timeout:180000});
  const backupFiles=(await import('node:fs')).readdirSync(join(dir,'backups')).filter(f=>f.endsWith('.tar.gz'));assert.equal(backupFiles.length,1);
  compose('exec','-T','webcaller','node','-e',"require('fs').writeFileSync('/app/data/after-backup-fixture','later')");
  compose('stop');
+ phase='snapshot restore';console.log('Checking snapshot restore');
  execFileSync('python3',['-c',"import importlib.machinery,importlib.util,pathlib; loader=importlib.machinery.SourceFileLoader('assistant','webcaller'); spec=importlib.util.spec_from_loader('assistant',loader); m=importlib.util.module_from_spec(spec); loader.exec_module(m); m.restore_snapshot(pathlib.Path('backups').resolve()/"+JSON.stringify(backupFiles[0])+"); m.start()"],{cwd:dir,encoding:'utf8',timeout:180000});
  assert.equal(compose('exec','-T','webcaller','node','-e',"process.stdout.write(String(require('fs').existsSync('/app/data/after-backup-fixture'))) ").trim(),'false');
  assert.equal((await api('/ntfy')).topic,topic);assert.equal((await api('/ntfy')).confirmed,true);
  const restored=compose('exec','-T','webcaller','node','-e',"process.stdout.write(require('fs').readFileSync('/run/webcaller-ntfy/publisher.token'))");assert.equal(restored,before);
  console.log('PASS disposable Linux stack: setup, HTTPS config, WS auth, ntfy ACL/priority, TURN allocation, private QR, restart persistence and consistent backup/restore preserving credentials and registrations.');
 }catch(error){
+ console.error('Failed phase: '+phase+'; error type: '+error.name+'; status: '+error.status);
+ if(['assistant status','consistent backup','snapshot restore'].includes(phase))for(const stream of [error.stdout,error.stderr])if(stream)console.error(String(stream).replace(/tk_[a-z0-9]+/g,'[redacted]').replace(/wc_[A-Za-z0-9_-]+/g,'[redacted]'));
  console.error('Disposable Docker smoke failed. Inspect synthetic container status below; credentials are omitted.');
  // Synthetic fixture only; never output config, tokens, QR, topic IDs or command buffers.
  try{const ps=compose('ps');console.error(ps);const logs=compose('logs','--tail=30','ntfy-init','webcaller','ntfy');console.error(logs.replace(/tk_[a-z0-9]+/g,'[redacted]').replace(/wc_[A-Za-z0-9_-]+/g,'[redacted]'));}catch{}

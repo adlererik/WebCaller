@@ -46,7 +46,9 @@ def helper(action,*args,root=False,volumes=None,archive=None,capture=False,setup
 def preflight():
  if platform.system()!='Linux':raise FriendlyError('This complete installer supports Linux only. Use a Linux server or virtual machine, not Docker Desktop on Windows/macOS.')
  if platform.machine() not in ['x86_64','aarch64','arm64']:raise FriendlyError('Use a 64-bit x86-64 or ARM64 Linux server. This release does not support 32-bit ARM.')
- docker('compose','version',capture=True)
+ if sys.version_info<(3,10):raise FriendlyError('Use Python 3.10 or newer. Install it with your Linux distribution package manager.')
+ version=docker('compose','version','--short',capture=True).strip().lstrip('v');match=re.match(r'(\d+)\.(\d+)',version)
+ if not match or tuple(map(int,match.groups()))<(2,20):raise FriendlyError('Update the Docker Compose plugin to version 2.20 or newer.')
  info=json.loads(docker('info','--format','{{json .}}',capture=True))
  endpoint=os.environ.get('DOCKER_HOST') or json.loads(docker('context','inspect','--format','{{json .Endpoints.docker.Host}}',capture=True))
  if not endpoint.startswith('unix://'):raise FriendlyError('Use Docker Engine on this Linux server. Remote Docker contexts and Docker Desktop are not supported by the local-folder installer.')

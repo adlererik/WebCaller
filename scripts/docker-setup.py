@@ -56,6 +56,9 @@ def install(settings,bundle,vapid=None,replace=False):
  old=current(bundle) if replace else {}
  secret=s.get('turnSecret') if s['relay']=='existing' else prior.get('TURN_SECRET') or secrets.token_hex(32)
  urls=s.get('turnURLs','') if s['relay']=='existing' else (f"turn:{s['publicIP']}:3478?transport=udp,turn:{s['publicIP']}:3478?transport=tcp" if s['relay']=='self' else '')
+ if s['relay']=='self' and old.get('relay')=='self':
+  extra=[u for u in prior.get('TURN_URLS','').split(',') if u.startswith('turns:')]
+  if extra:urls+=','+','.join(extra)
  app=dict(prior)
  if not replace:app.update(BOOTSTRAP_TOKEN=secrets.token_urlsafe(24),VAPID_PUBLIC_KEY=vapid['publicKey'],VAPID_PRIVATE_KEY=vapid['privateKey'],VAPID_SUBJECT='https://'+s['host'])
  if replace and old.get('appPath')!=s['appPath']:app.setdefault('APP_MANIFEST_ID',old['appPath'].rstrip('/')+'/')

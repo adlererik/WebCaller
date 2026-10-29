@@ -1,7 +1,7 @@
 name: Prebuilt Docker images
 on:
   push:
-    branches: [main, codex/linux-turnkey-release]
+    branches: [main]
   pull_request:
   workflow_dispatch:
     inputs:

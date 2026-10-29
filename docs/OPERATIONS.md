@@ -40,11 +40,11 @@ Replace the version placeholder with a reviewed actual tag. Preserve any local m
 
 For Docker, use its explicit-version updater and [volume/config backup guidance](../docker/README.md). The new bundle format deliberately blocks the old Olm updater from blindly applying this protocol change. `down -v` deletes volumes; do not use it as a restart command.
 
-## Update to v0.19.0
+## Update to v0.20.0
 
-For existing v0.18.0 libsignal installations, this is a normal backed-up source/native update: preserve `.env`, the database, browser site data, identities, service/proxy, TURN and ntfy configuration. No conversation purge or new phone enrollment is required. Reload both browsers once after the code update so they understand the shared-chat sticker context. Old per-file stickers remain readable.
+For existing v0.18.0/v0.19.0 libsignal installations, this is a normal backed-up source/native update: preserve `.env`, the database, browser site data, identities, service/proxy, TURN and ntfy configuration. No conversation purge or new phone enrollment is required. Reload both browsers once after the code update so they understand the shared-chat sticker context. Old per-file stickers remain readable.
 
-There is no v0.19.0 prebuilt Docker bundle or image. The v0.18.0 Docker release remains available; its updater cannot apply a source-only release. A native source update does not require switching to Docker.
+v0.20.0 adds a matching guided Linux Docker bundle and images. Existing native services can stay native; a source update does not require Docker. Existing v0.18.0 Docker users must make a consistent private manual backup before their first upgrade to the new assistant; see the [first-upgrade instructions](../docker/README.md#updates-and-recovery). v0.19.0 was source-only.
 
 ### Sticker sending or reactions
 

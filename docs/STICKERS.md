@@ -31,4 +31,4 @@ Put appropriately authorized WebP files under `public/stickers/<pack-id>/<number
 
 ## Updating an existing installation
 
-Follow the normal [source update guide](OPERATIONS.md#native-libsignal-updates) and reload both browsers once. Accounts, identities, existing stickers and Favorites remain valid; this update does not require deleting conversations or resetting browser data. There is no new prebuilt Docker bundle for v0.19.0. The ready-made pack images are served by your own installation, so no sticker-provider account, bot token or external image API is required.
+Follow the normal [source update guide](OPERATIONS.md#native-libsignal-updates) and reload both browsers once. Accounts, identities, existing stickers and Favorites remain valid; this update does not require deleting conversations or resetting browser data. v0.20.0 includes a matching [guided Linux Docker bundle](../docker/README.md); Docker users can follow its update and first-upgrade backup instructions. The ready-made pack images are served by your own installation, so no sticker-provider account, bot token or external image API is required.

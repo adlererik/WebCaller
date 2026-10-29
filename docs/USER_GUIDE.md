@@ -75,7 +75,7 @@ The default **Cutouts** view shows transparent stickers. Choose **All** to brows
 
 Stickers follow the timer that was selected when they were sent. Your countdown starts when sent; the recipient's starts when viewed. Reopening a chat uses its encrypted media cache where available, subject to the browser's storage limits. Your browser still needs a connection to send; the recipient can be offline and receive the stored encrypted copy later.
 
-**Updating to v0.19.0:** reload WebCaller once on both phones. Ordinary sticker sending in an established chat no longer needs a fresh starter key for every image. The app handles reconnect/retry automatically; nobody needs to copy, reset or manage encryption keys. A truly new conversation with no usable starter material still needs the other phone to reconnect before it can start safely. [Sticker guide](STICKERS.md).
+**Updating to v0.20.0:** reload WebCaller once on both phones. Ordinary sticker sending in an established chat no longer needs a fresh starter key for every image. The app handles reconnect/retry automatically; nobody needs to copy, reset or manage encryption keys. A truly new conversation with no usable starter material still needs the other phone to reconnect before it can start safely. [Sticker guide](STICKERS.md).
 
 ## Typing indicators
 

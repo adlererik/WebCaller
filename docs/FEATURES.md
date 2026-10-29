@@ -1,4 +1,4 @@
-# WebCaller feature reference — v0.19.0
+# WebCaller feature reference — v0.20.0
 
 A browser phone for one-to-one calls and conversations on Android, iPhone and desktop. The UI follows familiar Signal-style patterns; it is not an official Signal client. [User guide](USER_GUIDE.md) · [Security](SECURITY.md).
 
@@ -83,3 +83,9 @@ STUN/ICE selects direct media when possible; TURN carries encrypted media when n
 ## Not included
 
 Groups/federation, native mobile call integration, calls to Signal/WhatsApp accounts, compulsory phone numbers, automatic key transparency, Sealed Sender, traffic-analysis anonymity, guaranteed background ringing, universal earpiece/screenshot control, guaranteed zero traces or independent security certification. This is a one-to-one self-hosted browser phone. [Verification](VERIFICATION.md).
+
+## Guided Linux server edition (v0.20.0)
+
+Release-matched x86-64/ARM64 Docker images and a digest-pinned installer provide a four-part setup wizard, numbered maintenance menu, local-engine/Linux/port checks, per-installation Compose identities and a DNS/proxy/firewall checklist. Optional Caddy HTTPS, coturn, ntfy and Cloudflare connector are chosen explicitly. No domain/DNS account is created or existing website replaced. Native services remain a separate installation option.
+
+The assistant supports credential-preserving reconfiguration, local/public HTTPS diagnostics, consistent private snapshots, trusted snapshot restore and stable Docker-release discovery. Updates pull first, snapshot matching configuration/data/bundle files and recover that state if startup fails. Snapshots are private but not password-encrypted; phone private keys remain on the phones. Rootless Docker requires an external relay. TURN-TLS certificates/renewal and real two-network call/locked-phone tests remain additional steps. [Linux walkthrough](../docker/README.md).

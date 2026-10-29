@@ -13,7 +13,7 @@ test('prebuilt bundle pins its own published version independently of newer sour
  const images=readFileSync('docker/images.env','utf8');
  for(const suffix of ['','-setup','-turn'])assert.ok(images.includes('ghcr.io/adlererik/webcaller:'+version+suffix+'\n'));
  assert.match(images,/BUNDLE_FORMAT=2/);
- const result=spawnSync('sh',['docker/webcaller','status'],{encoding:'utf8'});
+ const result=spawnSync('python3',['docker/webcaller','status'],{encoding:'utf8'});
  assert.equal(result.status,1);assert.match(result.stdout+result.stderr,/Run \.\/webcaller setup first/);
 });
 test('publishing guard accepts only the pinned official upstream gitlink and rejects substitution',t=>{

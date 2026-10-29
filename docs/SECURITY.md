@@ -1,6 +1,6 @@
 # WebCaller security and encryption
 
-This is the security model for **v0.19.0**, which uses official libsignal **0.105.1**, pinned to commit `1738ead8a12ffe539f6309958123dadb16dc3b95`. It supersedes descriptions of the earlier Olm message transport. The upstream protocol source is unmodified. WebCaller's WASM adapter, storage, application signatures, call handling and SAS composition remain **unaudited**. This document describes mechanisms and boundaries, not a security certification.
+This is the security model for **v0.20.0**, which uses official libsignal **0.105.1**, pinned to commit `1738ead8a12ffe539f6309958123dadb16dc3b95`. It supersedes descriptions of the earlier Olm message transport. The upstream protocol source is unmodified. WebCaller's WASM adapter, storage, application signatures, call handling and SAS composition remain **unaudited**. This document describes mechanisms and boundaries, not a security certification.
 
 ## What end-to-end encryption means here
 
@@ -110,3 +110,11 @@ Stickers reuse authenticated AES-256-GCM attachment chunks and Signal-ratcheted 
 
 
 Sticker manifests now use the existing chat ratchet rather than consuming a new one-time PQXDH bundle for each image. Each sticker still has its own random AES-256-GCM attachment key. Auxiliary sticker-link and file-progress streams are separate per-contact ratchets; authenticated payloads retain their call/transfer identifiers and receivers reject mismatched contexts. Old per-file manifests and per-attempt control envelopes remain readable. Reconnect/resume schedules bounded publication retries without resetting identity pins, reusing claimed prekeys or falling back to plaintext. Starting a genuinely new session with no authenticated starter material still fails closed. This application-session change does not alter libsignal, its WASM binding, media encryption or SAS. Both browsers must load the updated client to receive the new shared-session sticker format.
+
+## Linux installer and recovery boundary
+
+v0.20.0 adds a Linux-only Docker assistant without changing the cryptographic core, browser binding, media protocol or SAS. Release bundles pin image digests; updater downloads are bounded/allowlisted, checked against release checksums and limited to expected image namespaces/bundle format. Checksums/digests identify downloaded bytes; they are not independent proof that an authorized publisher is trustworthy. Docker Engine and its socket are a privileged host trust boundary; the helper does not receive the Docker socket, and its archive commands run without container networking.
+
+Each new installation has a persistent random Compose project name. Maintenance locks and local-engine/project-folder/volume-label checks reduce accidental cross-installation changes. Consistent snapshots stop this project's services and include matching bundle/configuration/server-volume data. They contain secrets, are private by filesystem permissions and are **not password-encrypted**. A restore is an operator-authorized replacement of server state, not a phone-key backup. Archive verification rejects corruption, path escapes, links, special files, duplicates and excessive counts/sizes before restoring volumes. Only restore trusted snapshots: saved bundle files include executable code.
+
+Automatic startup recovery restores the prior server snapshot and resumes a previously running stack; it cannot restore browser ratchet/identity state or promise retention of later messages. Keep private independent backups and test recovery. Host networking, router/DNS/firewall configuration, certificate renewal for optional TURN-TLS, browser suspension and actual cross-network media tests remain operational responsibilities. Native services are not migrated by downloading or running this installer in a separate folder.

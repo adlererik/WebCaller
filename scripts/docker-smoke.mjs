@@ -29,7 +29,7 @@ try{
  const env=Object.fromEntries(readFileSync(join(dir,'config/app.env'),'utf8').trim().split('\n').map(v=>v.split(/=(.*)/s).slice(0,2)));
  const keys=()=>generateKeyPairSync('ec',{namedCurve:'prime256v1'}).publicKey.export({format:'jwk'});
  let token;
- const api=async(path,body)=>{const r=await fetch(base+'/api'+path,{method:body?'POST':'GET',headers:{Origin:origin,'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},...(body?{body:JSON.stringify(body)}:{})});assert.ok(r.ok,'API '+path+' status '+r.status);return r.json();};
+ const api=async(path,body)=>{const r=await fetch(base+'/api'+path,{method:body?'POST':'GET',headers:{Origin:origin,'Content-Type':'application/json',Connection:'close',...(token?{Authorization:'Bearer '+token}:{})},...(body?{body:JSON.stringify(body)}:{})});assert.ok(r.ok,'API '+path+' status '+r.status);return r.json();};
  token=(await api('/register',{name:'CI fixture',keys:{dh:keys(),sign:keys()},setupCode:env.BOOTSTRAP_TOKEN})).token;
  const topic=(await api('/ntfy',{})).topic;
  const ntfy='http://127.0.0.1:18194';
@@ -63,7 +63,7 @@ try{
  const restored=compose('exec','-T','webcaller','node','-e',"process.stdout.write(require('fs').readFileSync('/run/webcaller-ntfy/publisher.token'))");assert.equal(restored,before);
  console.log('PASS disposable Linux stack: setup, HTTPS config, WS auth, ntfy ACL/priority, TURN allocation, private QR, restart persistence and consistent backup/restore preserving credentials and registrations.');
 }catch(error){
- console.error('Failed phase: '+phase+'; error type: '+error.name+'; status: '+error.status);
+ console.error('Failed phase: '+phase+'; error type: '+error.name+'; status: '+error.status+'; cause: '+(error.cause?.code||'none'));
  if(['assistant status','consistent backup','snapshot restore'].includes(phase))for(const stream of [error.stdout,error.stderr])if(stream)console.error(String(stream).replace(/tk_[a-z0-9]+/g,'[redacted]').replace(/wc_[A-Za-z0-9_-]+/g,'[redacted]'));
  console.error('Disposable Docker smoke failed. Inspect synthetic container status below; credentials are omitted.');
  // Synthetic fixture only; never output config, tokens, QR, topic IDs or command buffers.

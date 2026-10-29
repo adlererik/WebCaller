@@ -1,4 +1,4 @@
-# WebCaller feature reference — v0.19.0
+# WebCaller feature reference — v0.20.0
 
 A browser phone for one-to-one calls and conversations on Android, iPhone and desktop. The UI follows familiar Signal-style patterns; it is not an official Signal client. [User guide](USER_GUIDE.md) · [Security](SECURITY.md).
 

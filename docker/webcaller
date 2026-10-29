@@ -80,6 +80,9 @@ def ports():
 
 def running():return bool(compose('ps','--services','--status','running',capture=True).strip())
 def start(check_ports=False):
+ if 'turn' in env(ROOT/'.env').get('COMPOSE_PROFILES','').split(','):
+  info=json.loads(docker('info','--format','{{json .}}',capture=True))
+  if 'rootless' in str(info.get('SecurityOptions','')):raise FriendlyError('Rootless Docker cannot use this host-network TURN recipe. Use configure to select an external relay, or use standard Docker Engine.')
  if check_ports:ports()
  compose('config','--quiet');compose('up','-d','--remove-orphans','--wait','--wait-timeout','180')
 

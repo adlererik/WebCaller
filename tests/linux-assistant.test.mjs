@@ -26,6 +26,12 @@ test('failed reconfiguration triggers full safety-snapshot recovery and resumes 
 test('Linux, local-engine and instance-folder checks prevent operating on a different installation',()=>{
  python(`c.platform.system=lambda:'Darwin'\ntry:c.preflight()\nexcept c.FriendlyError as e:assert 'Linux only' in str(e)\nelse:raise Exception('non-Linux host accepted')\nc.platform.system=lambda:'Linux';c.platform.machine=lambda:'x86_64';c.docker=lambda *a,**kw:'{}' if a[0]=='info' else json.dumps('ssh://other-server') if a[0]=='context' else '2.39.0'\ntry:c.preflight()\nexcept c.FriendlyError as e:assert 'Remote' in str(e)\nelse:raise Exception('remote daemon accepted')\n`);
 });
+test('an updated stack that fails its startup check restores the old release and resumes it',()=>{
+ python(`events=[];c.configured=lambda:True;c.preflight=lambda:{};c.confirm=lambda *a,**k:True;c.running=lambda:True;c.image=lambda:'cached-old-setup';c.compose=lambda *a,**k:events.append(('compose',a));c.snapshot=lambda **kw:pathlib.Path('/synthetic/snapshot.tar.gz');c.helper=lambda action,*a,**kw:events.append(('helper',action));c.restore_snapshot=lambda *a,**kw:events.append(('restore',str(a[0]),kw.get('setup_image')))\ndef start(**kw):\n events.append(('start',))\n if sum(e==('start',) for e in events)==1:raise c.FriendlyError('synthetic unhealthy new release')\nc.start=start\ntry:c.main(['update','v0.21.0'])\nexcept c.FriendlyError as e:assert 'restored' in str(e)\nelse:raise Exception('unhealthy release reported as success')\nassert ('helper','apply-update') in events;assert ('restore','/synthetic/snapshot.tar.gz','cached-old-setup') in events;assert events[-1]==('start',)\n`);
+});
+test('the bundled host-network relay is refused on rootless Docker before starting services',()=>{
+ python(`c.env=lambda path:{'COMPOSE_PROFILES':'turn'};c.docker=lambda *a,**kw:json.dumps({'SecurityOptions':['name=rootless']})\ntry:c.start()\nexcept c.FriendlyError as e:assert 'Rootless' in str(e)\nelse:raise Exception('unsupported relay network started')\n`);
+});
 test('guided answers retry invalid choices rather than crashing or treating them as acceptance',()=>{
  python(`answers=iter(['nope','4','2']);s.input=lambda label:next(answers);assert s.choice('Choose',[('a','one'),('b','two')],'a')=='b'\nanswers=iter(['maybe','yes']);s.input=lambda label:next(answers);assert s.yes('Continue?') is True\n`);
 });

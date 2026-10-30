@@ -4,7 +4,11 @@
 
 [Install on your server](docs/INSTALL.md) · [Download v0.20.0](https://github.com/adlererik/WebCaller/releases/tag/v0.20.0) · [All features](docs/FEATURES.md) · [How to use it](docs/USER_GUIDE.md) · [Security explained](docs/SECURITY.md)
 
-![WebCaller on desktop and mobile](docs/images/overview.jpg)
+| Pixel 10 Pro XL · Maya's phone | iPhone Pro · Alex's phone |
+|---|---|
+| <img src="docs/images/pixel-10-pro-xl-video-call.webp" width="360" alt="Photorealistic AI illustration of a Pixel video call with Alex, Maya in the self-preview, H.265 and Opus statistics, and four SAS words"> | <img src="docs/images/iphone-pro-video-call.webp" width="360" alt="Photorealistic AI illustration of the other end of the call on an iPhone Pro, showing Maya, Alex in the self-preview, and matching SAS words"> |
+
+AI-generated product illustrations with fictional callers and matching example SAS words. The H.265/Opus readings illustrate a clear Wi-Fi call; they are not measured performance results. [Images and provenance](docs/images/README.md).
 
 **v0.20.0 brings the guided Linux server edition:** setup, connection checks, reconfiguration, consistent backups, restore and backup-first updates. Prebuilt images support Linux x86-64 and ARM64. A native installation remains available; existing native servers are not converted to Docker. [Start the guided install](docker/README.md).
 
@@ -121,6 +125,8 @@ The assistant explains each choice and prints the DNS/ports/proxy checklist for 
 After setup, `./webcaller` opens a numbered menu. `./webcaller check-update` finds stable Docker releases; `./webcaller update` downloads first, makes a consistent private snapshot and restores the matching prior state if startup fails. `./webcaller configure`, `backup`, `restore`, `doctor` and `instructions` make everyday maintenance approachable. Backups contain credentials, are not password-encrypted and belong on protected storage. Updates and restores interrupt calls; phone private keys remain on the phones.
 
 Complete source TAR/ZIP downloads include the pinned upstream source and matching source offer. GitHub's automatic Source code archives omit submodules; use the uploaded release assets. [All install choices and checksums](docs/INSTALL.md).
+
+![WebCaller on desktop and mobile: actual interface with fictional conversations](docs/images/overview.jpg)
 
 | Mobile contacts | Mobile chat · dark appearance |
 |---|---|

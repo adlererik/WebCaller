@@ -4,11 +4,10 @@
 
 [Install on your server](docs/INSTALL.md) · [Download v0.20.0](https://github.com/adlererik/WebCaller/releases/tag/v0.20.0) · [All features](docs/FEATURES.md) · [How to use it](docs/USER_GUIDE.md) · [Security explained](docs/SECURITY.md)
 
-| Pixel 10 Pro XL · Maya's phone | iPhone Pro · Alex's phone |
-|---|---|
-| <img src="docs/images/pixel-10-pro-xl-video-call.webp" width="360" alt="Photorealistic AI illustration of a Pixel video call with Alex, Maya in the self-preview, H.265 and Opus statistics, and four SAS words"> | <img src="docs/images/iphone-pro-video-call.webp" width="360" alt="Photorealistic AI illustration of the other end of the call on an iPhone Pro, showing Maya, Alex in the self-preview, and matching SAS words"> |
-
-AI-generated product illustrations with fictional callers and matching example SAS words. The H.265/Opus readings illustrate a clear Wi-Fi call; they are not measured performance results. [Images and provenance](docs/images/README.md).
+<p align="center">
+  <img src="docs/images/pixel-10-pro-xl-video-call.webp" width="360" alt="WebCaller video call with Alex">
+  <img src="docs/images/iphone-pro-video-call.webp" width="360" alt="WebCaller video call with Maya">
+</p>
 
 **v0.20.0 brings the guided Linux server edition:** setup, connection checks, reconfiguration, consistent backups, restore and backup-first updates. Prebuilt images support Linux x86-64 and ARM64. A native installation remains available; existing native servers are not converted to Docker. [Start the guided install](docker/README.md).
 
